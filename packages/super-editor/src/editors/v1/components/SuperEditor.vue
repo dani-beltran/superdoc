@@ -89,6 +89,7 @@ const currentZoom = ref(1);
  * Stored to ensure proper removal in onBeforeUnmount to prevent memory leaks.
  */
 let zoomChangeHandler = null;
+let documentModeChangeHandler = null;
 
 // Watch for changes in options.rulers with deep option to catch nested changes
 watch(
@@ -130,6 +131,15 @@ watch(
     });
   },
   { immediate: true },
+);
+
+watch(
+  () => props.options?.documentMode,
+  (documentMode) => {
+    if (documentMode === 'viewing') {
+      cleanupViewingModeUi();
+    }
+  },
 );
 
 /**
@@ -320,6 +330,12 @@ const imageResizeState: ImageResizeState = reactive({
   imageElement: null,
   blockId: null,
 });
+
+const cleanupViewingModeUi = () => {
+  hideTableResizeOverlay();
+  hideImageResizeOverlay();
+  clearSelectedImage();
+};
 
 /**
  * Image selection state (for layout-engine rendered images)
@@ -631,6 +647,11 @@ const onTableResizeEnd = () => {
 const updateImageResizeOverlay = (event: MouseEvent): void => {
   if (!editorElem.value) return;
 
+  if (isViewingMode() || !activeEditor.value?.isEditable) {
+    hideImageResizeOverlay();
+    return;
+  }
+
   // Type guard: ensure event target is an Element
   if (!(event.target instanceof Element)) {
     imageResizeState.visible = false;
@@ -719,6 +740,11 @@ const clearSelectedImage = () => {
  * @returns {void}
  */
 const setSelectedImage = (element, blockId, pmStart) => {
+  if (isViewingMode() || !activeEditor.value?.isEditable) {
+    clearSelectedImage();
+    return;
+  }
+
   // Remove selection from the previously selected element
   if (selectedImageState.element && selectedImageState.element !== element) {
     selectedImageState.element.classList.remove('superdoc-image-selected');
@@ -747,10 +773,10 @@ const isViewingMode = () => getDocumentMode() === 'viewing';
 
 const handleOverlayUpdates = (event) => {
   if (isViewingMode()) {
-    hideTableResizeOverlay();
-  } else {
-    updateTableResizeOverlay(event);
+    cleanupViewingModeUi();
+    return;
   }
+  updateTableResizeOverlay(event);
   // Don't evaluate image overlay during an active table resize drag —
   // without the oversized table overlay, pointer events can reach images
   // and spuriously activate the image resize overlay mid-drag.
@@ -964,6 +990,16 @@ const initEditor = async ({ content, media = {}, mediaFiles = {}, fonts = {} } =
     presentationEditor: editor.value instanceof PresentationEditor ? editor.value : null,
   });
 
+  const documentModeEmitter = editor.value instanceof PresentationEditor ? editor.value : activeEditor.value;
+  if (documentModeEmitter?.on) {
+    documentModeChangeHandler = ({ documentMode } = {}) => {
+      if (documentMode === 'viewing') {
+        cleanupViewingModeUi();
+      }
+    };
+    documentModeEmitter.on('documentModeChange', documentModeChangeHandler);
+  }
+
   // Attach layout-engine specific image selection listeners
   if (editor.value instanceof PresentationEditor) {
     const presentationEditor = editor.value;
@@ -1111,7 +1147,7 @@ const handleSuperEditorClick = (event) => {
 
   // Update table resize overlay on click
   if (isViewingMode()) {
-    hideTableResizeOverlay();
+    cleanupViewingModeUi();
   } else {
     updateTableResizeOverlay(event);
   }
@@ -1202,6 +1238,12 @@ const handleMarginChange = ({ side, value }) => {
 
 onBeforeUnmount(() => {
   clearSelectedImage();
+
+  if (documentModeChangeHandler) {
+    const documentModeEmitter = editor.value instanceof PresentationEditor ? editor.value : activeEditor.value;
+    documentModeEmitter?.off?.('documentModeChange', documentModeChangeHandler);
+    documentModeChangeHandler = null;
+  }
 
   // Clean up zoomChange listener if it exists
   if (editor.value instanceof PresentationEditor && zoomChangeHandler) {
