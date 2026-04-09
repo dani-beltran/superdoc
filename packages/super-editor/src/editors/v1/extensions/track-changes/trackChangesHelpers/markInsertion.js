@@ -21,7 +21,7 @@ export const markInsertion = ({ tr, from, to, user, date, id: providedId }) => {
     from,
     to,
     markName: TrackInsertMarkName,
-    attrs: { authorEmail: user.email },
+    attrs: { authorEmail: user.email || '' },
   });
 
   let id;

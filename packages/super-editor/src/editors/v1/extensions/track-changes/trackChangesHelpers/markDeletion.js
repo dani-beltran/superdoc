@@ -29,7 +29,7 @@ export const markDeletion = ({ tr, from, to, user, date, id: providedId }) => {
     from,
     to,
     markName: TrackDeleteMarkName,
-    attrs: { authorEmail: user.email },
+    attrs: { authorEmail: user.email || '' },
   });
 
   let id;
