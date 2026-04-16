@@ -7635,6 +7635,12 @@ const deriveBlockVersion = (block: FlowBlock): string => {
               hash = hashString(hash, getRunStringProp(run, 'vertAlign'));
               hash = hashNumber(hash, getRunNumberProp(run, 'baselineShift'));
             }
+          } else if (cellBlock?.kind) {
+            // Non-paragraph cell blocks participate in the parent table version
+            // through their own block-level signatures. layout-bridge/cache.ts
+            // mirrors this policy so repaint and remeasure stay aligned for
+            // nested tables, images, drawings, and other embedded cell content.
+            hash = hashString(hash, deriveBlockVersion(cellBlock as FlowBlock));
           }
         }
       }
