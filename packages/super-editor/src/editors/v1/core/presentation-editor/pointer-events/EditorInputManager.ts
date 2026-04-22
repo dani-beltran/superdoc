@@ -359,6 +359,12 @@ export type EditorInputCallbacks = {
     dragAnchor: number,
     dragMode: 'char' | 'word' | 'para',
   ) => void;
+  /**
+   * Called when a pointer text-drag selection ends.
+   * Used to scroll the selection into view once after auto-scroll stops; during drag,
+   * selection-driven scroll is suppressed to avoid fighting edge auto-scroll.
+   */
+  notifyDragSelectionEnded?: () => void;
   /** Hit test table at coordinates */
   hitTestTable?: (x: number, y: number) => TableHitResult | null;
 };
@@ -1405,6 +1411,8 @@ export class EditorInputManager {
         const pointer = dragPointer ?? { clientX: event.clientX, clientY: event.clientY };
         this.#callbacks.finalizeDragSelectionWithDom?.(pointer, dragAnchor, dragMode);
       }
+
+      this.#callbacks.notifyDragSelectionEnded?.();
 
       this.#callbacks.scheduleA11ySelectionAnnouncement?.({ immediate: true });
 
