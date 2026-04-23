@@ -1611,13 +1611,18 @@ export class DomPainter {
 
   private updateBlockLookup(input: DomPainterInput): void {
     const { blocks, measures, headerBlocks, headerMeasures, footerBlocks, footerMeasures } = input;
+    const resolvedBlockVersions = this.resolvedLayout?.blockVersions;
 
     // Build lookup for main document blocks
-    const nextLookup = this.buildBlockLookup(blocks, measures);
+    const nextLookup = this.buildBlockLookup(blocks, measures, resolvedBlockVersions);
 
     const normalizedHeader = this.normalizeOptionalBlockMeasurePair('header', headerBlocks, headerMeasures);
     if (normalizedHeader) {
-      const headerLookup = this.buildBlockLookup(normalizedHeader.blocks, normalizedHeader.measures);
+      const headerLookup = this.buildBlockLookup(
+        normalizedHeader.blocks,
+        normalizedHeader.measures,
+        resolvedBlockVersions,
+      );
       headerLookup.forEach((entry, id) => {
         nextLookup.set(id, entry);
       });
@@ -1625,7 +1630,11 @@ export class DomPainter {
 
     const normalizedFooter = this.normalizeOptionalBlockMeasurePair('footer', footerBlocks, footerMeasures);
     if (normalizedFooter) {
-      const footerLookup = this.buildBlockLookup(normalizedFooter.blocks, normalizedFooter.measures);
+      const footerLookup = this.buildBlockLookup(
+        normalizedFooter.blocks,
+        normalizedFooter.measures,
+        resolvedBlockVersions,
+      );
       footerLookup.forEach((entry, id) => {
         nextLookup.set(id, entry);
       });
@@ -2799,10 +2808,12 @@ export class DomPainter {
           newPmStart != null &&
           current.element.dataset.pmStart != null &&
           this.currentMapping.map(Number(current.element.dataset.pmStart)) !== newPmStart;
+        const resolvedSig =
+          resolvedItem && 'version' in resolvedItem ? (resolvedItem as { version?: string }).version : undefined;
         const needsRebuild =
           geometryChanged ||
           this.changedBlocks.has(fragment.blockId) ||
-          current.signature !== fragmentSignature(fragment, this.blockLookup) ||
+          current.signature !== (resolvedSig ?? fragmentSignature(fragment, this.blockLookup)) ||
           sdtBoundaryMismatch ||
           betweenBorderMismatch ||
           mappingUnreliable;
@@ -2811,7 +2822,7 @@ export class DomPainter {
           const replacement = this.renderFragment(fragment, contextBase, sdtBoundary, betweenInfo, resolvedItem);
           pageEl.replaceChild(replacement, current.element);
           current.element = replacement;
-          current.signature = fragmentSignature(fragment, this.blockLookup);
+          current.signature = resolvedSig ?? fragmentSignature(fragment, this.blockLookup);
         } else if (this.currentMapping) {
           // Fragment NOT rebuilt - update position attributes to reflect document changes
           this.updatePositionAttributes(current.element, this.currentMapping);
@@ -2831,11 +2842,13 @@ export class DomPainter {
 
       const fresh = this.renderFragment(fragment, contextBase, sdtBoundary, betweenInfo, resolvedItem);
       pageEl.insertBefore(fresh, pageEl.children[index] ?? null);
+      const freshSig =
+        resolvedItem && 'version' in resolvedItem ? (resolvedItem as { version?: string }).version : undefined;
       nextFragments.push({
         key,
         fragment,
         element: fresh,
-        signature: fragmentSignature(fragment, this.blockLookup),
+        signature: freshSig ?? fragmentSignature(fragment, this.blockLookup),
         context: contextBase,
       });
     });
@@ -2944,9 +2957,11 @@ export class DomPainter {
         resolvedItem,
       );
       el.appendChild(fragmentEl);
+      const initSig =
+        resolvedItem && 'version' in resolvedItem ? (resolvedItem as { version?: string }).version : undefined;
       return {
         key: fragmentKey(fragment),
-        signature: fragmentSignature(fragment, this.blockLookup),
+        signature: initSig ?? fragmentSignature(fragment, this.blockLookup),
         fragment,
         element: fragmentEl,
         context: contextBase,
@@ -7042,7 +7057,11 @@ export class DomPainter {
     return 0;
   }
 
-  private buildBlockLookup(blocks: FlowBlock[], measures: Measure[]): BlockLookup {
+  private buildBlockLookup(
+    blocks: FlowBlock[],
+    measures: Measure[],
+    precomputedVersions?: Record<string, string>,
+  ): BlockLookup {
     if (blocks.length !== measures.length) {
       throw new Error('DomPainter requires the same number of blocks and measures');
     }
@@ -7052,7 +7071,7 @@ export class DomPainter {
       lookup.set(block.id, {
         block,
         measure: measures[index],
-        version: deriveBlockVersion(block),
+        version: precomputedVersions?.[block.id] ?? deriveBlockVersion(block),
       });
     });
     return lookup;

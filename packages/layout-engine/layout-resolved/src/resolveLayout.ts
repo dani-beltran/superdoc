@@ -28,6 +28,7 @@ import { resolveDrawingItem } from './resolveDrawing.js';
 import type { BlockMapEntry } from './resolvedBlockLookup.js';
 import { computeSdtContainerKey } from './sdtContainerKey.js';
 import { hashParagraphBorders } from './paragraphBorderHash.js';
+import { deriveBlockVersion, fragmentSignature } from './versionSignature.js';
 
 export type ResolveLayoutInput = {
   layout: Layout;
@@ -172,25 +173,53 @@ function resolveFragmentSdtContainerKey(fragment: Fragment, blockMap: Map<string
   return null;
 }
 
+function computeBlockVersion(
+  blockId: string,
+  blockMap: Map<string, BlockMapEntry>,
+  cache: Map<string, string>,
+): string {
+  const cached = cache.get(blockId);
+  if (cached !== undefined) return cached;
+  const entry = blockMap.get(blockId);
+  if (!entry) {
+    cache.set(blockId, 'missing');
+    return 'missing';
+  }
+  const version = deriveBlockVersion(entry.block);
+  cache.set(blockId, version);
+  return version;
+}
 function resolveFragmentItem(
   fragment: Fragment,
   fragmentIndex: number,
   pageIndex: number,
   blockMap: Map<string, BlockMapEntry>,
+  blockVersionCache: Map<string, string>,
 ): ResolvedPaintItem {
   const sdtContainerKey = resolveFragmentSdtContainerKey(fragment, blockMap);
+  const blockVer = computeBlockVersion(fragment.blockId, blockMap, blockVersionCache);
+  const version = fragmentSignature(fragment, blockVer);
 
   // Route to kind-specific resolvers for types that carry extracted block/measure data.
   switch (fragment.kind) {
     case 'table': {
       const item = resolveTableItem(fragment as TableFragment, fragmentIndex, pageIndex, blockMap);
       if (sdtContainerKey != null) item.sdtContainerKey = sdtContainerKey;
+      item.version = version;
       return item;
     }
-    case 'image':
-      return resolveImageItem(fragment as ImageFragment, fragmentIndex, pageIndex, blockMap);
-    case 'drawing':
-      return resolveDrawingItem(fragment as DrawingFragment, fragmentIndex, pageIndex, blockMap);
+    case 'image': {
+      const item = resolveImageItem(fragment as ImageFragment, fragmentIndex, pageIndex, blockMap);
+      if (sdtContainerKey != null) item.sdtContainerKey = sdtContainerKey;
+      item.version = version;
+      return item;
+    }
+    case 'drawing': {
+      const item = resolveDrawingItem(fragment as DrawingFragment, fragmentIndex, pageIndex, blockMap);
+      if (sdtContainerKey != null) item.sdtContainerKey = sdtContainerKey;
+      item.version = version;
+      return item;
+    }
     default: {
       // para, list-item — existing generic resolution
       const item: ResolvedFragmentItem = {
@@ -228,6 +257,7 @@ function resolveFragmentItem(
         if (listItem.continuesOnNext != null) item.continuesOnNext = listItem.continuesOnNext;
         if (listItem.markerWidth != null) item.markerWidth = listItem.markerWidth;
       }
+      item.version = version;
       return item;
     }
   }
@@ -236,6 +266,7 @@ function resolveFragmentItem(
 export function resolveLayout(input: ResolveLayoutInput): ResolvedLayout {
   const { layout, flowMode, blocks, measures } = input;
   const blockMap = buildBlockMap(blocks, measures);
+  const blockVersionCache = new Map<string, string>();
 
   const pages: ResolvedPage[] = layout.pages.map((page, pageIndex) => ({
     id: `page-${pageIndex}`,
@@ -244,7 +275,7 @@ export function resolveLayout(input: ResolveLayoutInput): ResolvedLayout {
     width: page.size?.w ?? layout.pageSize.w,
     height: page.size?.h ?? layout.pageSize.h,
     items: page.fragments.map((fragment, fragmentIndex) =>
-      resolveFragmentItem(fragment, fragmentIndex, pageIndex, blockMap),
+      resolveFragmentItem(fragment, fragmentIndex, pageIndex, blockMap, blockVersionCache),
     ),
     margins: page.margins,
     footnoteReserved: page.footnoteReserved,
@@ -262,6 +293,12 @@ export function resolveLayout(input: ResolveLayoutInput): ResolvedLayout {
     pageGap: layout.pageGap ?? 0,
     pages,
   };
+
+  if (blocks.length > 0) {
+    resolved.blockVersions = Object.fromEntries(
+      blocks.map((block) => [block.id, computeBlockVersion(block.id, blockMap, blockVersionCache)]),
+    );
+  }
 
   if (layout.layoutEpoch != null) {
     resolved.layoutEpoch = layout.layoutEpoch;
