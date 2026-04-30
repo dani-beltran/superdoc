@@ -3,7 +3,7 @@
  * engine's revision management and execution path.
  *
  * Read operations (list, get, goTo) are pure queries or non-mutating navigation.
- * Mutating operations (add, edit, reply, move, resolve, remove, setInternal, setActive)
+ * Mutating operations (add, edit, reply, move, resolve, reopen, remove, setInternal, setActive)
  * delegate to editor commands with plan-engine revision tracking.
  */
 
@@ -20,6 +20,7 @@ import type {
   MoveCommentInput,
   Receipt,
   RemoveCommentInput,
+  ReopenCommentInput,
   ReplyToCommentInput,
   ResolveCommentInput,
   RevisionGuardOptions,
@@ -79,6 +80,39 @@ function isSameTarget(
   right: { blockId: string; range: { start: number; end: number } },
 ): boolean {
   return left.blockId === right.blockId && left.range.start === right.range.start && left.range.end === right.range.end;
+}
+
+/**
+ * Check whether a payload should be routed through the multi-segment
+ * TextTarget branch. The document-api input validator accepts a payload
+ * if it satisfies *either* `isTextAddress` or `isTextTarget`; neither
+ * validator rejects extra fields, so a hybrid payload (`{ kind: 'text',
+ * blockId, range, segments }`) passes both. To avoid silently dropping
+ * the hybrid's `blockId`/`range` data, we require a *pure* TextTarget
+ * here: `kind: 'text'`, a non-empty `segments` array, AND the absence
+ * of TextAddress-style `blockId`/`range`. Hybrids fall through to the
+ * single-block branch, which is the more specific shape.
+ */
+function isTextTargetShape(target: unknown): target is TextTarget {
+  if (!target || typeof target !== 'object') return false;
+  const t = target as { kind?: unknown; segments?: unknown; blockId?: unknown; range?: unknown };
+  if (t.kind !== 'text') return false;
+  if (!Array.isArray(t.segments) || t.segments.length === 0) return false;
+  // Reject hybrid payloads — TextAddress fields take precedence so the
+  // adapter doesn't silently ignore caller-provided block/range data.
+  if (typeof t.blockId === 'string' || (t.range !== undefined && t.range !== null)) return false;
+  return true;
+}
+
+/**
+ * Normalize a TextAddress | TextTarget comment target into an array of
+ * segments. For TextAddress, the result is a single-entry array.
+ */
+function targetToSegments(
+  target: { kind: 'text'; blockId: string; range: { start: number; end: number } } | TextTarget,
+): TextSegment[] {
+  if (isTextTargetShape(target)) return [...target.segments];
+  return [{ blockId: target.blockId, range: target.range }];
 }
 
 function listCommentAnchorsSafe(editor: Editor): ReturnType<typeof listCommentAnchors> {
@@ -365,22 +399,91 @@ function buildCommentInfos(editor: Editor): CommentInfo[] {
 function addCommentHandler(editor: Editor, input: AddCommentInput, options?: RevisionGuardOptions): Receipt {
   requireEditorCommand(editor.commands?.addComment, 'comments.create (addComment)');
 
-  if (input.target.range.start === input.target.range.end) {
+  // The target can be either a single-block TextAddress or a multi-segment
+  // TextTarget. For a TextTarget, resolve each segment and require they
+  // cover a contiguous PM range in document order — out-of-order or
+  // disjoint segments would otherwise silently anchor the comment over
+  // intervening text the caller never selected.
+  const target = input.target;
+  if (!target) {
     return {
       success: false,
       failure: {
         code: 'INVALID_TARGET',
-        message: 'Comment target range must be non-collapsed.',
+        message: 'Comment target is required.',
       },
     };
   }
+  const segments = targetToSegments(target);
 
-  const resolved = resolveTextTarget(editor, input.target);
-  if (!resolved) {
+  // Per-segment collapse check. Without this, two collapsed segments in
+  // different blocks (e.g. caret at end of p1 and caret at start of p2)
+  // pass the order + contiguity checks AND the spanning-range collapse
+  // check (because firstResolved.from < lastResolved.to across the block
+  // boundary), then silently anchor a comment over intervening content.
+  // Each individual segment must represent a non-empty range.
+  for (const seg of segments) {
+    if (seg.range.start === seg.range.end) {
+      return {
+        success: false,
+        failure: {
+          code: 'INVALID_TARGET',
+          message: 'Comment target range must be non-collapsed.',
+          details: { target },
+        },
+      };
+    }
+  }
+
+  const resolvedSegments = segments.map((seg) =>
+    resolveTextTarget(editor, { kind: 'text', blockId: seg.blockId, range: seg.range }),
+  );
+  if (resolvedSegments.some((r) => r === null)) {
     throw new DocumentApiAdapterError('TARGET_NOT_FOUND', 'Comment target could not be resolved.', {
-      target: input.target,
+      target,
     });
   }
+
+  const docForGap = editor.state?.doc;
+  for (let i = 1; i < resolvedSegments.length; i += 1) {
+    const prev = resolvedSegments[i - 1]!;
+    const curr = resolvedSegments[i]!;
+    if (prev.to > curr.from) {
+      return {
+        success: false,
+        failure: {
+          code: 'INVALID_TARGET',
+          message: 'Comment target segments must be in document order.',
+          details: { target },
+        },
+      };
+    }
+    // Detect content the caller didn't select sitting between segments.
+    // `textBetween(prev.to, curr.from, '')` returns:
+    //   - '' for true adjacency (same block) or pure block boundaries
+    //     (a legitimate multi-block selection between adjacent blocks);
+    //   - '<text>' if any text node sits in the gap.
+    // The `leafText` 4th argument lets us also surface inline atoms
+    // (images, math, etc) that PM otherwise omits from `textBetween`.
+    // We pass a sentinel for atoms only — keeping `blockSeparator: ''`
+    // so legitimate cross-block adjacency still produces an empty gap.
+    const gap = docForGap ? docForGap.textBetween(prev.to, curr.from, '', () => '\u0001') : '';
+    if (gap.length > 0) {
+      return {
+        success: false,
+        failure: {
+          code: 'INVALID_TARGET',
+          message:
+            'Comment target segments must be contiguous — non-selected text or atoms between segments is not supported.',
+          details: { target },
+        },
+      };
+    }
+  }
+
+  const firstResolved = resolvedSegments[0]!;
+  const lastResolved = resolvedSegments[resolvedSegments.length - 1]!;
+  const resolved = { from: firstResolved.from, to: lastResolved.to };
   if (resolved.from === resolved.to) {
     return {
       success: false,
@@ -654,6 +757,68 @@ function resolveCommentHandler(editor: Editor, input: ResolveCommentInput, optio
   return { success: true, updated: [toCommentAddress(identity.commentId)] };
 }
 
+function reopenCommentHandler(editor: Editor, input: ReopenCommentInput, options?: RevisionGuardOptions): Receipt {
+  const reopenComment = requireEditorCommand(editor.commands?.reopenComment, 'comments.patch (reopenComment)');
+
+  const store = getCommentEntityStore(editor);
+  const identity = resolveCommentIdentity(editor, input.commentId);
+  const existing = findCommentEntity(store, identity.commentId);
+  // Idempotent on the no-op path: reopening an already-active comment
+  // (no anchor nodes in the doc, entity store doesn't show resolved)
+  // returns NO_OP rather than running a command that would fail
+  // silently.
+  const isAnchored = identity.anchors.length > 0;
+  const isResolvedInStore = existing ? isCommentResolved(existing) : false;
+  const isResolvedInDoc = isAnchored && identity.anchors.every((a) => a.status === 'resolved');
+  if (!isResolvedInStore && !isResolvedInDoc) {
+    return {
+      success: false,
+      failure: { code: 'NO_OP', message: 'Comment is already active.' },
+    };
+  }
+
+  // Recover the original `internal` flag from the entity store when
+  // present; the engine helper falls back to the value stamped on
+  // `commentRangeStart` when this is undefined, so a runtime-resolved
+  // comment with no entity record still round-trips correctly.
+  const storedInternal = (existing as { isInternal?: unknown } | undefined)?.isInternal;
+  const internalOverride = typeof storedInternal === 'boolean' ? storedInternal : undefined;
+
+  const receipt = executeDomainCommand(
+    editor,
+    () => {
+      const didReopen = reopenComment({
+        commentId: identity.commentId,
+        importedId: identity.importedId,
+        internal: internalOverride,
+      });
+      if (didReopen) {
+        // Clear the resolved markers in the entity store so subsequent
+        // `comments.list()` reflects the reopen. `resolvedTime` is
+        // dropped explicitly because `upsertCommentEntity` merges
+        // partials and would otherwise leave the prior timestamp in
+        // place.
+        upsertCommentEntity(store, identity.commentId, {
+          importedId: identity.importedId,
+          isDone: false,
+          resolvedTime: null,
+        });
+      }
+      return Boolean(didReopen);
+    },
+    { expectedRevision: options?.expectedRevision },
+  );
+
+  if (receipt.steps[0]?.effect !== 'changed') {
+    return {
+      success: false,
+      failure: { code: 'NO_OP', message: 'Comment reopen produced no change.' },
+    };
+  }
+
+  return { success: true, updated: [toCommentAddress(identity.commentId)] };
+}
+
 function removeCommentHandler(editor: Editor, input: RemoveCommentInput, options?: RevisionGuardOptions): Receipt {
   const removeComment = requireEditorCommand(editor.commands?.removeComment, 'comments.remove (removeComment)');
 
@@ -884,6 +1049,7 @@ export function createCommentsWrapper(editor: Editor): CommentsAdapter {
     move: (input: MoveCommentInput, options?: RevisionGuardOptions) => moveCommentHandler(editor, input, options),
     resolve: (input: ResolveCommentInput, options?: RevisionGuardOptions) =>
       resolveCommentHandler(editor, input, options),
+    reopen: (input: ReopenCommentInput, options?: RevisionGuardOptions) => reopenCommentHandler(editor, input, options),
     remove: (input: RemoveCommentInput, options?: RevisionGuardOptions) => removeCommentHandler(editor, input, options),
     setInternal: (input: SetCommentInternalInput, options?: RevisionGuardOptions) =>
       setCommentInternalHandler(editor, input, options),
