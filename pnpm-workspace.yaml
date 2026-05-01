@@ -11,6 +11,8 @@ packages:
   - examples/*
   - examples/*/*
   - examples/*/*/*
+  - examples/*/*/*/*
+  - examples/*/*/*/*/*
   - demos/*
   - demos/*/*
   - evals

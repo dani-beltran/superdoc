@@ -36,4 +36,5 @@ export {
   useSuperDocTrackChanges,
   useSuperDocToolbar,
   useSuperDocCommand,
+  useSuperDocDocument,
 } from './hooks.js';

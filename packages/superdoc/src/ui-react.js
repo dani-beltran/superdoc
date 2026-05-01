@@ -16,4 +16,5 @@ export {
   useSuperDocTrackChanges,
   useSuperDocToolbar,
   useSuperDocCommand,
+  useSuperDocDocument,
 } from '@superdoc/super-editor/ui/react';

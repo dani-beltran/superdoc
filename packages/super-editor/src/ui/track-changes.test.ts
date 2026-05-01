@@ -433,12 +433,15 @@ describe('ui.trackChanges — regression: scrollTo carries non-body story', () =
     await ui.trackChanges.scrollTo('tc-header');
 
     expect(mocks.navigateTo).toHaveBeenCalledTimes(1);
-    expect(mocks.navigateTo).toHaveBeenCalledWith({
-      kind: 'entity',
-      entityType: 'trackedChange',
-      entityId: 'tc-header',
-      story: 'header:rId1',
-    });
+    expect(mocks.navigateTo).toHaveBeenCalledWith(
+      {
+        kind: 'entity',
+        entityType: 'trackedChange',
+        entityId: 'tc-header',
+        story: 'header:rId1',
+      },
+      { behavior: 'smooth', block: 'center' },
+    );
     ui.destroy();
   });
 
@@ -450,11 +453,14 @@ describe('ui.trackChanges — regression: scrollTo carries non-body story', () =
 
     await ui.trackChanges.scrollTo('tc-body');
 
-    expect(mocks.navigateTo).toHaveBeenCalledWith({
-      kind: 'entity',
-      entityType: 'trackedChange',
-      entityId: 'tc-body',
-    });
+    expect(mocks.navigateTo).toHaveBeenCalledWith(
+      {
+        kind: 'entity',
+        entityType: 'trackedChange',
+        entityId: 'tc-body',
+      },
+      { behavior: 'smooth', block: 'center' },
+    );
     ui.destroy();
   });
 });

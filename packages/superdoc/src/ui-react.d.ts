@@ -9,5 +9,6 @@ export {
   useSuperDocTrackChanges,
   useSuperDocToolbar,
   useSuperDocCommand,
+  useSuperDocDocument,
   type SuperDocHost,
 } from '@superdoc/super-editor/ui/react';

@@ -45,17 +45,40 @@ export interface SuperDocLike {
   activeEditor?: SuperDocEditorLike | null;
   config?: { documentMode?: 'editing' | 'suggesting' | 'viewing' };
   /**
-   * Optional setter for documentMode. Reserved for future
-   * `ui.<domain>` surfaces (SD-2799) that move document-mode and
-   * other UI-only commands off the toolbar registry into dedicated
-   * handles. Not consumed by the controller today.
+   * Optional setter for documentMode. Consumed by `ui.document.setMode`
+   * (SD-2816) and reserved for future `ui.<domain>` surfaces (SD-2799)
+   * that move other UI-only commands off the toolbar registry.
    */
   setDocumentMode?(mode: 'editing' | 'suggesting' | 'viewing'): unknown;
+  /**
+   * Optional export bridge. `ui.document.export(options)` forwards
+   * here so consumers wiring an Export DOCX button can call it from
+   * the controller surface instead of pulling the host instance into
+   * their context. The shape mirrors `SuperDoc.export()` from the
+   * superdoc package; declared optional and `unknown`-typed so non
+   * browser test stubs stay valid without a host implementation.
+   */
+  export?(options?: DocumentExportInput): Promise<unknown>;
 }
 
 export interface SuperDocEditorLike {
   on?(event: string, handler: (...args: unknown[]) => void): unknown;
   off?(event: string, handler: (...args: unknown[]) => void): unknown;
+  emit?(event: string, payload: unknown): void;
+  /**
+   * Replace the current document file. Consumed by `ui.document.replaceFile`
+   * to give consumers a typed import path without reaching into the host
+   * instance. Optional in the structural typing so SSR / non-browser
+   * stubs stay valid.
+   */
+  replaceFile?(file: File): Promise<unknown>;
+  /**
+   * Converter handle. The controller reads `converter.comments` after
+   * a `replaceFile` to manually re-emit `commentsLoaded` while
+   * SD-2839 is open (Editor short-circuits the event when
+   * `modules.comments: false`).
+   */
+  converter?: { comments?: unknown[] };
   doc?: {
     selection?: {
       current?(input?: { includeText?: boolean }): {
@@ -89,6 +112,18 @@ export interface SuperDocEditorLike {
       list?(query?: unknown): unknown;
       decide?(input: unknown, options?: unknown): unknown;
     };
+    /**
+     * Insert content at a positional target. Surfaces the typed
+     * doc-API signature so custom commands can call
+     * `editor.doc.insert(...)` without a structural cast. The control
+     * surface needs `editor.doc.insert` for the Custom UI custom-command
+     * pattern (Insert clause, AI-generated text); other doc-API
+     * mutation methods stay loose unless a similar use case lands.
+     */
+    insert?(
+      input: import('@superdoc/document-api').InsertInput,
+      options?: unknown,
+    ): import('@superdoc/document-api').SDMutationReceipt;
   };
   /**
    * PresentationEditor handle. Browser-only. The controller calls
@@ -130,6 +165,14 @@ export interface SuperDocUIState {
   ready: boolean;
   /** Mirror of `superdoc.config.documentMode`. */
   documentMode: 'editing' | 'suggesting' | 'viewing' | null;
+  /**
+   * Document-level slice exposed on `state.document` (SD-2816). Sugar
+   * over the top-level `ready` and `documentMode` fields so a single
+   * subscription drives the document-bar / Export button / mode
+   * toggle. Kept minimal: dirty-tracking is a follow-up because
+   * SuperDoc has no host-side dirty primitive today.
+   */
+  document: DocumentSlice;
   /** Selection projection. See {@link SelectionSlice}. */
   selection: SelectionSlice;
   /**
@@ -233,7 +276,7 @@ export interface SelectionSlice {
    * root, so non-body selections route correctly. Today the selection
    * resolver does NOT yet stamp `target.story` for non-body surfaces
    * (header / footer / footnote / endnote); a doc-api follow-up
-   * tracks this. Until it lands, consumers building BYO UI on top of
+   * tracks this. Until it lands, consumers building Custom UI on top of
    * non-body content should detect the routed surface themselves and
    * stamp the right `StoryLocator` before passing the target into a
    * doc-api operation.
@@ -407,11 +450,147 @@ export interface SuperDocUI {
   viewport: ViewportHandle;
 
   /**
+   * Document domain. Session-level operations a custom toolbar
+   * needs (Export DOCX, document-mode toggle, ready state, unsaved-
+   * changes indicator). Sugar over `state.document` plus passthroughs
+   * to the host SuperDoc instance's `setDocumentMode` / `export` /
+   * `replaceFile`. Lifts the operations that previously forced
+   * consumers to wire a separate "host" hook through their React
+   * context just so a toolbar button could call `superdoc.export(...)`.
+   * The slice's `dirty` flag is transaction-driven and cleared on a
+   * successful `export` or `replaceFile`; see {@link DocumentSlice}.
+   */
+  document: DocumentHandle;
+
+  /**
    * Tear down all internal subscriptions to the editor / SuperDoc
    * instance / presentation editor. After destroy, no listeners will
    * fire and `select(...)` should not be called.
    */
   destroy(): void;
+}
+
+/**
+ * Document slice exposed on `state.document` and through
+ * {@link DocumentHandle}.
+ *
+ * Mirrors the `ready` / `documentMode` top-level fields as a single
+ * memoized object so a Document Bar / Export button / mode toggle can
+ * subscribe once instead of subscribing to two separate substrate
+ * selectors.
+ */
+export interface DocumentSlice {
+  /** True when SuperDoc has an active editor mounted. */
+  ready: boolean;
+  /** Mirror of `superdoc.config.documentMode`. */
+  mode: 'editing' | 'suggesting' | 'viewing' | null;
+  /**
+   * True when the document has unsaved changes. Flips to `true` on any
+   * editor transaction that mutates the document (`tr.docChanged`).
+   * Selection-only transactions (cursor moves, range adjustments) do
+   * not flip the flag.
+   *
+   * Cleared back to `false` when:
+   * - `ui.document.export(...)` resolves successfully, or
+   * - `ui.document.replaceFile(...)` swaps the document.
+   *
+   * Undo-to-clean is not tracked: hitting undo until the document
+   * matches its on-open state still reads as dirty. Apps that need
+   * the Word/GDocs-style "no unsaved changes" semantics should layer
+   * their own edit-count diff on top.
+   */
+  dirty: boolean;
+}
+
+/**
+ * Input shape for {@link DocumentHandle.export}. Mirrors the public
+ * `SuperDoc.export()` signature from the superdoc package; declared
+ * here on the controller so consumers don't have to import the host
+ * type to type their Export button. Every field is optional and the
+ * runtime defaults match `SuperDoc.export()`.
+ */
+export interface DocumentExportInput {
+  /**
+   * Output formats. `['docx']` (default) downloads the active document
+   * as DOCX. Multiple formats produce a zip.
+   */
+  exportType?: string[];
+  /**
+   * How comments are written to the export. `'external'` (default)
+   * preserves comments as Word-style comment nodes; `'internal'` keeps
+   * them on the SuperDoc internal channel; `'clean'` strips comments
+   * from the export.
+   */
+  commentsType?: 'internal' | 'external' | 'clean';
+  /** Override the default document title used as the file name. */
+  exportedName?: string;
+  /** Additional binary blobs to bundle with the export (zipped). */
+  additionalFiles?: unknown[];
+  /** File names paired with `additionalFiles` (same length). */
+  additionalFileNames?: string[];
+  /**
+   * When true, accepted/rejected tracked changes are flattened into
+   * the export so the recipient sees the final document instead of
+   * the working copy with revision history.
+   */
+  isFinalDoc?: boolean;
+  /**
+   * When true (default), the browser triggers a download for the
+   * resulting blob; when false, the blob is returned for the consumer
+   * to handle (upload, preview, attach, etc.).
+   */
+  triggerDownload?: boolean;
+  /**
+   * Optional CSS color for highlighting form fields in the export.
+   * `null` (default) leaves fields unhighlighted.
+   */
+  fieldsHighlightColor?: string | null;
+}
+
+/**
+ * Document domain handle exposed on `ui.document`. Snapshot +
+ * subscription mirror the other domain handles; `setMode` and
+ * `export` are imperative passthroughs to the host. Construction is
+ * cheap: every method routes through the controller's existing
+ * substrate / host references, no new caching needed.
+ */
+export interface DocumentHandle {
+  /** Snapshot the current document slice synchronously. */
+  getSnapshot(): DocumentSlice;
+  /**
+   * Subscribe to document-slice changes. Listener fires once
+   * synchronously with the current snapshot, then again whenever
+   * `ready` or `mode` changes by shallow equality. Returns an
+   * unsubscribe.
+   */
+  subscribe(listener: (event: { snapshot: DocumentSlice }) => void): () => void;
+  /**
+   * Set the document mode. Routes through `superdoc.setDocumentMode`
+   * which fires the existing `document-mode-change` event and updates
+   * the per-editor mode. No-op when the host stub omits the setter
+   * (e.g. SSR / non-browser test stubs).
+   */
+  setMode(mode: 'editing' | 'suggesting' | 'viewing'): void;
+  /**
+   * Export the document. Routes through `superdoc.export(options)`
+   * with the same defaults as the host method (DOCX, external
+   * comments, browser-triggered download). Returns the resulting
+   * blob (or zip) when `triggerDownload: false`, or `undefined`
+   * when the download was triggered. Rejects if the host's export
+   * fails; consumers should wrap their toolbar Export button in a
+   * try/catch and surface the error inline.
+   */
+  export(options?: DocumentExportInput): Promise<unknown>;
+  /**
+   * Replace the current document file. Routes through
+   * `superdoc.activeEditor.replaceFile(file)` and re-emits
+   * `commentsLoaded` once the swap completes so consumers running
+   * `modules.comments: false` (SD-2839) still see imported comments
+   * refresh in `ui.comments`. Resolves when the swap and the
+   * post-swap event have both fired. Rejects if the host has no
+   * active editor or the engine swap throws.
+   */
+  replaceFile(file: File): Promise<void>;
 }
 
 /**
@@ -463,32 +642,23 @@ export interface SelectionHandle {
 /**
  * Frozen snapshot returned by {@link SelectionHandle.capture}.
  *
- * Same shape as {@link SelectionSlice} but `DeepReadonly` so the
- * type signal matches the runtime deep-freeze: assigning into
- * `captured.target.segments[0].range.start` or
- * `captured.activeMarks[0]` is a TypeScript error AND a runtime
- * throw in strict mode. Declared as its own named type so
- * consumers can name the captured value in their component state
- * (`useState<SelectionCapture | null>(null)`) and so the planned
- * `restore(capture)` follow-up has a stable input type.
- */
-export type SelectionCapture = DeepReadonly<SelectionSlice>;
-
-/**
- * Recursively mark every property and array element as `readonly`.
- * Mirrors the runtime `Object.freeze` walk performed by
- * `ui.selection.capture()` so the static type matches reality.
+ * Same shape as {@link SelectionSlice}; declared as its own type
+ * so consumers can name the captured value in their component
+ * state (`useState<SelectionCapture | null>(null)`) and so the
+ * planned `restore(capture)` follow-up has a stable input type.
  *
- * Kept module-local: this is an implementation detail of the
- * captured selection contract, not a generic helper consumers
- * should reach for.
+ * The runtime value is recursively `Object.freeze`d, so assigning
+ * into `captured.target.segments[0].range.start` or
+ * `captured.activeMarks[0]` throws in strict mode. We do NOT
+ * encode that as a `readonly` type because the canonical use case
+ * is passing `captured.target` straight to `editor.doc.*`
+ * operations whose parameters are typed as mutable shapes (the
+ * doc-api doesn't mutate them, but its types don't say `readonly`).
+ * Adding `readonly` here would force a cast at every doc-api
+ * boundary; the runtime guard plus this JSDoc carry the "do not
+ * mutate" contract instead.
  */
-type DeepReadonly<T> =
-  T extends ReadonlyArray<infer U>
-    ? ReadonlyArray<DeepReadonly<U>>
-    : T extends object
-      ? { readonly [K in keyof T]: DeepReadonly<T[K]> }
-      : T;
+export type SelectionCapture = SelectionSlice;
 
 /**
  * Aggregate toolbar handle exposed on `ui.toolbar`. Compatible with
@@ -672,12 +842,23 @@ export type CustomCommandRegistration<TPayload = void, TValue = unknown> = {
    */
   id: string;
   /**
-   * Execute the command. Receives `payload` (typed per registration)
-   * and the host `superdoc` instance. Return value is normalized to
-   * `boolean` for the synchronous result; async commands return a
-   * Promise that the runtime awaits internally.
+   * Execute the command. Receives:
+   *
+   * - `payload` (typed per registration),
+   * - the host `superdoc` instance, and
+   * - the routed `editor` — the same editor `ui.commands.*` mutations
+   *   target. Use `editor.doc.*` for direct Document API access without
+   *   reaching `superdoc.activeEditor`. `editor` is `null` before the
+   *   editor has reported ready, so guard early.
+   *
+   * Return value is normalized to `boolean` for the synchronous result;
+   * async commands return a Promise the runtime awaits internally.
    */
-  execute: (args: { payload?: TPayload; superdoc: SuperDocLike }) => boolean | void | Promise<boolean | void>;
+  execute: (args: {
+    payload?: TPayload;
+    superdoc: SuperDocLike;
+    editor: SuperDocEditorLike | null;
+  }) => boolean | void | Promise<boolean | void>;
   /**
    * Optional state deriver. Runs on every snapshot rebuild. If omitted,
    * the command's state stays static at `{ active: false, disabled: false, value: undefined }`.
@@ -758,6 +939,33 @@ export interface CommentsHandle {
    * `editor.doc.comments.create`. Returns the operation receipt.
    */
   createFromSelection(input: { text: string }): import('@superdoc/document-api').Receipt;
+  /**
+   * Create a comment anchored to a captured selection snapshot.
+   * Use when the live selection is gone by the time the user submits
+   * (the canonical case: a composer textarea takes focus, the editor
+   * loses its visible selection, and `createFromSelection` would see
+   * a null target). Capture the selection at composer-open via
+   * `ui.selection.capture()`, hold it across the user's typing, then
+   * pass it here. Routes through `editor.doc.comments.create` with
+   * the captured `target`. Returns a `NO_OP` receipt when the capture
+   * lacks a positional target.
+   */
+  createFromCapture(capture: SelectionCapture, input: { text: string }): import('@superdoc/document-api').Receipt;
+  /**
+   * Post a reply to an existing thread. Routes through
+   * `editor.doc.comments.create({ parentCommentId, text })`; the
+   * reply inherits the parent's anchor, so callers don't pass a
+   * target. The next `useSuperDocComments()` snapshot includes the
+   * reply with `parentCommentId` set, which sidebars can group under
+   * the thread root.
+   *
+   * Returns a `NO_OP` receipt when `text` is empty or whitespace-only,
+   * matching the doc-api's text-required contract for top-level
+   * comments. Returns a failure receipt when the parent id has been
+   * deleted between the time the user opened the reply composer and
+   * pressed Send.
+   */
+  reply(parentCommentId: string, input: { text: string }): import('@superdoc/document-api').Receipt;
   /** Resolve a comment via `editor.doc.comments.patch`. */
   resolve(commentId: string): import('@superdoc/document-api').Receipt;
   /**
