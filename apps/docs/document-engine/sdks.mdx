@@ -171,9 +171,7 @@ The Python SDK also exposes synchronous `SuperDocClient` with the same document-
 
 ## Need file-to-file diffing?
 
-For workflows where you already have `Doc1` and need to compare an uploaded `Doc2`, see [SDK Diffing](/document-engine/sdk-diffing).
-
-That guide covers the recommended `diff.capture -> diff.compare -> diff.apply` flow and how to save the result as a third `.docx` with tracked changes.
+For workflows where you already have `Doc1` and need to compare an uploaded `Doc2`, see [Compare documents](/document-engine/diffing) — a Document Engine workflow that wraps `diff.capture`, `diff.compare`, and `diff.apply` into a recommended file-to-file flow.
 
 ## User identity
 
@@ -1492,7 +1490,7 @@ The SDKs expose all operations from the [Document API](/document-api/overview) p
 The SDKs are request/response wrappers around the CLI. They do **not** expose browser event subscriptions like `editor.on('update', ...)` or `superdoc.on('editor-update', ...)`.
 
 - Call `doc.info()` at workflow boundaries — after opening, after edits, or before saving — not in a polling loop.
-- If you are building a browser live counter, use the [SuperEditor events](/core/supereditor/events) or [SuperDoc events](/core/superdoc/events) instead.
+- If you are building a browser live counter, use the [SuperEditor events](/advanced/supereditor/events) or [SuperDoc events](/editor/superdoc/events) instead.
 
 ```ts
 const doc = await client.open({ doc: './report.docx' });
@@ -1511,4 +1509,4 @@ await doc.close();
 
 - [Document API](/document-api/overview) — the in-browser API that defines the operation set
 - [CLI](/document-engine/cli) — use the same operations from the terminal
-- [Collaboration guides](/modules/collaboration/overview) — set up Liveblocks, Hocuspocus, or SuperDoc Yjs
+- [Collaboration guides](/editor/collaboration/overview) — set up Liveblocks, Hocuspocus, or SuperDoc Yjs
