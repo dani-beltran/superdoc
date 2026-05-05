@@ -775,12 +775,8 @@ export interface SelectionHandle {
    * The returned handle is a frozen value object, safe to store
    * on a React ref or in component state across renders.
    *
-   * Visual restore (re-focus the editor and highlight the captured
-   * range when the composer closes) is intentionally NOT on this
-   * surface today: the public Document API has no `selection.set`
-   * primitive yet, and `editor.doc.*` is the contract this
-   * controller routes through. A `restore()` method lands once the
-   * doc-api primitive does.
+   * Pair with {@link restore} to put the visible selection back when
+   * the composer closes.
    */
   capture(): SelectionCapture | null;
   /**
@@ -826,7 +822,52 @@ export interface SelectionHandle {
    * `'union'`. Returns `null` when there are no rects.
    */
   getAnchorRect(options?: SelectionAnchorRectOptions, capture?: SelectionCapture | null): ViewportRect | null;
+  /**
+   * Inverse of {@link capture}. Set the editor's visible selection to
+   * the range a capture froze. Closes the round-trip a sidebar
+   * composer needs: capture on open, post on submit, restore on close
+   * so the user sees the editor with the same range highlighted.
+   *
+   * Returns a result object rather than `void` because captures go
+   * stale: an edit between capture-time and call-time can move or
+   * delete the captured block, the editor can switch into viewing
+   * mode, or the captured target may have been a non-text selection
+   * with no addressable range. The `reason` discriminator lets
+   * consumers distinguish "the editor hasn't mounted yet" from "the
+   * doc has changed under us" without inspecting state separately.
+   *
+   * Side effect: a successful restore also moves browser focus into
+   * the editor's painted host (via the underlying `setTextSelection`
+   * command). That is the right behavior for the canonical composer
+   * flow — the user submits and expects to keep typing — but it does
+   * mean callers triggering `restore` from contexts where focus
+   * shouldn't move (e.g. a "preview" toggle that should leave focus
+   * on a sidebar control) need to gate the call themselves.
+   *
+   * Cross-surface limitation: a capture taken in a header / footer /
+   * footnote / endnote restores correctly while the user remains in
+   * that story (the routed editor still owns the captured block ids).
+   * Once focus has moved to the body, the routed editor falls back
+   * and the captured non-body block ids no longer resolve there;
+   * `restore` returns `{ success: false, reason: 'stale' }` rather
+   * than placing the selection on the wrong surface. Same posture as
+   * {@link getRects}.
+   */
+  restore(capture: SelectionCapture): SelectionRestoreResult;
 }
+
+/**
+ * Result of {@link SelectionHandle.restore}.
+ *
+ * `'not-ready'` — no editor mounted (SSR, post-destroy).
+ * `'read-only'` — editor is in viewing mode; selection mutation refused.
+ * `'missing-target'` — capture had no addressable text target.
+ * `'stale'` — captured block ids don't resolve in the current document
+ * (the doc was edited or swapped between capture and restore).
+ */
+export type SelectionRestoreResult =
+  | { success: true }
+  | { success: false; reason: 'not-ready' | 'read-only' | 'missing-target' | 'stale' };
 
 /**
  * Options for {@link SelectionHandle.getAnchorRect}.
@@ -849,8 +890,8 @@ export interface SelectionAnchorRectOptions {
  *
  * Same shape as {@link SelectionSlice}; declared as its own type
  * so consumers can name the captured value in their component
- * state (`useState<SelectionCapture | null>(null)`) and so the
- * planned `restore(capture)` follow-up has a stable input type.
+ * state (`useState<SelectionCapture | null>(null)`) and so
+ * {@link SelectionHandle.restore} has a stable input type.
  *
  * The runtime value is recursively `Object.freeze`d, so assigning
  * into `captured.target.segments[0].range.start` or
