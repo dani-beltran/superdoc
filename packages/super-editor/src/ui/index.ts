@@ -92,6 +92,7 @@ export type {
   SuperDocUIState,
 
   // Selection
+  SelectionAnchorRectOptions,
   SelectionCapture,
   SelectionHandle,
   SelectionSlice,
