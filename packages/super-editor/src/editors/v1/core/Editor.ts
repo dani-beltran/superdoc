@@ -2703,6 +2703,11 @@ export class Editor extends EventEmitter<EditorEventMap> {
     const prevState = this.state;
     let nextState: EditorState;
     let transactionToApply = transaction;
+    // appendTransaction plugins (e.g. numberingPlugin) may produce transactions that
+    // change the doc even when the original transaction does not. We resolve the
+    // effective doc-carrying tr after applyTransaction so the 'update' event is
+    // emitted with `docChanged` / `mapping` that consumers (notably
+    // PresentationEditor.handleUpdate) actually need.
     let effectiveTransaction: Transaction = transaction;
     const forceTrackChanges = transactionToApply.getMeta('forceTrackChanges') === true;
     try {
@@ -2778,7 +2783,8 @@ export class Editor extends EventEmitter<EditorEventMap> {
     }
 
     if (effectiveTransaction.docChanged) {
-      // Track document modifications and promote to GUID if needed
+      // Track document modifications and promote to GUID if needed.
+      // Only count user-initiated (original) transactions as document modifications.
       if (transaction.docChanged && this.converter) {
         if (!this.converter.documentGuid) {
           this.converter.promoteToGuid();
