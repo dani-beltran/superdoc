@@ -44,6 +44,7 @@ import { AnnotatorHelpers } from '@helpers/annotator.js';
 import { prepareCommentsForExport, prepareCommentsForImport } from '@extensions/comment/comments-helpers.js';
 import DocxZipper from '@core/DocxZipper.js';
 import { generateCollaborationData, cleanupCollaborationSideEffects } from '@extensions/collaboration/collaboration.js';
+import { normalizeYjsFragmentForSchema } from '@extensions/collaboration/normalize-yjs-fragment.js';
 import { seedPartsFromEditor } from '@extensions/collaboration/part-sync/seed-parts.js';
 import { onCollaborationProviderSynced } from './helpers/collaboration-provider-sync.js';
 import { useHighContrastMode } from '../composables/use-high-contrast-mode.js';
@@ -2436,7 +2437,10 @@ export class Editor extends EventEmitter<EditorEventMap> {
             });
           else if (this.options.jsonOverride) doc = this.schema.nodeFromJSON(this.options.jsonOverride);
 
-          if (fragment) doc = yXmlFragmentToProseMirrorRootNode(fragment, this.schema);
+          if (fragment) {
+            normalizeYjsFragmentForSchema(fragment);
+            doc = yXmlFragmentToProseMirrorRootNode(fragment, this.schema);
+          }
         }
       }
 

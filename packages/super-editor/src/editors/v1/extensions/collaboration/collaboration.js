@@ -8,6 +8,7 @@ import {
 } from '../../core/helpers/collaboration-provider-sync.js';
 import { bootstrapPartSync } from './part-sync/index.js';
 import { seedPartsFromEditor } from './part-sync/seed-parts.js';
+import { normalizeYjsFragmentForSchema } from './normalize-yjs-fragment.js';
 
 export const CollaborationPluginKey = new PluginKey('collaboration');
 const headlessBindingStateByEditor = new WeakMap();
@@ -282,6 +283,7 @@ export const cleanupCollaborationSideEffects = (editor) => {
 
 export const createSyncPlugin = (ydoc, editor) => {
   const fragment = ydoc.getXmlFragment('supereditor');
+  normalizeYjsFragmentForSchema(fragment);
   const onFirstRender = () => {
     if (!editor.options.isNewFile) return;
     initializeMetaMap(ydoc, editor);
