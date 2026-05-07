@@ -41,6 +41,103 @@ describe('Relationships tests', () => {
     expect(found.attributes.Target).toBe('https://www.superdoc.dev');
   });
 
+  it.each(['Hyperlink', 'FollowedHyperlink'])(
+    'clears transient textStyle and runProperties styleId "%s" when unsetting a link',
+    (styleId) => {
+      editor.commands.insertContent('link');
+      editor.commands.selectAll();
+      editor.commands.setLink({ href: 'https://www.superdoc.dev' });
+      editor.commands.setMark('textStyle', { styleId });
+      editor.commands.command(({ tr, dispatch }) => {
+        const runNodesToPatch = [];
+
+        tr.doc.descendants((node, pos) => {
+          if (node.type.name !== 'run') return;
+
+          runNodesToPatch.push({ node, pos });
+        });
+
+        runNodesToPatch
+          .sort((a, b) => b.pos - a.pos)
+          .forEach(({ node, pos }) => {
+            tr.setNodeMarkup(
+              pos,
+              node.type,
+              {
+                ...node.attrs,
+                runProperties: { ...node.attrs.runProperties, styleId },
+              },
+              node.marks,
+            );
+          });
+
+        dispatch(tr);
+        return true;
+      });
+
+      editor.commands.unsetLink();
+
+      const textStyleMarks = [];
+      const runNodes = [];
+      editor.state.doc.descendants((node) => {
+        if (!node.isText) return;
+        node.marks.forEach((mark) => {
+          if (mark.type.name === 'textStyle') {
+            textStyleMarks.push(mark);
+          }
+        });
+      });
+      editor.state.doc.descendants((node) => {
+        if (node.type.name !== 'run') return;
+        runNodes.push(node);
+      });
+
+      expect(textStyleMarks.length).toBeGreaterThan(0);
+      textStyleMarks.forEach((mark) => {
+        expect(mark.attrs.styleId).toBeNull();
+      });
+      expect(runNodes.length).toBeGreaterThan(0);
+      runNodes.forEach((runNode) => {
+        expect(runNode.attrs.runProperties?.styleId).toBeNull();
+      });
+    },
+  );
+
+  it('preserves pre-existing underline after unsetLink', () => {
+    editor.commands.insertContent('link');
+    editor.commands.selectAll();
+    editor.commands.setUnderline();
+    editor.commands.setLink({ href: 'https://www.superdoc.dev' });
+    editor.commands.unsetLink();
+
+    let hasUnderline = false;
+    editor.state.doc.descendants((node) => {
+      if (!node.isText) return;
+      if (node.marks.some((mark) => mark.type.name === 'underline')) {
+        hasUnderline = true;
+      }
+    });
+
+    expect(hasUnderline).toBe(true);
+  });
+
+  it('removes underline on unsetLink when underline was not pre-existing', () => {
+    editor.commands.insertContent('link');
+    editor.commands.selectAll();
+    editor.commands.setLink({ href: 'https://www.superdoc.dev' });
+    editor.commands.unsetLink();
+
+    let hasUnderline = false;
+    editor.state.doc.descendants((node) => {
+      if (!node.isText) return;
+      if (node.marks.some((mark) => mark.type.name === 'underline')) {
+        hasUnderline = true;
+      }
+    });
+
+    expect(hasUnderline).toBe(false);
+  });
+
   it('tests that the uploaded image has a rId and a relationship', async () => {
     const blob = await fetch(imageBase64).then((res) => res.blob());
     const file = new File([blob], 'image.png', { type: 'image/png' });
