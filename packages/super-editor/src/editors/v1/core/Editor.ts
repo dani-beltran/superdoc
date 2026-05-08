@@ -371,6 +371,12 @@ export class Editor extends EventEmitter<EditorEventMap> {
    */
   #documentOpenTracked = false;
 
+  /**
+   * Fragment configured at construction time. This is reusable default config,
+   * unlike document-scoped fragments supplied to a single open() call.
+   */
+  #constructorFragment: YXmlFragment | null = null;
+
   options: EditorOptions = {
     element: null,
     selector: null,
@@ -526,6 +532,8 @@ export class Editor extends EventEmitter<EditorEventMap> {
       resolvedOptions.element = null;
       resolvedOptions.selector = null;
     }
+
+    this.#constructorFragment = resolvedOptions.fragment ?? null;
 
     this.#checkHeadless(resolvedOptions);
     this.setOptions(resolvedOptions);
@@ -816,6 +824,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
       // Merge options with defaults
       const resolvedMode = options?.mode ?? this.options.mode ?? 'docx';
       const explicitIsNewFile = options?.isNewFile;
+      const hasOpenFragment = Object.prototype.hasOwnProperty.call(options ?? {}, 'fragment');
       const resolvedOptions = {
         ...this.options,
         mode: resolvedMode,
@@ -825,7 +834,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
         html: options?.html,
         markdown: options?.markdown,
         jsonOverride: options?.json ?? null,
-        fragment: options?.fragment ?? null,
+        fragment: hasOpenFragment ? (options?.fragment ?? null) : this.#constructorFragment,
       };
 
       // Password for encrypted .docx — threaded to loadXmlData, then cleared
