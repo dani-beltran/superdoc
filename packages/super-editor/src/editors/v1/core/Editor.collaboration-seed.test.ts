@@ -218,6 +218,41 @@ describe('Editor collaboration seeding', () => {
     }
   });
 
+  it('hydrates directly from a fragment supplied to open options', async () => {
+    const seedYdoc = new YDoc();
+    const seedEditor = createTestEditor();
+    const fragmentEditor = createTestEditor();
+
+    try {
+      await seedEditor.open(undefined, { mode: 'docx' });
+      const crossReferenceDoc = createCrossReferencePmDoc(seedEditor);
+      seedEditor.dispatch(seedEditor.state.tr.replaceWith(0, seedEditor.state.doc.content.size, crossReferenceDoc));
+      seedEditorStateToYDoc(seedEditor, seedYdoc);
+      addCachedResultRunToYjsCrossReference(seedYdoc);
+
+      await fragmentEditor.open(undefined, {
+        mode: 'docx',
+        fragment: seedYdoc.getXmlFragment('supereditor'),
+        isNewFile: false,
+      });
+
+      const fragmentCrossReferences = collectCrossReferences(fragmentEditor);
+      expect(fragmentCrossReferences).toHaveLength(1);
+      expect(fragmentCrossReferences[0].attrs.instruction).toBe('REF _Ref228977094 \\r \\h');
+      expect(fragmentCrossReferences[0].attrs.resolvedText).toBe('\u200e1');
+    } finally {
+      if (seedEditor.lifecycleState === 'ready') {
+        seedEditor.close();
+      }
+      if (fragmentEditor.lifecycleState === 'ready') {
+        fragmentEditor.close();
+      }
+      seedEditor.destroy();
+      fragmentEditor.destroy();
+      seedYdoc.destroy();
+    }
+  });
+
   it('preserves crossReference nodes when room content arrives after collaboration setup', async () => {
     const observerProvider = createProviderStub();
     const seedYdoc = new YDoc();

@@ -2,7 +2,7 @@ import type { EditorState, Transaction, Plugin } from 'prosemirror-state';
 import { Transform } from 'prosemirror-transform';
 import type { EditorView as PmEditorView } from 'prosemirror-view';
 import type { Node as PmNode, Schema } from 'prosemirror-model';
-import type { Doc as YDoc } from 'yjs';
+import type { Doc as YDoc, XmlFragment as YXmlFragment } from 'yjs';
 import type { EditorOptions, User, FieldValue, DocxFileEntry } from './types/EditorConfig.js';
 import type { EditorHelpers, ExtensionStorage, ProseMirrorJSON, PageStyles, Toolbar } from './types/EditorTypes.js';
 import type { ChainableCommandObject, CanObject, EditorCommands } from './types/ChainedCommands.js';
@@ -176,6 +176,9 @@ export interface OpenOptions {
 
   /** JSON content to initialize with */
   json?: ProseMirrorJSON | null;
+
+  /** Y.js XML fragment to hydrate from */
+  fragment?: YXmlFragment | null;
 
   /** Whether comments are enabled */
   isCommentsEnabled?: boolean;
@@ -822,6 +825,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
         html: options?.html,
         markdown: options?.markdown,
         jsonOverride: options?.json ?? null,
+        fragment: options?.fragment ?? this.options.fragment ?? null,
       };
 
       // Password for encrypted .docx — threaded to loadXmlData, then cleared
@@ -3498,6 +3502,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
       html,
       markdown,
       json,
+      fragment,
       isCommentsEnabled,
       suppressDefaultDocxStyles,
       documentMode,
@@ -3515,6 +3520,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
       html,
       markdown,
       json,
+      fragment,
       isCommentsEnabled,
       suppressDefaultDocxStyles,
       documentMode: documentMode as 'editing' | 'viewing' | 'suggesting' | undefined,
