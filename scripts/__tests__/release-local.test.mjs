@@ -338,6 +338,40 @@ test('stable-to-main sync waits for stable release completion', async () => {
   );
 });
 
+test('stable-to-main sync preserves stable release ancestry', async () => {
+  const workflow = await readRepoFile('.github/workflows/sync-patches.yml');
+
+  assert.equal(
+    workflow.includes('git merge --squash'),
+    false,
+    '.github/workflows/sync-patches.yml: stable-to-main sync must not squash because semantic-release needs stable tags reachable from main',
+  );
+  assert.ok(
+    workflow.includes('git merge --no-ff --no-edit origin/stable'),
+    '.github/workflows/sync-patches.yml: stable-to-main sync must create a real merge commit',
+  );
+  assert.ok(
+    workflow.includes('git merge-base --is-ancestor origin/stable origin/main') &&
+      workflow.includes('git merge-base --is-ancestor origin/stable HEAD'),
+    '.github/workflows/sync-patches.yml: sync must guard on and verify stable ancestry',
+  );
+  assert.ok(
+    workflow.includes('release_artifact_only_conflict') &&
+      workflow.includes('version-only') &&
+      workflow.includes('git checkout --theirs "$f"'),
+    '.github/workflows/sync-patches.yml: release artifact conflicts must resolve to stable only when the conflict is version-only',
+  );
+  assert.equal(
+    workflow.includes('git add -A'),
+    false,
+    '.github/workflows/sync-patches.yml: sync must not commit unresolved conflict markers into review PRs',
+  );
+  assert.ok(
+    workflow.includes("This PR must be merged with GitHub's merge-commit option"),
+    '.github/workflows/sync-patches.yml: generated PRs must warn reviewers not to squash away stable ancestry',
+  );
+});
+
 test('MCP releaserc builds the package before publish so the tarball ships dist/', async () => {
   const content = await readRepoFile('apps/mcp/.releaserc.cjs');
   assert.ok(
@@ -413,6 +447,53 @@ test('stable recovery ignores PyPI gaps when SDK PyPI publishing is disabled', a
     /name: 'sdk'[\s\S]*\.\.\.\(SDK_PYPI_ENABLED[\s\S]*pythonPackages: SDK_PYTHON_PACKAGES[\s\S]*preparePythonSnapshot: prepareSdkPythonSnapshot/.test(content),
     'scripts/release-local-stable.mjs: SDK Python tracking and snapshot recovery must move together behind SDK_PYPI_ENABLED',
   );
+});
+
+test('release configs suppress per-PR comment spam on prereleases', async () => {
+  const releasercPaths = [
+    'packages/superdoc/.releaserc.cjs',
+    'packages/react/.releaserc.cjs',
+    'packages/sdk/.releaserc.cjs',
+    'packages/template-builder/.releaserc.cjs',
+    'packages/esign/.releaserc.cjs',
+    'apps/cli/.releaserc.cjs',
+    'apps/mcp/.releaserc.cjs',
+    'apps/vscode-ext/.releaserc.cjs',
+    'apps/create/.releaserc.cjs',
+  ];
+
+  for (const releasercPath of releasercPaths) {
+    const content = await readRepoFile(releasercPath);
+
+    const usesGithubPlugin = content.includes("'@semantic-release/github'");
+    const usesLinearPlugin = content.includes("'semantic-release-linear-app'");
+
+    if (!usesGithubPlugin && !usesLinearPlugin) continue;
+
+    assert.ok(
+      content.includes('const shouldCommentOnRelease = !isPrerelease'),
+      `${releasercPath}: must define shouldCommentOnRelease = !isPrerelease so the prerelease comment gate is consistent across configs`,
+    );
+
+    if (usesGithubPlugin) {
+      assert.ok(
+        content.includes('successCommentCondition: shouldCommentOnRelease ? undefined : false'),
+        `${releasercPath}: @semantic-release/github must gate successCommentCondition through shouldCommentOnRelease so prereleases don't re-comment on every PR after a stable -> main sync`,
+      );
+    }
+
+    if (usesLinearPlugin) {
+      assert.ok(
+        content.includes('addComment: shouldCommentOnRelease'),
+        `${releasercPath}: semantic-release-linear-app addComment must be gated through shouldCommentOnRelease so prereleases don't post duplicate Linear comments after a stable -> main sync`,
+      );
+      assert.equal(
+        content.includes('addComment: true'),
+        false,
+        `${releasercPath}: semantic-release-linear-app must not hardcode addComment: true`,
+      );
+    }
+  }
 });
 
 test('release-state probes wrap fetch in bounded retry to absorb transient blips', async () => {
