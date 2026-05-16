@@ -12,7 +12,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import { writeFile } from 'node:fs/promises';
-import { corpusDoc, unwrap, useStoryHarness } from '../harness';
+import path from 'node:path';
+import { unwrap, useStoryHarness } from '../harness';
 
 const ALL_METADATA_COMMAND_IDS = [
   'metadata.attach',
@@ -42,7 +43,7 @@ type Scenario = {
   run: (sessionId: string, fixture: Fixture | null) => Promise<any>;
 };
 
-const BASE_DOC = corpusDoc('basic/longer-header.docx');
+const BASE_DOC = path.resolve(import.meta.dirname, '../../../../shared/common/data/blank.docx');
 const NAMESPACE = 'urn:superdoc:metadata-story:1';
 
 describe('document-api story: all metadata commands', () => {
@@ -68,6 +69,10 @@ describe('document-api story: all metadata commands', () => {
 
   function resultDocNameFor(operationId: MetadataCommandId): string {
     return `${slug(operationId)}.docx`;
+  }
+
+  function roundtripDocNameFor(operationId: MetadataCommandId): string {
+    return `${slug(operationId)}-roundtrip.docx`;
   }
 
   function readOutputNameFor(operationId: MetadataCommandId): string {
@@ -96,8 +101,10 @@ describe('document-api story: all metadata commands', () => {
     await callDocOperation('save', { sessionId, out: outPath(sourceDocNameFor(operationId)), force: true });
   }
 
-  async function saveResult(sessionId: string, operationId: MetadataCommandId): Promise<void> {
-    await callDocOperation('save', { sessionId, out: outPath(resultDocNameFor(operationId)), force: true });
+  async function saveResult(sessionId: string, operationId: MetadataCommandId): Promise<string> {
+    const docPath = outPath(resultDocNameFor(operationId));
+    await callDocOperation('save', { sessionId, out: docPath, force: true });
+    return docPath;
   }
 
   function assertMutationSuccess(operationId: string, result: any): void {
@@ -109,6 +116,86 @@ describe('document-api story: all metadata commands', () => {
   function requireFixture(operationId: MetadataCommandId, fixture: Fixture | null): Fixture {
     if (!fixture) throw new Error(`${operationId} requires a fixture.`);
     return fixture;
+  }
+
+  function itemIds(result: any): string[] {
+    return (result?.items ?? [])
+      .map((item: any) => item?.id ?? item?.domain?.id)
+      .filter((id: unknown) => typeof id === 'string');
+  }
+
+  function expectedIdFor(operationId: MetadataCommandId, fixture: Fixture | null, result: any): string | null {
+    if (operationId === 'metadata.attach' && typeof result?.id === 'string') return result.id;
+    if (typeof fixture?.id === 'string') return fixture.id;
+    return null;
+  }
+
+  async function assertRoundtripState(
+    operationId: MetadataCommandId,
+    resultDocPath: string,
+    fixture: Fixture | null,
+    result: any,
+  ): Promise<void> {
+    const reopenSessionId = makeSessionId(`${slug(operationId)}-reopen`);
+    const expectedId = expectedIdFor(operationId, fixture, result);
+    try {
+      await callDocOperation('open', { sessionId: reopenSessionId, doc: resultDocPath });
+
+      if (operationId === 'metadata.remove') {
+        if (!expectedId) throw new Error('metadata.remove roundtrip requires an id fixture.');
+        const reopenedGet = await callDocOperation<any>('metadata.get', { sessionId: reopenSessionId, id: expectedId });
+        expect(reopenedGet).toBeNull();
+        const reopenedResolve = await callDocOperation<any>('metadata.resolve', {
+          sessionId: reopenSessionId,
+          id: expectedId,
+        });
+        expect(reopenedResolve).toBeNull();
+        const reopenedList = await callDocOperation<any>('metadata.list', {
+          sessionId: reopenSessionId,
+          namespace: NAMESPACE,
+        });
+        expect(itemIds(reopenedList)).not.toContain(expectedId);
+        await callDocOperation('save', {
+          sessionId: reopenSessionId,
+          out: outPath(roundtripDocNameFor(operationId)),
+          force: true,
+        });
+        return;
+      }
+
+      if (!expectedId) throw new Error(`${operationId} roundtrip requires an anchored metadata id.`);
+      const reopenedInfo = await callDocOperation<any>('metadata.get', { sessionId: reopenSessionId, id: expectedId });
+      expect(reopenedInfo?.id).toBe(expectedId);
+      expect(reopenedInfo?.namespace).toBe(NAMESPACE);
+
+      const reopenedResolve = await callDocOperation<any>('metadata.resolve', {
+        sessionId: reopenSessionId,
+        id: expectedId,
+      });
+      expect(reopenedResolve?.id).toBe(expectedId);
+      expect(reopenedResolve?.target?.kind).toBe('selection');
+
+      const reopenedList = await callDocOperation<any>('metadata.list', {
+        sessionId: reopenSessionId,
+        namespace: NAMESPACE,
+      });
+      expect(itemIds(reopenedList)).toContain(expectedId);
+
+      const reopenedWithin = await callDocOperation<any>('metadata.list', {
+        sessionId: reopenSessionId,
+        namespace: NAMESPACE,
+        within: reopenedResolve.target,
+      });
+      expect(itemIds(reopenedWithin)).toContain(expectedId);
+
+      await callDocOperation('save', {
+        sessionId: reopenSessionId,
+        out: outPath(roundtripDocNameFor(operationId)),
+        force: true,
+      });
+    } finally {
+      await callDocOperation('close', { sessionId: reopenSessionId, discard: true }).catch(() => {});
+    }
   }
 
   async function seedTextTarget(sessionId: string, text: string): Promise<TextTarget> {
@@ -158,10 +245,15 @@ describe('document-api story: all metadata commands', () => {
           payload: { kind: 'citation', source: 'Story v1' },
         });
 
-        // Survives a list round-trip
+        const withinResult = await callDocOperation<any>('metadata.list', {
+          sessionId,
+          namespace: NAMESPACE,
+          within: f.target,
+        });
+        expect(itemIds(withinResult)).toContain(id);
+
         const listResult = await callDocOperation<any>('metadata.list', { sessionId, namespace: NAMESPACE });
-        const ids = (listResult?.items ?? []).map((item: any) => item?.id ?? item?.domain?.id);
-        expect(ids).toContain(id);
+        expect(itemIds(listResult)).toContain(id);
 
         return attachResult;
       },
@@ -173,11 +265,22 @@ describe('document-api story: all metadata commands', () => {
         await attachOne(sessionId, id, { kind: 'citation', source: 'List scenario' });
         return { id };
       },
-      run: async (sessionId) => {
+      run: async (sessionId, fixture) => {
         const result = await callDocOperation<any>('metadata.list', { sessionId, namespace: NAMESPACE });
         expect(typeof result?.total).toBe('number');
         expect(result.total).toBeGreaterThanOrEqual(1);
         expect(Array.isArray(result?.items)).toBe(true);
+
+        const f = requireFixture('metadata.list', fixture);
+        if (!f.id) throw new Error('metadata.list requires an id fixture.');
+        const resolved = await callDocOperation<any>('metadata.resolve', { sessionId, id: f.id });
+        expect(resolved?.target?.kind).toBe('selection');
+        const narrowed = await callDocOperation<any>('metadata.list', {
+          sessionId,
+          namespace: NAMESPACE,
+          within: resolved.target,
+        });
+        expect(itemIds(narrowed)).toContain(f.id);
         return result;
       },
     },
@@ -260,8 +363,7 @@ describe('document-api story: all metadata commands', () => {
         expect(afterResolve).toBeNull();
 
         const listAfter = await callDocOperation<any>('metadata.list', { sessionId, namespace: NAMESPACE });
-        const ids = (listAfter?.items ?? []).map((item: any) => item?.id ?? item?.domain?.id);
-        expect(ids).not.toContain(f.id);
+        expect(itemIds(listAfter)).not.toContain(f.id);
 
         return removeResult;
       },
@@ -292,7 +394,8 @@ describe('document-api story: all metadata commands', () => {
           assertMutationSuccess(scenario.operationId, result);
         }
 
-        await saveResult(sessionId, scenario.operationId);
+        const resultDocPath = await saveResult(sessionId, scenario.operationId);
+        await assertRoundtripState(scenario.operationId, resultDocPath, fixture, result);
       } finally {
         await callDocOperation('close', { sessionId, discard: true }).catch(() => {});
       }
