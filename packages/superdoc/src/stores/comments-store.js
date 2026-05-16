@@ -611,6 +611,27 @@ export const useCommentsStore = defineStore('comments', () => {
       return true;
     };
 
+    const applyStoryMetadata = (target) => {
+      if (!target) return false;
+      let didChange = false;
+      if (normalizedTrackedChangeStory !== undefined && normalizedTrackedChangeStory !== null) {
+        didChange = setIfChanged(target, 'trackedChangeStory', normalizedTrackedChangeStory) || didChange;
+      }
+      if (normalizedTrackedChangeStoryKind !== undefined && normalizedTrackedChangeStoryKind !== null) {
+        didChange =
+          setIfChanged(target, 'trackedChangeStoryKind', normalizedTrackedChangeStoryKind) || didChange;
+      }
+      if (normalizedTrackedChangeStoryLabel !== undefined && normalizedTrackedChangeStoryLabel !== '') {
+        didChange =
+          setIfChanged(target, 'trackedChangeStoryLabel', normalizedTrackedChangeStoryLabel) || didChange;
+      }
+      if (normalizedTrackedChangeAnchorKey !== undefined && normalizedTrackedChangeAnchorKey !== null) {
+        didChange =
+          setIfChanged(target, 'trackedChangeAnchorKey', normalizedTrackedChangeAnchorKey) || didChange;
+      }
+      return didChange;
+    };
+
     const applyChangedFields = (target) => {
       const fields = {
         trackedChangeText: trackedChangeText ?? null,
@@ -618,17 +639,12 @@ export const useCommentsStore = defineStore('comments', () => {
         trackedChangeDisplayType: trackedChangeDisplayType ?? null,
         deletedText: deletedText ?? null,
       };
-      if (normalizedTrackedChangeStory != null) fields.trackedChangeStory = normalizedTrackedChangeStory;
-      if (normalizedTrackedChangeStoryKind != null) fields.trackedChangeStoryKind = normalizedTrackedChangeStoryKind;
-      if (normalizedTrackedChangeStoryLabel !== '') fields.trackedChangeStoryLabel = normalizedTrackedChangeStoryLabel;
-      if (normalizedTrackedChangeAnchorKey != null) fields.trackedChangeAnchorKey = normalizedTrackedChangeAnchorKey;
 
-      // If values match
       let didChange = false;
       for (const [key, value] of Object.entries(fields)) {
-        if (setIfChanged(target, key, value)) didChange = true;
+        didChange = setIfChanged(target, key, value) || didChange;
       }
-      return didChange;
+      return applyStoryMetadata(target) || didChange;
     };
 
     const updateExistingTrackedChange = (trackedComment) => {
@@ -657,9 +673,9 @@ export const useCommentsStore = defineStore('comments', () => {
       }
       addComment({ superdoc, comment, broadcastChanges });
     } else if (event === 'update') {
+      // If we have an update event, simply update the composable comment
       const existingTrackedChange = findTrackedChangeById();
       if (!existingTrackedChange) return;
-
       if (!updateExistingTrackedChange(existingTrackedChange)) return;
 
       const emitData = {
