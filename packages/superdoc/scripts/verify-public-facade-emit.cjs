@@ -153,7 +153,15 @@ function loadFile(file) {
   return fs.readFileSync(file, 'utf8');
 }
 
-function listExportedNames(file) {
+function formatDiagnostic(diagnostic) {
+  const message = ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n');
+  if (!diagnostic.file || diagnostic.start == null) return message;
+  const { line, character } = diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start);
+  const relative = path.relative(repoRoot, diagnostic.file.fileName);
+  return `${relative}:${line + 1}:${character + 1} ${message}`;
+}
+
+function listExportedNames(entry, file) {
   const program = ts.createProgram({
     rootNames: [file],
     options: {
@@ -161,19 +169,39 @@ function listExportedNames(file) {
       module: ts.ModuleKind.ESNext,
       target: ts.ScriptTarget.ESNext,
       noEmit: true,
-      skipLibCheck: true,
+      skipLibCheck: false,
     },
   });
+  const diagnostics = [
+    ...program.getSyntacticDiagnostics(),
+    ...program.getSemanticDiagnostics(),
+    ...program.getDeclarationDiagnostics(),
+  ];
+  if (diagnostics.length > 0) {
+    console.error(`[verify-public-facade-emit] ${entry.name}: facade declaration has TypeScript diagnostics.`);
+    for (const diagnostic of diagnostics.slice(0, 10)) {
+      console.error('  - ' + formatDiagnostic(diagnostic));
+    }
+    if (diagnostics.length > 10) {
+      console.error(`  ... ${diagnostics.length - 10} more diagnostics`);
+    }
+    return { ok: false, names: [] };
+  }
   const checker = program.getTypeChecker();
   const src = program.getSourceFile(file);
   const symbol = checker.getSymbolAtLocation(src) ?? (src && src.symbol);
-  if (!symbol) return [];
-  return [...new Set(checker.getExportsOfModule(symbol).map((s) => s.getName()))].sort();
+  if (!symbol) return { ok: true, names: [] };
+  return {
+    ok: true,
+    names: [...new Set(checker.getExportsOfModule(symbol).map((s) => s.getName()))].sort(),
+  };
 }
 
 function checkSymbolSet(entry) {
   const expected = [...entry.expectedNames].sort();
-  const actual = listExportedNames(entry.esm);
+  const result = listExportedNames(entry, entry.esm);
+  if (!result.ok) return { ok: false, actual: result.names };
+  const actual = result.names;
   if (JSON.stringify(actual) === JSON.stringify(expected)) {
     return { ok: true, actual };
   }
@@ -186,7 +214,9 @@ function checkSymbolSet(entry) {
 }
 
 function checkEsmCjsParity(entry, esmNames) {
-  const cjsNames = listExportedNames(entry.cjs);
+  const result = listExportedNames(entry, entry.cjs);
+  if (!result.ok) return false;
+  const cjsNames = result.names;
   if (JSON.stringify(esmNames) === JSON.stringify(cjsNames)) return true;
   const importOnly = esmNames.filter((n) => !cjsNames.includes(n));
   const requireOnly = cjsNames.filter((n) => !esmNames.includes(n));
