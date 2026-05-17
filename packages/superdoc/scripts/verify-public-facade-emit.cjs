@@ -33,8 +33,15 @@
  *
  * Adding a new facade file:
  *   - Create `packages/superdoc/src/public/<name>.ts` with named exports.
- *   - Wire it into `vite.config.js` (`rollupOptions.input`) and the CJS
- *     shim list in `scripts/ensure-types.cjs`.
+ *   - Wire it into `vite.config.js` (`rollupOptions.input`).
+ *   - If the new entry is intended to ship with both ESM and CJS type
+ *     declarations (i.e. `package.json#exports` will use a `types.import` /
+ *     `types.require` pair), also add it to `cjsDeclarationShims` in
+ *     `scripts/ensure-types.cjs` and set `cjs` on the `FACADE_ENTRIES`
+ *     entry below. If the entry will use a single `types` string instead
+ *     (matching the SD-3180 legacy leaf entries), leave `cjs: null` and
+ *     the parity check is skipped. Phase 4 of SD-3175 owns the contract
+ *     flip and decides per-entry which shape ships.
  *   - Append a `FACADE_ENTRIES` entry below with the expected symbol set.
  *   - If the new entry re-exports `EditorCommands`, set
  *     `runsCommandSignatureProbe: true`.
@@ -96,6 +103,39 @@ const FACADE_ENTRIES = [
     ],
     runsCommandSignatureProbe: false,
     ticket: 'SD-3179',
+  },
+  // SD-3180: legacy leaf entries. These match the existing single-types
+  // pattern of the live `superdoc/converter` / `superdoc/docx-zipper` /
+  // `superdoc/file-zipper` subpaths, which do not have `.d.cts` shims
+  // today. `cjs: null` skips the ESM/CJS parity check. Phase 4 decides
+  // whether to add CJS shims when the contract flips.
+  {
+    name: 'legacy/converter',
+    esm: path.join(PUBLIC_DIST, 'legacy', 'converter.d.ts'),
+    cjs: null,
+    expectedNames: ['SuperConverter'],
+    runsCommandSignatureProbe: false,
+    ticket: 'SD-3180',
+  },
+  {
+    name: 'legacy/docx-zipper',
+    esm: path.join(PUBLIC_DIST, 'legacy', 'docx-zipper.d.ts'),
+    cjs: null,
+    // AIDEV-NOTE: `default`, not `DocxZipper`. The current public contract
+    // is `import DocxZipper from 'superdoc/docx-zipper'`. The resolved
+    // exported name is therefore `default`. Changing to a named export
+    // would break consumers.
+    expectedNames: ['default'],
+    runsCommandSignatureProbe: false,
+    ticket: 'SD-3180',
+  },
+  {
+    name: 'legacy/file-zipper',
+    esm: path.join(PUBLIC_DIST, 'legacy', 'file-zipper.d.ts'),
+    cjs: null,
+    expectedNames: ['createZip'],
+    runsCommandSignatureProbe: false,
+    ticket: 'SD-3180',
   },
 ];
 
@@ -218,7 +258,9 @@ const LEAK_PATTERNS = [
 
 function checkLeaks(entry) {
   let ok = true;
-  for (const file of [entry.esm, entry.cjs]) {
+  const files = [entry.esm];
+  if (entry.cjs) files.push(entry.cjs);
+  for (const file of files) {
     const code = stripComments(loadFile(file));
     for (const pattern of LEAK_PATTERNS) {
       const matches = code.match(pattern.re);
@@ -239,7 +281,10 @@ for (const entry of FACADE_ENTRIES) {
   const symbolResult = checkSymbolSet(entry);
   if (!symbolResult.ok) failed = true;
 
-  if (!checkEsmCjsParity(entry, symbolResult.actual)) failed = true;
+  // Entries with `cjs: null` (e.g. SD-3180 legacy leaf entries that match
+  // the existing single-types pattern) skip the parity check until Phase 4
+  // decides whether to add proper CJS shims.
+  if (entry.cjs && !checkEsmCjsParity(entry, symbolResult.actual)) failed = true;
 
   if (entry.runsCommandSignatureProbe && !checkCommandSignatureProbe(entry)) {
     failed = true;
