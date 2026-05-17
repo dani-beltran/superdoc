@@ -237,6 +237,12 @@ export default defineConfig(({ mode, command }) => {
           'super-editor/docx-zipper': '@core/DocxZipper',
           'super-editor/converter': '@core/super-converter/SuperConverter',
           'super-editor/file-zipper': '@core/super-converter/zipper.js',
+          // SD-3178 (Phase 3 of SD-3175): root entry of the explicit public
+          // facade. Build emits the artifact alongside the existing entries
+          // so the facade declarations are available for postbuild
+          // verification. `package.json#exports` is intentionally not yet
+          // updated; Phase 4 owns the contract switch.
+          'public': 'src/public/index.ts',
         },
         external: [
           'yjs',
