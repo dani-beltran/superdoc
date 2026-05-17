@@ -140,6 +140,12 @@ const cjsDeclarationShims = [
     source: path.join(distRoot, 'superdoc/src/public/index.d.ts'),
     target: './index.js',
   },
+  // SD-3179: legacy headless-toolbar facade entry.
+  {
+    file: path.join(distRoot, 'superdoc/src/public/legacy/headless-toolbar.d.cts'),
+    source: path.join(distRoot, 'superdoc/src/public/legacy/headless-toolbar.d.ts'),
+    target: './headless-toolbar.js',
+  },
 ];
 
 function isValidIdentifier(name) {

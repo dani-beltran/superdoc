@@ -11,6 +11,9 @@ These files lock the public TypeScript surface that ships through SuperDoc's leg
 | `superdoc-converter.txt` | Resolved exports through `superdoc/converter` | Single-purpose legacy entry; freeze check. |
 | `superdoc-docx-zipper.txt` | Resolved exports through `superdoc/docx-zipper` | Single-purpose legacy entry; freeze check. |
 | `superdoc-file-zipper.txt` | Resolved exports through `superdoc/file-zipper` | Single-purpose legacy entry; freeze check. |
+| `superdoc-headless-toolbar.txt` | Resolved exports through `superdoc/headless-toolbar` | Reclassified as legacy in SD-3179 ahead of the `superdoc/ui` migration. 16-name surface; freeze check. |
+| `superdoc-headless-toolbar-react.txt` | Resolved exports through `superdoc/headless-toolbar/react` | Framework helper paired with `superdoc/headless-toolbar`. Migration target: `superdoc/ui/react`. |
+| `superdoc-headless-toolbar-vue.txt` | Resolved exports through `superdoc/headless-toolbar/vue` | Framework helper paired with `superdoc/headless-toolbar`. Migration target: tracked separately. |
 
 Snapshot scripts:
 
@@ -65,5 +68,5 @@ node snapshot-superdoc-legacy-exports.mjs --check
 - Does not classify supported public surfaces (root `superdoc`, `superdoc/ui`, etc.). That work lives in `tests/consumer-typecheck/public-facade-policy.json` and SD-2966 / SD-3147.
 - Does not catch leaks through non-legacy paths. The full path-as-contract facade lands under SD-3175.
 - Does not lock the *types* of exported symbols, only their names. A breaking change to an existing export's shape passes this gate.
-- Does not run against arbitrary subpaths. Only the four files listed above are tracked.
+- Does not run against arbitrary subpaths. Only the files listed in the table above are tracked. The authoritative list lives in `SUBPATHS` inside `tests/consumer-typecheck/snapshot-superdoc-legacy-exports.mjs`.
 - Does not enumerate every file reachable through existing wildcard export-map keys in `@superdoc/super-editor` (e.g. `"./*"`, `"./converter/internal/*"`). Snapshot A freezes the export-map key set; Snapshot B freezes the resolved `superdoc/super-editor` named export surface. A new file added under an existing wildcard that a consumer reaches via deep import (`@superdoc/super-editor/something-new`) passes both gates. Wildcard removal or shrinkage belongs to the later compat/major phases of SD-3175.

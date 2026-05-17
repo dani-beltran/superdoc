@@ -237,16 +237,21 @@ export default defineConfig(({ mode, command }) => {
           'super-editor/docx-zipper': '@core/DocxZipper',
           'super-editor/converter': '@core/super-converter/SuperConverter',
           'super-editor/file-zipper': '@core/super-converter/zipper.js',
-          // SD-3178 (Phase 3 of SD-3175): root entry of the explicit public
-          // facade. Build emits the artifact alongside the existing entries
-          // so the facade declarations are available for postbuild
-          // verification.
+          // SD-3178 (Phase 3 of SD-3175): explicit public facade entries.
+          // Build emits the artifacts alongside the existing entries so the
+          // facade declarations are available for postbuild verification.
           // AIDEV-NOTE: `package.json#exports` is intentionally not yet
-          // updated to point at this entry. Phase 4 (a separate child of
-          // SD-3175) owns the contract switch. Adding a `./public` entry
-          // here without that ticket ships a new public subpath under the
-          // radar.
+          // updated to point at these entries. Phase 4 (a separate child
+          // of SD-3175) owns the contract switch. Adding `./public` or
+          // `./public/...` entries here without that ticket ships new
+          // public subpaths under the radar.
           'public': 'src/public/index.ts',
+          // SD-3179: legacy headless-toolbar facade entry. Classified as
+          // legacy public compatibility surface in
+          // `docs/architecture/package-boundaries.md` Decision 4. New
+          // custom UI integrations should use the `superdoc/ui` /
+          // `superdoc/ui/react` entries instead.
+          'public/legacy/headless-toolbar': 'src/public/legacy/headless-toolbar.ts',
         },
         external: [
           'yjs',

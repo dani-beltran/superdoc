@@ -4,10 +4,15 @@
  *
  * Snapshots the resolved named exports visible through these subpaths against
  * the packed-and-installed tarball:
- *   - superdoc/super-editor   (the dangerous one; `export *` from @superdoc/super-editor)
+ *   - superdoc/super-editor          (the dangerous one; `export *` from @superdoc/super-editor)
  *   - superdoc/converter
  *   - superdoc/docx-zipper
  *   - superdoc/file-zipper
+ *   - superdoc/headless-toolbar      (SD-3179 reclassified from public to legacy)
+ *   - superdoc/headless-toolbar/react
+ *   - superdoc/headless-toolbar/vue
+ *
+ * The authoritative list is the `SUBPATHS` constant below.
  *
  * Source parsing is insufficient because `superdoc/src/super-editor.js` is
  * `export * from '@superdoc/super-editor'`. The contract that ships is what
@@ -65,6 +70,11 @@ const SUBPATHS = [
   './converter',
   './docx-zipper',
   './file-zipper',
+  // SD-3179 reclassified the headless-toolbar subpaths from public to
+  // legacy compatibility surface. See package-boundaries.md Decision 4.
+  './headless-toolbar',
+  './headless-toolbar/react',
+  './headless-toolbar/vue',
 ];
 
 function resolveTypesEntries(exportsValue) {

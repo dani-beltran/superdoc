@@ -1,21 +1,22 @@
 #!/usr/bin/env node
 /**
- * SD-3178 (Phase 3 of SD-3175): verify the explicit public facade emits a
- * declaration tree that is safe to ship.
+ * SD-3178 (Phase 3 of SD-3175): verify the explicit public facade entries
+ * emit declaration trees that are safe to ship.
  *
- * Runs as a postbuild step under `packages/superdoc/`. Loads the emitted
- * `dist/superdoc/src/public/index.d.ts` and `index.d.cts` with the
- * TypeScript compiler API and asserts:
+ * Runs as a postbuild step under `packages/superdoc/`. For each entry in
+ * the `FACADE_ENTRIES` config below, loads the emitted `.d.ts` and `.d.cts`
+ * with the TypeScript compiler API and asserts:
  *
  *   1. The expected symbol set is exported from each declaration file.
  *   2. The ESM and CJS declarations agree on the exported names.
- *   3. The command signature surface survives the facade emit. This is
- *      the SD-2965 regression vector: specific command signatures getting
- *      dropped or failing to flow through the facade. `EditorCommands` is
- *      `CoreCommands & ExtensionCommands & AllCommandSignatures & Record<string, AnyCommand>`,
- *      so the trailing `Record<string, AnyCommand>` makes any indexer
- *      lookup resolve even when the specific signatures are missing.
- *      The probe asserts the RETURN TYPE of two commands (`setBold`,
+ *   3. (Root entry only) The command signature surface survives the
+ *      facade emit. This is the SD-2965 regression vector: specific
+ *      command signatures getting dropped or failing to flow through the
+ *      facade. `EditorCommands` is `CoreCommands & ExtensionCommands &
+ *      AllCommandSignatures & Record<string, AnyCommand>`, so the
+ *      trailing `Record<string, AnyCommand>` makes any indexer lookup
+ *      resolve even when the specific signatures are missing. The probe
+ *      asserts the RETURN TYPE of two commands (`setBold`,
  *      `insertComment`) is `boolean`, not the `AnyCommand` fallback's
  *      `unknown`. Two commands from two signature sources (formatting +
  *      comments) catch partial drops a single-command probe would miss.
@@ -30,6 +31,14 @@
  *      not see the workspace specifier. Later SD-3178 follow-ups reduce
  *      how much the facade depends on that broader declaration graph.
  *
+ * Adding a new facade file:
+ *   - Create `packages/superdoc/src/public/<name>.ts` with named exports.
+ *   - Wire it into `vite.config.js` (`rollupOptions.input`) and the CJS
+ *     shim list in `scripts/ensure-types.cjs`.
+ *   - Append a `FACADE_ENTRIES` entry below with the expected symbol set.
+ *   - If the new entry re-exports `EditorCommands`, set
+ *     `runsCommandSignatureProbe: true`.
+ *
  * Exits non-zero on any failure. Designed to fail loud and early.
  */
 'use strict';
@@ -39,10 +48,7 @@ const path = require('node:path');
 
 const repoRoot = path.resolve(__dirname, '..', '..', '..');
 const distRoot = path.resolve(__dirname, '..', 'dist');
-const FACADE_ESM = path.join(distRoot, 'superdoc', 'src', 'public', 'index.d.ts');
-const FACADE_CJS = path.join(distRoot, 'superdoc', 'src', 'public', 'index.d.cts');
-
-const EXPECTED_NAMES = ['Config', 'Editor', 'EditorCommands', 'SuperDoc'].sort();
+const PUBLIC_DIST = path.join(distRoot, 'superdoc', 'src', 'public');
 
 let ts;
 try {
@@ -51,6 +57,47 @@ try {
   console.error('[verify-public-facade-emit] typescript is not available in this package.');
   process.exit(1);
 }
+
+// AIDEV-NOTE: Adding or removing an export from a facade file in
+// `packages/superdoc/src/public/**` must update the matching
+// `expectedNames` list below in the same PR. Skipping that step fails
+// this gate. Link the PR to SD-3175 (path-as-contract umbrella) for
+// reviewer sign-off when growth is intentional.
+const FACADE_ENTRIES = [
+  {
+    name: 'root (./index)',
+    esm: path.join(PUBLIC_DIST, 'index.d.ts'),
+    cjs: path.join(PUBLIC_DIST, 'index.d.cts'),
+    expectedNames: ['Config', 'Editor', 'EditorCommands', 'SuperDoc'],
+    runsCommandSignatureProbe: true,
+    ticket: 'SD-3178',
+  },
+  {
+    name: 'legacy/headless-toolbar',
+    esm: path.join(PUBLIC_DIST, 'legacy', 'headless-toolbar.d.ts'),
+    cjs: path.join(PUBLIC_DIST, 'legacy', 'headless-toolbar.d.cts'),
+    expectedNames: [
+      'CreateHeadlessToolbarOptions',
+      'HeadlessToolbarController',
+      'HeadlessToolbarSuperdocHost',
+      'HeadlessToolbarSurface',
+      'PublicToolbarItemId',
+      'ToolbarCommandState',
+      'ToolbarCommandStates',
+      'ToolbarContext',
+      'ToolbarExecuteFn',
+      'ToolbarPayloadMap',
+      'ToolbarSnapshot',
+      'ToolbarTarget',
+      'ToolbarValueMap',
+      'createHeadlessToolbar',
+      'headlessToolbarConstants',
+      'headlessToolbarHelpers',
+    ],
+    runsCommandSignatureProbe: false,
+    ticket: 'SD-3179',
+  },
+];
 
 function loadFile(file) {
   if (!fs.existsSync(file)) {
@@ -75,48 +122,39 @@ function listExportedNames(file) {
   const checker = program.getTypeChecker();
   const src = program.getSourceFile(file);
   const symbol = checker.getSymbolAtLocation(src) ?? (src && src.symbol);
-  if (!symbol) {
-    return { names: [], program, checker };
+  if (!symbol) return [];
+  return [...new Set(checker.getExportsOfModule(symbol).map((s) => s.getName()))].sort();
+}
+
+function checkSymbolSet(entry) {
+  const expected = [...entry.expectedNames].sort();
+  const actual = listExportedNames(entry.esm);
+  if (JSON.stringify(actual) === JSON.stringify(expected)) {
+    return { ok: true, actual };
   }
-  return {
-    names: [...new Set(checker.getExportsOfModule(symbol).map((s) => s.getName()))].sort(),
-    program,
-    checker,
-  };
+  console.error(`[verify-public-facade-emit] ${entry.name}: facade exports drifted.`);
+  console.error('  expected: ' + expected.join(', '));
+  console.error('  actual:   ' + actual.join(', '));
+  console.error(`  If this addition is intentional, update FACADE_ENTRIES["${entry.name}"].expectedNames in this script and link`);
+  console.error(`  the PR to ${entry.ticket} / SD-3175 (path-as-contract umbrella) for reviewer sign-off.`);
+  return { ok: false, actual };
 }
 
-let failed = false;
-
-// (1) Symbol set.
-const esm = listExportedNames(FACADE_ESM);
-if (JSON.stringify(esm.names) !== JSON.stringify(EXPECTED_NAMES)) {
-  console.error(`[verify-public-facade-emit] ESM facade exports drifted.`);
-  console.error('  expected: ' + EXPECTED_NAMES.join(', '));
-  console.error('  actual:   ' + esm.names.join(', '));
-  console.error('  If this addition is intentional, update EXPECTED_NAMES in this script and link');
-  console.error('  the PR to SD-3175 (path-as-contract umbrella) for reviewer sign-off.');
-  failed = true;
-}
-
-// (2) ESM/CJS parity.
-const cjs = listExportedNames(FACADE_CJS);
-if (JSON.stringify(esm.names) !== JSON.stringify(cjs.names)) {
-  const importOnly = esm.names.filter((n) => !cjs.names.includes(n));
-  const requireOnly = cjs.names.filter((n) => !esm.names.includes(n));
-  console.error('[verify-public-facade-emit] ESM/CJS facade declarations disagree on exports.');
+function checkEsmCjsParity(entry, esmNames) {
+  const cjsNames = listExportedNames(entry.cjs);
+  if (JSON.stringify(esmNames) === JSON.stringify(cjsNames)) return true;
+  const importOnly = esmNames.filter((n) => !cjsNames.includes(n));
+  const requireOnly = cjsNames.filter((n) => !esmNames.includes(n));
+  console.error(`[verify-public-facade-emit] ${entry.name}: ESM/CJS facade declarations disagree on exports.`);
   if (importOnly.length) console.error('  ESM-only:  ' + importOnly.join(', '));
   if (requireOnly.length) console.error('  CJS-only:  ' + requireOnly.join(', '));
   console.error('  Fix the CJS shim generator (packages/superdoc/scripts/ensure-types.cjs).');
-  failed = true;
+  return false;
 }
 
-// (3) Command signature survival: assert two commands return `boolean`,
-//     not the `AnyCommand` fallback. See header for why a bare resolution
-//     check is not enough (the `Record<string, AnyCommand>` intersection
-//     always satisfies the indexer).
-{
+function checkCommandSignatureProbe(entry) {
   const probe = `
-    import type { EditorCommands } from ${JSON.stringify(FACADE_ESM)};
+    import type { EditorCommands } from ${JSON.stringify(entry.esm)};
     type ReturnsBoolean<F> = F extends (...args: any[]) => boolean ? true : false;
     // Direct assignment of literal \`true\` to the conditional result. If the
     // signature is missing and the indexer falls back to AnyCommand, the
@@ -150,25 +188,22 @@ if (JSON.stringify(esm.names) !== JSON.stringify(cjs.names)) {
       ...program.getSemanticDiagnostics(),
       ...program.getDeclarationDiagnostics(),
     ];
-    if (diagnostics.length > 0) {
-      console.error('[verify-public-facade-emit] command signature probe failed.');
-      console.error('  A command (setBold or insertComment) does not return `boolean` through the facade.');
-      console.error('  This is the SD-2965 regression vector: specific command signatures were dropped or failed to flow through the facade, and EditorCommands fell back to the `AnyCommand` indexer.');
-      for (const d of diagnostics) {
-        const msg = typeof d.messageText === 'string'
-          ? d.messageText
-          : ts.flattenDiagnosticMessageText(d.messageText, '\n');
-        console.error('  - ' + msg);
-      }
-      failed = true;
+    if (diagnostics.length === 0) return true;
+    console.error(`[verify-public-facade-emit] ${entry.name}: command signature probe failed.`);
+    console.error('  A command (setBold or insertComment) does not return `boolean` through the facade.');
+    console.error('  This is the SD-2965 regression vector: specific command signatures were dropped or failed to flow through the facade, and EditorCommands fell back to the `AnyCommand` indexer.');
+    for (const d of diagnostics) {
+      const msg = typeof d.messageText === 'string'
+        ? d.messageText
+        : ts.flattenDiagnosticMessageText(d.messageText, '\n');
+      console.error('  - ' + msg);
     }
+    return false;
   } finally {
     try { fs.unlinkSync(probePath); } catch (_) {}
   }
 }
 
-// (4) No internal leaks in emitted code (strip JSDoc/line comments first so
-// that comments referencing `@superdoc/super-editor` in prose are not flagged).
 function stripComments(source) {
   return source
     .replace(/\/\*[\s\S]*?\*\//g, '')
@@ -181,16 +216,38 @@ const LEAK_PATTERNS = [
   { name: 'absolute source path', re: /['"][\/\\][^'"\n]*\/(packages|node_modules)\//g },
 ];
 
-for (const file of [FACADE_ESM, FACADE_CJS]) {
-  const code = stripComments(loadFile(file));
-  for (const pattern of LEAK_PATTERNS) {
-    const matches = code.match(pattern.re);
-    if (matches && matches.length > 0) {
-      console.error(`[verify-public-facade-emit] leak in ${path.relative(repoRoot, file)}:`);
-      console.error(`  ${pattern.name}: ${matches.slice(0, 5).join(', ')}`);
-      failed = true;
+function checkLeaks(entry) {
+  let ok = true;
+  for (const file of [entry.esm, entry.cjs]) {
+    const code = stripComments(loadFile(file));
+    for (const pattern of LEAK_PATTERNS) {
+      const matches = code.match(pattern.re);
+      if (matches && matches.length > 0) {
+        console.error(`[verify-public-facade-emit] ${entry.name}: leak in ${path.relative(repoRoot, file)}:`);
+        console.error(`  ${pattern.name}: ${matches.slice(0, 5).join(', ')}`);
+        ok = false;
+      }
     }
   }
+  return ok;
+}
+
+let failed = false;
+const summaryLines = [];
+
+for (const entry of FACADE_ENTRIES) {
+  const symbolResult = checkSymbolSet(entry);
+  if (!symbolResult.ok) failed = true;
+
+  if (!checkEsmCjsParity(entry, symbolResult.actual)) failed = true;
+
+  if (entry.runsCommandSignatureProbe && !checkCommandSignatureProbe(entry)) {
+    failed = true;
+  }
+
+  if (!checkLeaks(entry)) failed = true;
+
+  summaryLines.push(`${entry.name}: ${symbolResult.actual.length} exports`);
 }
 
 if (failed) {
@@ -199,4 +256,4 @@ if (failed) {
   process.exit(1);
 }
 
-console.log(`[verify-public-facade-emit] OK. Facade emits cleanly: ${esm.names.length} exports, ESM/CJS in parity, command signatures survive.`);
+console.log(`[verify-public-facade-emit] OK. Facade emits cleanly across ${FACADE_ENTRIES.length} entries (${summaryLines.join('; ')}).`);
