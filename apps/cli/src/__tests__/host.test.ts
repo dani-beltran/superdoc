@@ -446,7 +446,7 @@ describe('CLI host mode', () => {
 
       expect(exitCode).not.toBe(0);
       expect(stderrBuffer).toContain('--request-timeout-ms');
-      expect(stderrBuffer).toContain('positive integer');
+      expect(stderrBuffer).toContain('positive finite number');
     },
     HOST_TEST_TIMEOUT_MS,
   );

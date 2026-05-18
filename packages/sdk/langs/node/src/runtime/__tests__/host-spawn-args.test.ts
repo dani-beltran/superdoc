@@ -30,8 +30,17 @@ describe('buildHostSpawnArgs', () => {
   });
 
   test('forwards requestTimeoutMs=0 as "0" so the host can reject it', () => {
-    // Validation lives in the host parser (positive-integer check). The
+    // Validation lives in the host parser (positive-finite-number check). The
     // SDK forwards verbatim and lets the host produce a structured error.
     expect(buildHostSpawnArgs([], { requestTimeoutMs: 0 })).toEqual(['host', '--stdio', '--request-timeout-ms', '0']);
+  });
+
+  test('forwards a positive non-integer (float) verbatim', () => {
+    expect(buildHostSpawnArgs([], { requestTimeoutMs: 1500.5 })).toEqual([
+      'host',
+      '--stdio',
+      '--request-timeout-ms',
+      '1500.5',
+    ]);
   });
 });

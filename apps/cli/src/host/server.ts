@@ -58,13 +58,19 @@ export function parseHostCommandTokens(tokens: string[]): ParsedHostCommand {
     if (token === REQUEST_TIMEOUT_FLAG || token.startsWith(`${REQUEST_TIMEOUT_FLAG}=`)) {
       const value = token === REQUEST_TIMEOUT_FLAG ? tokens[++i] : token.slice(REQUEST_TIMEOUT_FLAG.length + 1);
       if (value == null || value === '') {
-        throw new CliError('INVALID_ARGUMENT', `host: ${REQUEST_TIMEOUT_FLAG} requires a positive integer value.`);
-      }
-      const parsed = Number(value);
-      if (!Number.isInteger(parsed) || parsed <= 0) {
         throw new CliError(
           'INVALID_ARGUMENT',
-          `host: ${REQUEST_TIMEOUT_FLAG} requires a positive integer value (got ${JSON.stringify(value)}).`,
+          `host: ${REQUEST_TIMEOUT_FLAG} requires a positive finite number of milliseconds.`,
+        );
+      }
+      // Accept any positive finite number — `setTimeout` happily takes floats,
+      // and the SDK's `requestTimeoutMs` option is typed `number` so any value
+      // that was valid as a JS timer pre-fix must remain valid here.
+      const parsed = Number(value);
+      if (!Number.isFinite(parsed) || parsed <= 0) {
+        throw new CliError(
+          'INVALID_ARGUMENT',
+          `host: ${REQUEST_TIMEOUT_FLAG} requires a positive finite number of milliseconds (got ${JSON.stringify(value)}).`,
         );
       }
       requestTimeoutMs = parsed;
