@@ -142,6 +142,32 @@ const FACADE_ENTRIES = [
     runsCommandSignatureProbe: false,
     ticket: 'SD-3180',
   },
+  // SD-3182: first supported-surface facade entry. The `superdoc/ui/react`
+  // subpath is the strategic React binding surface. SD-3147 classification:
+  // 12 public + 1 legacy/public-compat. Matches the existing `./ui/react`
+  // single-`types` shape, so `cjs: null`.
+  {
+    name: 'ui-react',
+    esm: path.join(PUBLIC_DIST, 'ui-react.d.ts'),
+    cjs: null,
+    expectedNames: [
+      'SuperDocHost',
+      'SuperDocUIProvider',
+      'useSetSuperDoc',
+      'useSuperDocCommand',
+      'useSuperDocComments',
+      'useSuperDocContentControls',
+      'useSuperDocDocument',
+      'useSuperDocHost',
+      'useSuperDocSelection',
+      'useSuperDocSlice',
+      'useSuperDocToolbar',
+      'useSuperDocTrackChanges',
+      'useSuperDocUI',
+    ],
+    runsCommandSignatureProbe: false,
+    ticket: 'SD-3182',
+  },
 ];
 
 function loadFile(file) {

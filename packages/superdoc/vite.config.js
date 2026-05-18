@@ -258,6 +258,10 @@ export default defineConfig(({ mode, command }) => {
           'public/legacy/converter': 'src/public/legacy/converter.ts',
           'public/legacy/docx-zipper': 'src/public/legacy/docx-zipper.ts',
           'public/legacy/file-zipper': 'src/public/legacy/file-zipper.ts',
+          // SD-3182: first supported-surface facade entry. The
+          // `superdoc/ui/react` subpath is the strategic React binding
+          // surface. SD-3147 classification: 12 public + 1 legacy/public-compat.
+          'public/ui-react': 'src/public/ui-react.ts',
         },
         external: [
           'yjs',
