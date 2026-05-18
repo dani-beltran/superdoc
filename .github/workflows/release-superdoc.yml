@@ -149,6 +149,12 @@ jobs:
         # the packed tarball. Same step as PR CI.
         run: node tests/consumer-typecheck/package-shape-gate.mjs
 
+      - name: Legacy public no-growth gates (SD-3176)
+        # Same gate as PR CI. Catches releases that bypass PR CI.
+        run: |
+          node tests/consumer-typecheck/snapshot-super-editor-package-exports.mjs --check
+          node tests/consumer-typecheck/snapshot-superdoc-legacy-exports.mjs --check
+
       # PR preview: publish with pr-<number> dist-tag
       - name: Publish PR preview
         if: inputs.pr_number
