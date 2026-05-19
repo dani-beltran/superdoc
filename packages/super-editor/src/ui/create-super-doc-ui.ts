@@ -2275,7 +2275,11 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     const editor = superdoc.activeEditor as SuperDocEditorLike | undefined;
     const getFn = editor?.doc?.metadata?.get;
     if (typeof getFn !== 'function') return false;
-    return getFn.call(editor!.doc!.metadata!, { id }) !== null;
+    // `!= null` (not `!== null`) so a stub or adapter returning
+    // `undefined` for an unknown id is treated as absent — production
+    // `metadata.get` returns `null`, but the structural type permits
+    // either and we want both paths to gate the same way.
+    return getFn.call(editor!.doc!.metadata!, { id }) != null;
   };
 
   const metadata: MetadataHandle = {
