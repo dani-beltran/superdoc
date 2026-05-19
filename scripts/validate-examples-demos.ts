@@ -100,8 +100,16 @@ function validateManifest(manifestPath: string, relPath: string): void {
     issues.push({ file: relPath, line: 0, kind: 'manifest-shape', detail: 'top-level must be an array' });
     return;
   }
-  for (const entry of entries) {
-    if (typeof entry !== 'object' || entry === null) continue;
+  for (const [index, entry] of entries.entries()) {
+    if (typeof entry !== 'object' || entry === null) {
+      issues.push({
+        file: relPath,
+        line: 0,
+        kind: 'manifest-shape',
+        detail: `entry at index ${index} must be a JSON object with id and metadata fields`,
+      });
+      continue;
+    }
     const e = entry as Record<string, unknown>;
     const eid = typeof e.id === 'string' ? e.id : '<no-id>';
     if (typeof e.section !== 'string' || !ALLOWED_SECTIONS.has(e.section)) {
