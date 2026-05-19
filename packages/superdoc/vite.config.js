@@ -252,6 +252,11 @@ export default defineConfig(({ mode, command }) => {
           // custom UI integrations should use the `superdoc/ui` /
           // `superdoc/ui/react` entries instead.
           'public/legacy/headless-toolbar': 'src/public/legacy/headless-toolbar.ts',
+          // SD-3207: legacy headless-toolbar framework helpers. Paired
+          // with the root above; same legacy classification. Each entry
+          // re-exports `useHeadlessToolbar` only.
+          'public/legacy/headless-toolbar-react': 'src/public/legacy/headless-toolbar-react.ts',
+          'public/legacy/headless-toolbar-vue': 'src/public/legacy/headless-toolbar-vue.ts',
           // SD-3180: legacy leaf facade entries mirroring the existing
           // single-export legacy subpaths. Same classification as
           // headless-toolbar above.
@@ -262,6 +267,16 @@ export default defineConfig(({ mode, command }) => {
           // `superdoc/ui/react` subpath is the strategic React binding
           // surface. SD-3147 classification: 12 public + 1 legacy/public-compat.
           'public/ui-react': 'src/public/ui-react.ts',
+          // SD-3183: ui controller facade. 70 symbols (49 public + 21
+          // legacy/public-compat per SD-3147). Re-export source MUST stay
+          // `@superdoc/super-editor/ui` (narrow), not the root barrel —
+          // `audit-bundle.cjs` enforces shape on `dist/public/ui.es.js`.
+          'public/ui': 'src/public/ui.ts',
+          // SD-3184: types facade — type-only entry. 116 names, all
+          // `export type { ... }`. The existing `./types` subpath has
+          // split types.import/types.require declarations, so this
+          // facade adds a `public/types.d.cts` shim via ensure-types.cjs.
+          'public/types': 'src/public/types.ts',
         },
         external: [
           'yjs',
