@@ -62,12 +62,26 @@ const bucketByName = Object.fromEntries(classification.rows.map((r) => [r.name, 
 const allRootNames = new Set(Object.keys(bucketByName));
 const internalCandidates = new Set(classification.rows.filter((r) => r.bucket === 'internal-candidate').map((r) => r.name));
 
-// Manual overrides for known-acceptable references. Use sparingly and with
-// a comment explaining why. The override skips the closure assertion for
-// the named reference even if it appears in internal-candidate.
-const OVERRIDES = new Set([
-  // (none today; add with PR + rationale)
+// Manual overrides for known-acceptable references. Each entry MUST include
+// a reason string explaining why the closure assertion is intentionally
+// skipped for this symbol. Empty reason is a structural error and will
+// abort. Use sparingly: the gate exists precisely to surface these.
+//
+// Adding an entry should land in its own PR with the rationale visible in
+// the commit message and the reason string referenceable from grep.
+//
+// Shape: Map<symbolName, reason>.
+const OVERRIDES = new Map([
+  // ['ExampleType', 'DOM global re-exposed via X; not a real classification leak (see SD-XXXX).'],
 ]);
+
+// Validate override shape at startup so we never accept an empty reason.
+for (const [name, reason] of OVERRIDES) {
+  if (typeof reason !== 'string' || reason.trim().length < 20) {
+    console.error(`[SD-3212 a1b] OVERRIDES entry '${name}' must include a reason string of >= 20 chars.`);
+    process.exit(2);
+  }
+}
 
 // Resolve the emitted root .d.ts path from the installed package.json#exports
 const pkg = JSON.parse(readFileSync(join(FIXTURE_SUPERDOC, 'package.json'), 'utf8'));
@@ -184,6 +198,10 @@ for (const exportSym of rootExports) {
   for (const refName of refs) {
     if (internalCandidates.has(refName) && !OVERRIDES.has(refName)) {
       violations.push({ exporter: name, exporterBucket: bucket, references: refName, referencesBucket: 'internal-candidate' });
+    }
+    // Note overridden references for telemetry/visibility.
+    if (internalCandidates.has(refName) && OVERRIDES.has(refName)) {
+      console.log(`[SD-3212 a1b] override applied: ${name} (${bucket}) references ${refName} (internal-candidate). Reason: ${OVERRIDES.get(refName)}`);
     }
   }
 }
