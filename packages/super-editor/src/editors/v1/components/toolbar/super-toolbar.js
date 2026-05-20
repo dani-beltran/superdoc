@@ -74,7 +74,7 @@ import { insertTableOfContentsAtSelection } from '@extensions/table-of-contents/
  * @property {{ value: boolean }} active - Whether the item is active
  * @property {{ value: boolean }} expand - Whether the item is expanded
  * @property {{ value: ToolbarItem[] }} nestedOptions - Nested options for the item
- * @property {{ value: Record<string, string> | undefined }} style - Custom style for the item
+ * @property {{ value: Record<string, string | number> | undefined }} style - Custom style for the item
  * @property {{ value: boolean }} isNarrow - Whether the item has narrow styling
  * @property {{ value: boolean }} isWide - Whether the item has wide styling
  * @property {{ value: number | string | undefined }} minWidth - Minimum width of the item
@@ -90,7 +90,7 @@ import { insertTableOfContentsAtSelection } from '@extensions/table-of-contents/
  * @property {{ value: ToolbarItem | undefined }} childItem - The child of this item if it has one
  * @property {{ value: string | undefined }} iconColor - The color of the icon (CSS color)
  * @property {{ value: boolean }} hasCaret - Whether the item has a dropdown caret
- * @property {{ value: Record<string, string> | undefined }} dropdownStyles - Custom styles for the dropdown
+ * @property {{ value: Record<string, string | number> | undefined }} dropdownStyles - Custom styles for the dropdown
  * @property {{ value: boolean }} tooltipVisible - Whether the tooltip is visible
  * @property {{ value: number | undefined }} tooltipTimeout - Timeout for the tooltip (ms)
  * @property {{ value: string | undefined }} defaultLabel - The default label for the item
