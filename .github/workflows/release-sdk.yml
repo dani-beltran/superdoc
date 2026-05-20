@@ -6,9 +6,9 @@
 #   - push to main (auto-release)         -> TestPyPI (Python @next .devN, ephemeral)
 #   - workflow_dispatch, smoke=true       -> TestPyPI only (Python; no npm, no semantic-release)
 #   - workflow_dispatch, smoke=false      -> production PyPI (manual production recovery for stable)
-# TestPyPI Trusted Publishers must be configured for all six projects against this
-# workflow filename and the `testpypi` environment. PyPI TP config is keyed to the
-# workflow filename, so the smoke job lives in this file (not a sibling workflow).
+# TestPyPI auth uses an account-scoped API token stored as TEST_PYPI_TOKEN in
+# the `testpypi` GitHub environment (not OIDC). The smoke job lives in this
+# file so the same token + env scope cover both auto and smoke paths.
 name: "\U0001F4E6 Release SDK"
 
 on:
@@ -74,8 +74,8 @@ jobs:
     if: github.event_name == 'push'
     runs-on: ubuntu-24.04
     # Auto path publishes only to TestPyPI to keep production PyPI storage
-    # reserved for stable X.Y.Z releases. Trusted Publisher config for this
-    # workflow filename must exist on TestPyPI for all six projects.
+    # reserved for stable X.Y.Z releases. Auth uses TEST_PYPI_TOKEN from the
+    # `testpypi` GitHub environment (account-scoped TestPyPI API token).
     environment: testpypi
     outputs:
       released: ${{ steps.detect.outputs.released }}
@@ -202,6 +202,7 @@ jobs:
         if: steps.detect.outputs.release_present == 'true'
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
+          password: ${{ secrets.TEST_PYPI_TOKEN }}
           repository-url: https://test.pypi.org/legacy/
           packages-dir: packages/sdk/langs/python/companion-dist/
           skip-existing: true
@@ -210,6 +211,7 @@ jobs:
         if: steps.detect.outputs.release_present == 'true'
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
+          password: ${{ secrets.TEST_PYPI_TOKEN }}
           repository-url: https://test.pypi.org/legacy/
           packages-dir: packages/sdk/langs/python/dist/
           skip-existing: true
@@ -447,6 +449,7 @@ jobs:
       - name: Publish companion Python packages to TestPyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
+          password: ${{ secrets.TEST_PYPI_TOKEN }}
           repository-url: https://test.pypi.org/legacy/
           packages-dir: packages/sdk/langs/python/companion-dist/
           skip-existing: true
@@ -454,6 +457,7 @@ jobs:
       - name: Publish main Python SDK to TestPyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
+          password: ${{ secrets.TEST_PYPI_TOKEN }}
           repository-url: https://test.pypi.org/legacy/
           packages-dir: packages/sdk/langs/python/dist/
           skip-existing: true
