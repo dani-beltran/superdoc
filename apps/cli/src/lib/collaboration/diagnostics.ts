@@ -56,7 +56,15 @@ export function sanitizeDiagnosticString(value: string): string {
   const withSanitizedUrls = value.replace(/\b(?:wss?|https?):\/\/[^\s"'<>]+/gi, sanitizeUrlCandidate);
 
   return withSanitizedUrls.replace(/([?&])([^=&#\s"']+)=([^&#\s"']*)/g, (match, prefix: string, key: string) => {
-    const decodedKey = decodeURIComponent(key.replace(/\+/g, ' '));
+    let decodedKey: string;
+    try {
+      decodedKey = decodeURIComponent(key.replace(/\+/g, ' '));
+    } catch {
+      // Malformed percent-encoding (e.g. a raw `%` in the key). Fall back to
+      // the raw key for the sensitivity check — diagnostics must never throw
+      // because they run inside the sync-timeout callback.
+      decodedKey = key;
+    }
     if (!isSensitiveDiagnosticKey(decodedKey)) return match;
     return `${prefix}${key}=${REDACTED}`;
   });

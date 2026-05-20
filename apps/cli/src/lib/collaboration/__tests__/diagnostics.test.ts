@@ -103,6 +103,27 @@ describe('sanitizeDiagnosticString', () => {
     const out = sanitizeDiagnosticString('Expected 101 status code');
     expect(out).toBe('Expected 101 status code');
   });
+
+  test('does not throw on malformed percent-encoded query keys', () => {
+    // decodeURIComponent('%') throws URIError. The sanitizer runs inside the
+    // sync-timeout callback, so any throw here would suppress the structured
+    // COLLABORATION_SYNC_TIMEOUT envelope entirely.
+    expect(() => sanitizeDiagnosticString('wss://broker/r?%=x')).not.toThrow();
+    expect(typeof sanitizeDiagnosticString('wss://broker/r?%=x')).toBe('string');
+  });
+
+  test('still redacts other sensitive keys when one key has a malformed escape', () => {
+    const out = sanitizeDiagnosticString('wss://broker/r?%=junk&token=secret-leak-123');
+    expect(out).not.toContain('secret-leak-123');
+    expect(out).toContain('[REDACTED]');
+  });
+
+  test('redacts percent-encoded sensitive key names', () => {
+    // %74oken decodes to 'token' - should still be redacted so encoded
+    // variants can't bypass the sensitivity check.
+    const out = sanitizeDiagnosticString('wss://broker/r?%74oken=secret-leak-xyz');
+    expect(out).not.toContain('secret-leak-xyz');
+  });
 });
 
 // ---------------------------------------------------------------------------
