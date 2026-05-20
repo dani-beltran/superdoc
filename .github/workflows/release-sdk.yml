@@ -427,6 +427,20 @@ jobs:
           test -f packages/superdoc/dist/super-editor.es.js \
             || (echo "FATAL: packages/superdoc/dist/super-editor.es.js missing — build:es likely failed silently" && exit 1)
 
+      # Stage CLI native binaries into Python companion packages.
+      # build-python-sdk.mjs has a fail-fast prerequisite check that requires
+      # these binaries; the auto-release path stages them via
+      # sdk-release-publish.mjs --npm-only, which the smoke job bypasses.
+      # These three steps map to steps 2, 3, 5 of sdk-release-publish.mjs.
+      - name: Build CLI native binaries (all platforms)
+        run: pnpm --prefix apps/cli run build:native:all
+
+      - name: Stage CLI artifacts
+        run: pnpm --prefix apps/cli run build:stage
+
+      - name: Stage Python companion binaries
+        run: node packages/sdk/scripts/stage-python-companion-cli.mjs
+
       - name: Build and verify Python SDK
         run: node packages/sdk/scripts/build-python-sdk.mjs
 
