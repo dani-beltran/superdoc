@@ -633,6 +633,32 @@ const scenarios = [
     files: ['src/extensions-helpers.ts'],
     mustPass: true,
   },
+  // SD-3213: NodeConfig.renderDOM uses a local SuperDocDOMOutputSpec
+  // alias instead of PM's DOMOutputSpec (which contains
+  // `readonly [string, ...any[]]`). Pins the four consumer shapes
+  // (string, tuple with attrs+0, nested tuples, { dom, contentDOM? })
+  // plus negative assertions for bad tuple elements and non-string
+  // tagName.
+  {
+    name: 'bundler / node renderDOM (SD-3213)',
+    module: 'ESNext',
+    moduleResolution: 'bundler',
+    skipLibCheck: true,
+    strict: true,
+    noPropertyAccessFromIndexSignature: true,
+    files: ['src/node-render-dom.ts'],
+    mustPass: true,
+  },
+  {
+    name: 'node16 / node renderDOM (SD-3213)',
+    module: 'Node16',
+    moduleResolution: 'node16',
+    skipLibCheck: true,
+    strict: true,
+    noPropertyAccessFromIndexSignature: true,
+    files: ['src/node-render-dom.ts'],
+    mustPass: true,
+  },
   // SD-3213 sub 2: ProseMirror generic defaults on Editor + Node
   // public surface. `Editor.schema` becomes `Schema<string, string>`,
   // `Editor.registerPlugin<PluginState>(plugin)` preserves the state

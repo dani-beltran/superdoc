@@ -1,7 +1,7 @@
 {
   "version": 1,
   "scope": "supported-root",
-  "generatedAt": "2026-05-21T18:52:37.197Z",
+  "generatedAt": "2026-05-21T19:18:32.457Z",
   "entries": [
     {
       "key": "index|node_modules/superdoc/dist/super-editor/src/editors/v1/core/Editor.d.ts|Editor.<value>.new(options)<0>.extensions[].editor.converter[string]|converter: SuperConverter;",
@@ -180,66 +180,6 @@
       "file": "node_modules/superdoc/dist/super-editor/src/editors/v1/core/helpers/getActiveFormatting.d.ts",
       "line": 1,
       "snippet": "export function getActiveFormatting(editor: any): any;",
-      "owner": "tier-5-other",
-      "rationale": "auto-seeded from inventory (supported-root scope)"
-    },
-    {
-      "key": "type|node_modules/superdoc/dist/super-editor/src/editors/v1/core/Node.d.ts|Editor.<value>.new(options)<0>.extensions[].config.renderDOM<1>|renderDOM?: MaybeGetter<DOMOutputSpec>;",
-      "kind": "type",
-      "symbolPath": "Editor.<value>.new(options)<0>.extensions[].config.renderDOM<1>",
-      "file": "node_modules/superdoc/dist/super-editor/src/editors/v1/core/Node.d.ts",
-      "line": 49,
-      "snippet": "renderDOM?: MaybeGetter<DOMOutputSpec>;",
-      "owner": "tier-5-other",
-      "rationale": "auto-seeded from inventory (supported-root scope)"
-    },
-    {
-      "key": "type|node_modules/superdoc/dist/super-editor/src/editors/v1/core/Node.d.ts|Extensions.<value>.Node.new(config).editor.presentationEditor.options.extensions[].config.renderDOM<1>|renderDOM?: MaybeGetter<DOMOutputSpec>;",
-      "kind": "type",
-      "symbolPath": "Extensions.<value>.Node.new(config).editor.presentationEditor.options.extensions[].config.renderDOM<1>",
-      "file": "node_modules/superdoc/dist/super-editor/src/editors/v1/core/Node.d.ts",
-      "line": 49,
-      "snippet": "renderDOM?: MaybeGetter<DOMOutputSpec>;",
-      "owner": "tier-5-other",
-      "rationale": "auto-seeded from inventory (supported-root scope)"
-    },
-    {
-      "key": "type|node_modules/superdoc/dist/super-editor/src/editors/v1/core/Node.d.ts|defineNode.<value>(config).editor.presentationEditor.options.extensions[].config.renderDOM<1>|renderDOM?: MaybeGetter<DOMOutputSpec>;",
-      "kind": "type",
-      "symbolPath": "defineNode.<value>(config).editor.presentationEditor.options.extensions[].config.renderDOM<1>",
-      "file": "node_modules/superdoc/dist/super-editor/src/editors/v1/core/Node.d.ts",
-      "line": 49,
-      "snippet": "renderDOM?: MaybeGetter<DOMOutputSpec>;",
-      "owner": "tier-5-other",
-      "rationale": "auto-seeded from inventory (supported-root scope)"
-    },
-    {
-      "key": "type|node_modules/superdoc/dist/super-editor/src/editors/v1/core/Node.d.ts|getRichTextExtensions.<value>=>return[].config.renderDOM<1>|renderDOM?: MaybeGetter<DOMOutputSpec>;",
-      "kind": "type",
-      "symbolPath": "getRichTextExtensions.<value>=>return[].config.renderDOM<1>",
-      "file": "node_modules/superdoc/dist/super-editor/src/editors/v1/core/Node.d.ts",
-      "line": 49,
-      "snippet": "renderDOM?: MaybeGetter<DOMOutputSpec>;",
-      "owner": "tier-5-other",
-      "rationale": "auto-seeded from inventory (supported-root scope)"
-    },
-    {
-      "key": "type|node_modules/superdoc/dist/super-editor/src/editors/v1/core/Node.d.ts|getSchemaIntrospection.<value>(options).editor.presentationEditor.options.extensions[].config.renderDOM<1>|renderDOM?: MaybeGetter<DOMOutputSpec>;",
-      "kind": "type",
-      "symbolPath": "getSchemaIntrospection.<value>(options).editor.presentationEditor.options.extensions[].config.renderDOM<1>",
-      "file": "node_modules/superdoc/dist/super-editor/src/editors/v1/core/Node.d.ts",
-      "line": 49,
-      "snippet": "renderDOM?: MaybeGetter<DOMOutputSpec>;",
-      "owner": "tier-5-other",
-      "rationale": "auto-seeded from inventory (supported-root scope)"
-    },
-    {
-      "key": "type|node_modules/superdoc/dist/super-editor/src/editors/v1/core/Node.d.ts|getStarterExtensions.<value>=>return[].config.renderDOM<1>|renderDOM?: MaybeGetter<DOMOutputSpec>;",
-      "kind": "type",
-      "symbolPath": "getStarterExtensions.<value>=>return[].config.renderDOM<1>",
-      "file": "node_modules/superdoc/dist/super-editor/src/editors/v1/core/Node.d.ts",
-      "line": 49,
-      "snippet": "renderDOM?: MaybeGetter<DOMOutputSpec>;",
       "owner": "tier-5-other",
       "rationale": "auto-seeded from inventory (supported-root scope)"
     }
