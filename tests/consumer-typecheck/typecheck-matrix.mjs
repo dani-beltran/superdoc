@@ -562,6 +562,28 @@ const scenarios = [
     files: ['src/event-emitter-contract.ts'],
     mustPass: true,
   },
+  // SD-3213 Whiteboard data-shape typing: pin the three contracts
+  // tightened in this PR — toJSON returns `images` not `stickers`,
+  // stored items use normalized field names (pointsN/xN/yN/widthN),
+  // and registry items expose `id` typed with `unknown` for extras.
+  {
+    name: 'bundler / whiteboard data shape (SD-3213)',
+    module: 'ESNext',
+    moduleResolution: 'bundler',
+    skipLibCheck: true,
+    strict: true,
+    files: ['src/whiteboard-data-shape.ts'],
+    mustPass: true,
+  },
+  {
+    name: 'node16 / whiteboard data shape (SD-3213)',
+    module: 'Node16',
+    moduleResolution: 'node16',
+    skipLibCheck: true,
+    strict: true,
+    files: ['src/whiteboard-data-shape.ts'],
+    mustPass: true,
+  },
   // SD-2867 phase B: SuperDoc.canPerformPermission forwards `comment` and
   // `trackedChange` to isAllowed() unchanged, so the public contract must
   // accept the wide payloads the editor's permission helper produces

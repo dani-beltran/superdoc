@@ -1,7 +1,7 @@
 {
   "version": 1,
   "scope": "supported-root",
-  "generatedAt": "2026-05-21T00:16:58.891Z",
+  "generatedAt": "2026-05-21T09:36:10.903Z",
   "entries": [
     {
       "key": "index|node_modules/superdoc/dist/super-editor/src/editors/v1/core/Editor.d.ts|Editor.<value>.new(options)<0>.extensions[].editor.converter[string]|converter: SuperConverter;",
@@ -1010,126 +1010,6 @@
       "file": "node_modules/superdoc/dist/superdoc/src/core/SuperDoc.d.ts",
       "line": 81,
       "snippet": "app: import('vue').App;",
-      "owner": "tier-5-other",
-      "rationale": "auto-seeded from inventory (supported-root scope)"
-    },
-    {
-      "key": "type|node_modules/superdoc/dist/superdoc/src/core/whiteboard/Whiteboard.d.ts|SuperDoc.<value>.new(config).modules.comments.permissionResolver(params).superdoc.whiteboard.register(items)<0>|items: any[]",
-      "kind": "type",
-      "symbolPath": "SuperDoc.<value>.new(config).modules.comments.permissionResolver(params).superdoc.whiteboard.register(items)<0>",
-      "file": "node_modules/superdoc/dist/superdoc/src/core/whiteboard/Whiteboard.d.ts",
-      "line": 30,
-      "snippet": "items: any[]",
-      "owner": "tier-5-other",
-      "rationale": "auto-seeded from inventory (supported-root scope)"
-    },
-    {
-      "key": "type|node_modules/superdoc/dist/superdoc/src/core/whiteboard/Whiteboard.d.ts|SuperDoc.<value>.new(config).modules.comments.permissionResolver(params).superdoc.whiteboard.register(items)[]|items: any[]",
-      "kind": "type",
-      "symbolPath": "SuperDoc.<value>.new(config).modules.comments.permissionResolver(params).superdoc.whiteboard.register(items)[]",
-      "file": "node_modules/superdoc/dist/superdoc/src/core/whiteboard/Whiteboard.d.ts",
-      "line": 30,
-      "snippet": "items: any[]",
-      "owner": "tier-5-other",
-      "rationale": "auto-seeded from inventory (supported-root scope)"
-    },
-    {
-      "key": "type|node_modules/superdoc/dist/superdoc/src/core/whiteboard/Whiteboard.d.ts|SuperDoc.whiteboard.getType=>return<0>|getType(type: string): any[] | undefined;",
-      "kind": "type",
-      "symbolPath": "SuperDoc.whiteboard.getType=>return<0>",
-      "file": "node_modules/superdoc/dist/superdoc/src/core/whiteboard/Whiteboard.d.ts",
-      "line": 36,
-      "snippet": "getType(type: string): any[] | undefined;",
-      "owner": "tier-5-other",
-      "rationale": "auto-seeded from inventory (supported-root scope)"
-    },
-    {
-      "key": "type|node_modules/superdoc/dist/superdoc/src/core/whiteboard/Whiteboard.d.ts|SuperDoc.whiteboard.getType=>return[]|getType(type: string): any[] | undefined;",
-      "kind": "type",
-      "symbolPath": "SuperDoc.whiteboard.getType=>return[]",
-      "file": "node_modules/superdoc/dist/superdoc/src/core/whiteboard/Whiteboard.d.ts",
-      "line": 36,
-      "snippet": "getType(type: string): any[] | undefined;",
-      "owner": "tier-5-other",
-      "rationale": "auto-seeded from inventory (supported-root scope)"
-    },
-    {
-      "key": "type|node_modules/superdoc/dist/superdoc/src/core/whiteboard/Whiteboard.d.ts|SuperDoc.whiteboard.register(items)<0>|items: any[]",
-      "kind": "type",
-      "symbolPath": "SuperDoc.whiteboard.register(items)<0>",
-      "file": "node_modules/superdoc/dist/superdoc/src/core/whiteboard/Whiteboard.d.ts",
-      "line": 30,
-      "snippet": "items: any[]",
-      "owner": "tier-5-other",
-      "rationale": "auto-seeded from inventory (supported-root scope)"
-    },
-    {
-      "key": "type|node_modules/superdoc/dist/superdoc/src/core/whiteboard/Whiteboard.d.ts|SuperDoc.whiteboard.register(items)[]|items: any[]",
-      "kind": "type",
-      "symbolPath": "SuperDoc.whiteboard.register(items)[]",
-      "file": "node_modules/superdoc/dist/superdoc/src/core/whiteboard/Whiteboard.d.ts",
-      "line": 30,
-      "snippet": "items: any[]",
-      "owner": "tier-5-other",
-      "rationale": "auto-seeded from inventory (supported-root scope)"
-    },
-    {
-      "key": "type|node_modules/superdoc/dist/superdoc/src/core/whiteboard/WhiteboardPage.d.ts|SuperDoc.whiteboard.getPages=>return[].toJSON=>return.stickers<0>|stickers: any[];",
-      "kind": "type",
-      "symbolPath": "SuperDoc.whiteboard.getPages=>return[].toJSON=>return.stickers<0>",
-      "file": "node_modules/superdoc/dist/superdoc/src/core/whiteboard/WhiteboardPage.d.ts",
-      "line": 103,
-      "snippet": "stickers: any[];",
-      "owner": "tier-5-other",
-      "rationale": "auto-seeded from inventory (supported-root scope)"
-    },
-    {
-      "key": "type|node_modules/superdoc/dist/superdoc/src/core/whiteboard/WhiteboardPage.d.ts|SuperDoc.whiteboard.getPages=>return[].toJSON=>return.stickers[]|stickers: any[];",
-      "kind": "type",
-      "symbolPath": "SuperDoc.whiteboard.getPages=>return[].toJSON=>return.stickers[]",
-      "file": "node_modules/superdoc/dist/superdoc/src/core/whiteboard/WhiteboardPage.d.ts",
-      "line": 103,
-      "snippet": "stickers: any[];",
-      "owner": "tier-5-other",
-      "rationale": "auto-seeded from inventory (supported-root scope)"
-    },
-    {
-      "key": "type|node_modules/superdoc/dist/superdoc/src/core/whiteboard/WhiteboardPage.d.ts|SuperDoc.whiteboard.getPages=>return[].toJSON=>return.strokes<0>|strokes: any[];",
-      "kind": "type",
-      "symbolPath": "SuperDoc.whiteboard.getPages=>return[].toJSON=>return.strokes<0>",
-      "file": "node_modules/superdoc/dist/superdoc/src/core/whiteboard/WhiteboardPage.d.ts",
-      "line": 101,
-      "snippet": "strokes: any[];",
-      "owner": "tier-5-other",
-      "rationale": "auto-seeded from inventory (supported-root scope)"
-    },
-    {
-      "key": "type|node_modules/superdoc/dist/superdoc/src/core/whiteboard/WhiteboardPage.d.ts|SuperDoc.whiteboard.getPages=>return[].toJSON=>return.strokes[]|strokes: any[];",
-      "kind": "type",
-      "symbolPath": "SuperDoc.whiteboard.getPages=>return[].toJSON=>return.strokes[]",
-      "file": "node_modules/superdoc/dist/superdoc/src/core/whiteboard/WhiteboardPage.d.ts",
-      "line": 101,
-      "snippet": "strokes: any[];",
-      "owner": "tier-5-other",
-      "rationale": "auto-seeded from inventory (supported-root scope)"
-    },
-    {
-      "key": "type|node_modules/superdoc/dist/superdoc/src/core/whiteboard/WhiteboardPage.d.ts|SuperDoc.whiteboard.getPages=>return[].toJSON=>return.text<0>|text: any[];",
-      "kind": "type",
-      "symbolPath": "SuperDoc.whiteboard.getPages=>return[].toJSON=>return.text<0>",
-      "file": "node_modules/superdoc/dist/superdoc/src/core/whiteboard/WhiteboardPage.d.ts",
-      "line": 102,
-      "snippet": "text: any[];",
-      "owner": "tier-5-other",
-      "rationale": "auto-seeded from inventory (supported-root scope)"
-    },
-    {
-      "key": "type|node_modules/superdoc/dist/superdoc/src/core/whiteboard/WhiteboardPage.d.ts|SuperDoc.whiteboard.getPages=>return[].toJSON=>return.text[]|text: any[];",
-      "kind": "type",
-      "symbolPath": "SuperDoc.whiteboard.getPages=>return[].toJSON=>return.text[]",
-      "file": "node_modules/superdoc/dist/superdoc/src/core/whiteboard/WhiteboardPage.d.ts",
-      "line": 102,
-      "snippet": "text: any[];",
       "owner": "tier-5-other",
       "rationale": "auto-seeded from inventory (supported-root scope)"
     }

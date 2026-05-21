@@ -3,8 +3,25 @@ import { WhiteboardPage } from './WhiteboardPage';
 
 /**
  * @typedef {{ width: number, height: number, originalWidth?: number, originalHeight?: number }} WhiteboardPageSize
- * @typedef {{ strokes?: any[], text?: any[], images?: any[] }} WhiteboardPageData
+ *
+ * The page-level serialized shape is the normalized one (matches what
+ * `WhiteboardPage.toJSON()` actually returns). SD-3213 follow-up:
+ * the previous `any[]` typing meant consumers reading
+ * `whiteboard.getWhiteboardData().pages[0].strokes` had no
+ * IntelliSense — and a wrong assumption that fields like `.points`
+ * or `.x` would be present (runtime gives `pointsN` / `xN`).
+ *
+ * @typedef {import('./WhiteboardPage.js').WhiteboardStoredPageData} WhiteboardPageData
  * @typedef {{ pages?: Record<string, WhiteboardPageData> }} WhiteboardData
+ *
+ * Registry items the host can attach for UI palettes (stickers,
+ * comments, etc.). The shape is intentionally extensible: `id` is the
+ * one field the runtime actually relies on (filter, dedup); everything
+ * else is consumer-typed via `unknown` so palettes for new domains
+ * don't need a contract change.
+ *
+ * @typedef {{ id?: string | number, [key: string]: unknown }} WhiteboardRegistryItem
+ *
  * @typedef {{
  *  Renderer?: any,
  *  superdoc?: any,
@@ -65,7 +82,7 @@ export class Whiteboard extends EventEmitter {
   /**
    * Register items for a UI palette type (e.g. stickers, comments).
    * @param {string} type
-   * @param {any[]} items
+   * @param {WhiteboardRegistryItem[]} items
    */
   register(type, items) {
     this.#registry.set(type, items);
@@ -74,7 +91,7 @@ export class Whiteboard extends EventEmitter {
   /**
    * Get registered items by type.
    * @param {string} type
-   * @returns {any[] | undefined}
+   * @returns {WhiteboardRegistryItem[] | undefined}
    */
   getType(type) {
     return this.#registry.get(type);
