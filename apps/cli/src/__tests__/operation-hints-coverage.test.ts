@@ -2,8 +2,8 @@ import { describe, expect, test } from 'bun:test';
 import { CLI_DOC_OPERATIONS } from '../cli/operation-set';
 import { OPERATION_FAMILY, OUTPUT_FORMAT, RESPONSE_ENVELOPE_KEY, SUCCESS_VERB } from '../cli/operation-hints';
 
-// IT-1096: the four hint tables are typed as `Record<CliExposedOperationId, ...>`,
-// but apps/cli does not run `tsc --noEmit` in CI, so the type-level exhaustiveness
+// The four hint tables are typed as `Record<CliExposedOperationId, ...>`, but
+// apps/cli does not run `tsc --noEmit` in CI, so the type-level exhaustiveness
 // check is not enforced. This runtime test gives us the same protection under
 // `pnpm test` — if a new doc-backed operation lands without a matching hint
 // entry, mutation/read orchestrators would silently serialize its payload under

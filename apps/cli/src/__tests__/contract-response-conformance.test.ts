@@ -50,10 +50,10 @@ describe('contract response conformance', () => {
       const success = envelope as SuccessEnvelope;
       validateOperationResponseData(scenario.operationId, success.data, commandKey);
 
-      // Regression guard (IT-1096): no successful CLI response may serialize
-      // its payload under the property name "undefined" — which is what JS
-      // does when the orchestrator reads an undefined envelope key as a
-      // dynamic property (`{ [undefined]: result }` → `{ "undefined": ... }`).
+      // Regression guard: no successful CLI response may serialize its payload
+      // under the property name "undefined" — which is what JS does when the
+      // orchestrator reads an undefined envelope key as a dynamic property
+      // (`{ [undefined]: result }` → `{ "undefined": ... }`).
       if (success.data && typeof success.data === 'object') {
         const data = success.data as Record<string, unknown>;
         expect(Object.prototype.hasOwnProperty.call(data, 'undefined')).toBe(false);

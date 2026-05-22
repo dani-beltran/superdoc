@@ -50,8 +50,8 @@ function classifySdkSurface(operationId: string): SdkSurface {
 
 /**
  * Resolves the response envelope key for a doc-backed operation, failing closed
- * on missing entries. Missing entries would previously be coerced to null and
- * silently leak a `[undefined]: result` wrap from the CLI orchestrators (IT-1096).
+ * on missing entries. Missing entries would otherwise be coerced to null and
+ * silently leak a `[undefined]: result` wrap from the CLI orchestrators.
  */
 function resolveDocBackedEnvelopeKey(docApiId: string): string | null {
   if (!Object.prototype.hasOwnProperty.call(RESPONSE_ENVELOPE_KEY, docApiId)) {
@@ -161,7 +161,7 @@ function buildSdkContract() {
       // null means result is spread across top-level keys (no unwrapping needed).
       // Doc-backed ops must have an explicit entry in RESPONSE_ENVELOPE_KEY; missing entries
       // would otherwise be coerced to null here and silently leak a `[undefined]: result`
-      // wrap from the CLI orchestrators (IT-1096).
+      // wrap from the CLI orchestrators.
       responseEnvelopeKey: docApiId ? resolveDocBackedEnvelopeKey(docApiId) : null,
 
       // Transport plane

@@ -215,7 +215,7 @@ export const SUCCESS_VERB: Record<CliExposedOperationId, string> = {
   'diff.compare': 'compared documents',
   'diff.apply': 'applied diff',
 
-  // Backfill (IT-1096): every doc-api operation must have a success verb.
+  // Every doc-api operation must have a success verb.
   // Used only by `--pretty` output; JSON envelope unaffected.
   'authorities.configure': 'configured',
   'authorities.entries.get': 'retrieved item',
@@ -600,7 +600,7 @@ export const OUTPUT_FORMAT: Record<CliExposedOperationId, OutputFormat> = {
   'diff.compare': 'diffPayload',
   'diff.apply': 'diffApplyResult',
 
-  // Backfill (IT-1096): every doc-api operation must declare an output format.
+  // Every doc-api operation must declare an output format.
   // 'plain' falls back to the default Revision/verb pretty output (FORMAT_DISPATCH
   // has no entry for 'plain' so formatOutput returns null).
   'authorities.configure': 'plain',
@@ -978,8 +978,8 @@ export const RESPONSE_ENVELOPE_KEY: Record<CliExposedOperationId, string | null>
   'diff.compare': 'diff',
   'diff.apply': 'result',
 
-  // Backfill (IT-1096): every doc-api operation must declare an envelope key
-  // so missing entries can't degrade to `[undefined]: result`.
+  // Every doc-api operation must declare an envelope key so missing entries
+  // can't degrade to `[undefined]: result` at runtime.
   'authorities.configure': 'result',
   'authorities.entries.get': 'result',
   'authorities.entries.insert': 'result',
@@ -1365,7 +1365,7 @@ export const OPERATION_FAMILY: Record<CliExposedOperationId, OperationFamily> = 
   'diff.compare': 'diff',
   'diff.apply': 'diff',
 
-  // Backfill (IT-1096): every doc-api operation must declare a family.
+  // Every doc-api operation must declare a family.
   // 'general' mirrors the existing runtime fallback in error-mapping.ts.
   'authorities.configure': 'general',
   'authorities.entries.get': 'general',
