@@ -370,6 +370,30 @@ const scenarios = [
     files: ['src/track-changes-helpers.ts'],
     mustPass: true,
   },
+  // SD-2980 PR A: fieldAnnotationHelpers exported under `superdoc/super-editor`
+  // now carry typed JSDoc on every helper. The fixture pins each helper's
+  // return shape (`{ node, pos }`, plus DOMRect for the rect variant) and
+  // proves arguments are real ProseMirror types, not `any`.
+  {
+    name: 'bundler / field annotation helper typing (SD-2980)',
+    module: 'ESNext',
+    moduleResolution: 'bundler',
+    skipLibCheck: false,
+    strict: true,
+    noPropertyAccessFromIndexSignature: true,
+    files: ['src/field-annotation-helpers-typed.ts'],
+    mustPass: true,
+  },
+  {
+    name: 'node16 / field annotation helper typing (SD-2980)',
+    module: 'Node16',
+    moduleResolution: 'node16',
+    skipLibCheck: false,
+    strict: true,
+    noPropertyAccessFromIndexSignature: true,
+    files: ['src/field-annotation-helpers-typed.ts'],
+    mustPass: true,
+  },
   // SD-2892: full public-facing surface with skipLibCheck=false. These
   // scenarios pack SuperDoc, install it into the consumer fixture, and compile
   // every public consumer assertion under the resolution modes customers use.
