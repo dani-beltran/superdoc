@@ -1,28 +1,35 @@
 /**
- * Consumer typecheck: `trackChangesHelpers` core helpers (PR B of
- * SD-2980) return real shapes, not `any` / `any[]`.
+ * Consumer typecheck: every exported helper in `trackChangesHelpers`
+ * returns a real shape, not `any` / `any[]`.
  *
- * Before this change, every exported helper in `markSnapshotHelpers`
- * and `documentHelpers` resolved to `(...args: any[]) => any[]` in the
- * published `.d.ts` (39 audit findings). PR B added JSDoc on every
- * helper. This fixture pins the visible return / parameter shapes so a
- * regression breaks the typecheck matrix, not just the inventory count.
+ * Initially landed for SD-2980 PR B (markSnapshotHelpers +
+ * documentHelpers, 39 findings); extended for PR C with the remaining
+ * 4 helpers (getLiveInlineMarksInRange, findTrackedMarkBetween,
+ * trackedTransaction, getTrackChanges, 14 findings) — together these
+ * drain the entire tier-3-helpers bucket for trackChanges. The fixture
+ * pins the visible return / parameter shapes so a regression breaks
+ * the typecheck matrix, not just the inventory count.
  *
  * Coverage:
- * - markSnapshotHelpers: createMarkSnapshot, getTypeName,
+ * - markSnapshotHelpers (PR B): createMarkSnapshot, getTypeName,
  *   isTrackFormatNoOp, attrsExactlyMatch, markSnapshotMatchesStepMark,
  *   hasMatchingMark, upsertMarkSnapshotByType, findMarkInRangeBySnapshot
- * - documentHelpers: findMarkPosition, flatten, findChildren,
+ * - documentHelpers (PR B): findMarkPosition, flatten, findChildren,
  *   findInlineNodes (the 3-arg track-changes variant, distinct from
  *   `@core/helpers/findChildren`)
+ * - PR C helpers: getLiveInlineMarksInRange, findTrackedMarkBetween,
+ *   trackedTransaction, getTrackChanges
  */
 
 import { trackChangesHelpers } from 'superdoc/super-editor';
 import type { Node as PmNode, Mark as PmMark } from 'prosemirror-model';
+import type { EditorState, Transaction } from 'prosemirror-state';
 
 declare const doc: PmNode;
 declare const mark: PmMark;
 declare const liveMarks: PmMark[];
+declare const state: EditorState;
+declare const tr: Transaction;
 
 type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
 
@@ -144,3 +151,94 @@ trackChangesHelpers.documentHelpers.findChildren(doc, (s: string) => s.length > 
 
 // @ts-expect-error SD-2980 PR B: findMarkPosition needs a string mark name.
 trackChangesHelpers.documentHelpers.findMarkPosition(doc, 5, 42);
+
+// =========================================================================
+// PR C: remaining trackChanges helpers
+// =========================================================================
+
+// --- getLiveInlineMarksInRange returns PmMark[] -------------------------
+
+const liveInline = trackChangesHelpers.getLiveInlineMarksInRange({ doc, from: 0, to: 10 });
+const _liveInlineNotAnyArr: Equal<typeof liveInline, any[]> = false;
+void _liveInlineNotAnyArr;
+if (liveInline[0]) {
+  // PM Mark exposes `.type.name`, not just `any`.
+  const _typeName: string = liveInline[0].type.name;
+  void _typeName;
+}
+
+// @ts-expect-error SD-2980 PR C: getLiveInlineMarksInRange needs { doc, from, to }.
+trackChangesHelpers.getLiveInlineMarksInRange({ doc, from: 0 });
+
+// --- findTrackedMarkBetween returns TrackedMarkRange | null --------------
+
+const tracked = trackChangesHelpers.findTrackedMarkBetween({
+  tr,
+  from: 0,
+  to: 10,
+  markName: 'trackInsert',
+});
+const _trackedNotAny: Equal<typeof tracked, any> = false;
+void _trackedNotAny;
+// `null` must be in the union (no match case).
+const _trackedHandlesNull: null extends typeof tracked ? true : false = true;
+void _trackedHandlesNull;
+if (tracked) {
+  const _from: number = tracked.from;
+  const _to: number = tracked.to;
+  const _markType: string = tracked.mark.type.name;
+  void _from;
+  void _to;
+  void _markType;
+}
+
+// Optional `attrs` and `offset` are accepted.
+trackChangesHelpers.findTrackedMarkBetween({
+  tr,
+  from: 0,
+  to: 10,
+  markName: 'trackInsert',
+  attrs: { id: 'abc' },
+  offset: 0,
+});
+
+// @ts-expect-error SD-2980 PR C: markName is required and must be a string.
+trackChangesHelpers.findTrackedMarkBetween({ tr, from: 0, to: 10 });
+
+// --- trackedTransaction returns Transaction ------------------------------
+
+declare const user: { name: string; email: string };
+const resultTr = trackChangesHelpers.trackedTransaction({ tr, state, user });
+const _resultTrNotAny: Equal<typeof resultTr, any> = false;
+void _resultTrNotAny;
+// The return is a PM Transaction: it exposes `.docChanged`, `.steps`, etc.
+const _docChanged: boolean = resultTr.docChanged;
+const _stepsLen: number = resultTr.steps.length;
+void _docChanged;
+void _stepsLen;
+
+// Optional `replacements` accepts the literal union.
+trackChangesHelpers.trackedTransaction({ tr, state, user, replacements: 'independent' });
+
+// @ts-expect-error SD-2980 PR C: replacements must be 'paired' | 'independent'.
+trackChangesHelpers.trackedTransaction({ tr, state, user, replacements: 'bogus' });
+
+// --- getTrackChanges returns TrackedMarkRange[] -------------------------
+
+const changes = trackChangesHelpers.getTrackChanges(state);
+const _changesNotAnyArr: Equal<typeof changes, any[]> = false;
+void _changesNotAnyArr;
+if (changes[0]) {
+  const _markType: string = changes[0].mark.type.name;
+  const _from: number = changes[0].from;
+  const _to: number = changes[0].to;
+  void _markType;
+  void _from;
+  void _to;
+}
+
+// Tolerates missing state per the JSDoc contract.
+trackChangesHelpers.getTrackChanges(null);
+trackChangesHelpers.getTrackChanges(undefined);
+// Filter by id.
+trackChangesHelpers.getTrackChanges(state, 'change-1');
