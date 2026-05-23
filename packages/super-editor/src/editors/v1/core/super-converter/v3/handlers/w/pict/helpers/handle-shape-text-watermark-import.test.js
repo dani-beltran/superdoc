@@ -480,6 +480,39 @@ describe('handleShapeTextWatermarkImport', () => {
 
       expect(result.attrs.textWatermarkData.fill.color).toBe('silver');
     });
+
+    it('should parse VML percentage and fixed-point opacity values', () => {
+      const buildPict = (opacity) => ({
+        elements: [
+          {
+            name: 'v:shape',
+            attributes: {
+              style: 'width:100pt',
+            },
+            elements: [
+              {
+                name: 'v:textpath',
+                attributes: {
+                  string: 'OPACITY',
+                },
+              },
+              {
+                name: 'v:fill',
+                attributes: {
+                  opacity,
+                },
+              },
+            ],
+          },
+        ],
+      });
+
+      const percentResult = handleShapeTextWatermarkImport({ params: {}, pict: buildPict('50%') });
+      const fixedResult = handleShapeTextWatermarkImport({ params: {}, pict: buildPict('32768f') });
+
+      expect(percentResult.attrs.textWatermarkData.fill.opacity).toBe(0.5);
+      expect(fixedResult.attrs.textWatermarkData.fill.opacity).toBe(0.5);
+    });
   });
 
   describe('Stroke properties', () => {
@@ -575,6 +608,42 @@ describe('handleShapeTextWatermarkImport', () => {
 
       expect(result.attrs.textWatermarkData.textStyle.fontFamily).toBe('Liberation Sans');
       expect(result.attrs.textWatermarkData.textStyle.fontSize).toBe('1pt');
+    });
+
+    it('should decode XML entities in textpath font family', () => {
+      const pict = {
+        elements: [
+          {
+            name: 'v:shape',
+            attributes: {
+              style: 'width:479.9pt;height:179.95pt;rotation:315',
+              fillcolor: 'silver',
+              stroked: 'f',
+            },
+            elements: [
+              {
+                name: 'v:fill',
+                attributes: {
+                  opacity: '.5',
+                },
+              },
+              {
+                name: 'v:textpath',
+                attributes: {
+                  string: 'EXAMPLE',
+                  style: 'font-family:&quot;Calibri&quot;;font-size:1pt',
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      const result = handleShapeTextWatermarkImport({ params: {}, pict });
+
+      expect(result.attrs.textWatermarkData.textStyle.fontFamily).toBe('Calibri');
+      const decodedSvg = decodeURIComponent(result.attrs.src.replace('data:image/svg+xml,', ''));
+      expect(decodedSvg).toContain('font-family="Calibri, Arial, sans-serif"');
     });
 
     it('should handle single quotes in font-family', () => {
@@ -731,6 +800,49 @@ describe('handleShapeTextWatermarkImport', () => {
       expect(result.attrs.vmlWrapAttributes).toEqual({ type: 'none' });
       expect(result.attrs.wrap.type).toBe('None');
       expect(result.attrs.wrap.attrs.behindDoc).toBe(true);
+    });
+  });
+
+  describe('SVG rendering data', () => {
+    it('fits text to the VML shape width and normalizes named fill colors in the generated SVG', () => {
+      const pict = {
+        elements: [
+          {
+            name: 'v:shape',
+            attributes: {
+              style: 'width:479.9pt;height:179.95pt;rotation:315',
+              fillcolor: 'silver',
+              stroked: 'f',
+            },
+            elements: [
+              {
+                name: 'v:fill',
+                attributes: {
+                  opacity: '.5',
+                },
+              },
+              {
+                name: 'v:textpath',
+                attributes: {
+                  string: 'EXAMPLE',
+                  style: 'font-family:&quot;Calibri&quot;;font-size:1pt',
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      const result = handleShapeTextWatermarkImport({ params: {}, pict });
+      const decodedSvg = decodeURIComponent(result.attrs.src.replace('data:image/svg+xml,', ''));
+
+      expect(decodedSvg).toMatch(/textLength="639\.866666666666[67]"/);
+      expect(decodedSvg).toContain('lengthAdjust="spacingAndGlyphs"');
+      expect(decodedSvg).toContain('font-size="268.7253333333333px"');
+      expect(decodedSvg).toContain('fill="#C0C0C0"');
+      expect(decodedSvg).toContain('fill-opacity="0.25"');
+      expect(result.attrs.textWatermarkData.fill.color).toBe('silver');
+      expect(result.attrs.textWatermarkData.fill.opacity).toBe(0.5);
     });
   });
 

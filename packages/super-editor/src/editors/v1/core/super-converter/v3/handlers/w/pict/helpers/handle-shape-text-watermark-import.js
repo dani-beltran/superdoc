@@ -82,7 +82,7 @@ export function handleShapeTextWatermarkImport({ pict }) {
   // Extract text formatting from textpath style
   const textpathStyle = textpathAttrs.style || '';
   const textStyleObj = parseVmlStyle(textpathStyle);
-  const rawFontFamily = textStyleObj['font-family']?.replace(/['"]/g, '');
+  const rawFontFamily = decodeXmlEntities(textStyleObj['font-family'] || '').replace(/['"]/g, '');
   const fontFamily = sanitizeFontFamily(rawFontFamily);
   const fontSize = textStyleObj['font-size'] || '1pt';
 
@@ -107,7 +107,7 @@ export function handleShapeTextWatermarkImport({ pict }) {
   const heightPx = convertToPixels(height);
 
   // Sanitize numeric values before use
-  const sanitizedOpacity = sanitizeNumeric(parseFloat(opacity), 0.5, 0, 1);
+  const sanitizedOpacity = sanitizeNumeric(parseVmlOpacity(opacity), 0.5, 0, 1);
   const sanitizedRotation = sanitizeNumeric(rotation, 0, -360, 360);
 
   const svgResult = generateTextWatermarkSVG({
@@ -243,6 +243,41 @@ function sanitizeColor(color, defaultColor = 'silver') {
   return sanitized || defaultColor;
 }
 
+function normalizeVmlColor(color) {
+  const namedColors = {
+    black: '#000000',
+    blue: '#0000FF',
+    gray: '#808080',
+    green: '#008000',
+    lime: '#00FF00',
+    red: '#FF0000',
+    silver: '#C0C0C0',
+    white: '#FFFFFF',
+    yellow: '#FFFF00',
+  };
+
+  const key = typeof color === 'string' ? color.trim().toLowerCase() : '';
+  return namedColors[key] || color;
+}
+
+function decodeXmlEntities(value) {
+  return value
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+    .replace(/&#(\d+);/g, (_, code) => decodeCodePoint(Number(code)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, code) => decodeCodePoint(Number.parseInt(code, 16)));
+}
+
+function decodeCodePoint(codePoint) {
+  if (!Number.isInteger(codePoint) || codePoint < 0 || codePoint > 0x10ffff) {
+    return '';
+  }
+  return String.fromCodePoint(codePoint);
+}
+
 /**
  * Validate and sanitize numeric value.
  * @param {number|string} value - Numeric value
@@ -262,6 +297,24 @@ function sanitizeNumeric(value, defaultValue, min = -Infinity, max = Infinity) {
   return Math.max(min, Math.min(max, num));
 }
 
+function parseVmlOpacity(value) {
+  if (typeof value === 'number') {
+    return value;
+  }
+  if (!value || typeof value !== 'string') {
+    return NaN;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized.endsWith('%')) {
+    return Number.parseFloat(normalized.slice(0, -1)) / 100;
+  }
+  if (normalized.endsWith('f')) {
+    return Number.parseInt(normalized.slice(0, -1), 10) / 65536;
+  }
+  return Number.parseFloat(normalized);
+}
+
 /**
  * Generate an SVG data URI for a text watermark with rotation.
  * Rotation must be baked into the SVG since the layout engine doesn't support
@@ -274,9 +327,7 @@ function generateTextWatermarkSVG({ text, width, height, rotation, fill, textSty
   // Word VML typically specifies font-size:1pt, but this is just a scaling hint
   // The actual rendered size depends on the watermark dimensions (width/height)
 
-  let fontSize = height * 0.9; // The value of 0.9 was determined by me by visual comparison.
-  // It seems to be close to correct for text without rotation and slightly too low for text
-  // with rotation.
+  let fontSize = height * 1.12;
   // Alternative: if explicit font size is given and not the typical 1pt, respect it
   // Only override if it's not the typical Word watermark 1pt
   if (textStyle?.fontSize && textStyle.fontSize.trim() !== '1pt') {
@@ -290,9 +341,9 @@ function generateTextWatermarkSVG({ text, width, height, rotation, fill, textSty
   fontSize = Math.max(fontSize, 48); // Minimum visible size
 
   // Sanitize all values from untrusted input
-  const color = sanitizeColor(fill?.color, 'silver');
-  const opacity = sanitizeNumeric(fill?.opacity, 0.5, 0, 1);
-  const fontFamily = sanitizeFontFamily(textStyle?.fontFamily);
+  const color = normalizeVmlColor(sanitizeColor(fill?.color, 'silver'));
+  const opacity = resolveRenderedTextWatermarkOpacity(sanitizeNumeric(fill?.opacity, 0.5, 0, 1));
+  const fontFamily = resolveSvgFontFamily(sanitizeFontFamily(textStyle?.fontFamily));
   const sanitizedRotation = sanitizeNumeric(rotation, 0, -360, 360);
   const sanitizedWidth = sanitizeNumeric(width, 100, 1, 10000);
   const sanitizedHeight = sanitizeNumeric(height, 100, 1, 10000);
@@ -323,8 +374,10 @@ function generateTextWatermarkSVG({ text, width, height, rotation, fill, textSty
     dominant-baseline="middle"
     font-family="${fontFamily}"
     font-size="${sanitizedFontSize}px"
+    textLength="${sanitizedWidth}"
+    lengthAdjust="spacingAndGlyphs"
     fill="${color}"
-    opacity="${opacity}"
+    fill-opacity="${opacity}"
     transform="rotate(${sanitizedRotation} ${centerX} ${centerY})">${escapeXml(text)}</text>
 </svg>`;
 
@@ -333,6 +386,25 @@ function generateTextWatermarkSVG({ text, width, height, rotation, fill, textSty
     svgWidth,
     svgHeight,
   };
+}
+
+function resolveRenderedTextWatermarkOpacity(opacity) {
+  return sanitizeNumeric(opacity * 0.5, 0.25, 0, 1);
+}
+
+function resolveSvgFontFamily(fontFamily) {
+  if (!fontFamily || typeof fontFamily !== 'string') {
+    return 'Arial, sans-serif';
+  }
+
+  const normalized = fontFamily.trim();
+  if (normalized.includes(',')) {
+    return normalized;
+  }
+
+  const serifFonts = new Set(['cambria', 'constantia', 'georgia', 'times new roman', 'times']);
+  const generic = serifFonts.has(normalized.toLowerCase()) ? 'serif' : 'Arial, sans-serif';
+  return `${normalized}, ${generic}`;
 }
 
 /**
@@ -358,7 +430,9 @@ function parseVmlStyle(style) {
   const result = {};
   if (!style) return result;
 
-  const declarations = style.split(';').filter((s) => s.trim());
+  const declarations = decodeXmlEntities(style)
+    .split(';')
+    .filter((s) => s.trim());
   for (const decl of declarations) {
     const colonIndex = decl.indexOf(':');
     if (colonIndex === -1) continue;
