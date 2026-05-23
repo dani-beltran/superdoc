@@ -1,3 +1,5 @@
+import { encodeUtf8Base64 } from '../../../../../../helpers/base64.js';
+
 /**
  * Handles VML shape elements with v:textpath (text watermarks).
  *
@@ -93,6 +95,7 @@ export function handleShapeTextWatermarkImport({ pict }) {
 
   // Extract other textpath attributes
   const fitshape = textpathAttrs.fitshape || 't';
+  const shouldFitShape = fitshape === 't';
   const trim = textpathAttrs.trim || 't';
   const textpathOn = textpathAttrs.on || 't';
 
@@ -128,6 +131,7 @@ export function handleShapeTextWatermarkImport({ pict }) {
       fontFamily,
       fontSize,
     },
+    fitShape: shouldFitShape,
   });
 
   const svgDataUri = svgResult.dataUri;
@@ -209,7 +213,7 @@ export function handleShapeTextWatermarkImport({ pict }) {
         },
         textpath: {
           on: textpathOn === 't',
-          fitshape: fitshape === 't',
+          fitshape: shouldFitShape,
           trim: trim === 't',
           textpathok: textpathok === 't',
         },
@@ -232,7 +236,7 @@ function sanitizeFontFamily(fontFamily) {
   }
   // Only allow alphanumeric, spaces, hyphens, and commas (for font lists)
   // This prevents injection via quotes, angle brackets, parentheses, etc.
-  const sanitized = fontFamily.replace(/[^a-zA-Z0-9\s,\-]/g, '').trim();
+  const sanitized = fontFamily.replace(/[^a-zA-Z0-9\s,-]/g, '').trim();
   return sanitized || 'Arial';
 }
 
@@ -348,7 +352,7 @@ function getTextWatermarkCenterOffset({ hPosition, vPosition, hRelativeTo, vRela
  * @param {Object} options - Watermark options
  * @returns {Object} Object with dataUri, svgWidth, and svgHeight
  */
-function generateTextWatermarkSVG({ text, width, height, rotation, fill, textStyle }) {
+function generateTextWatermarkSVG({ text, width, height, rotation, fill, textStyle, fitShape }) {
   // Word watermarks don't use font-size literally - they scale text to fill available space
   // Word VML typically specifies font-size:1pt, but this is just a scaling hint
   // The actual rendered size depends on the watermark dimensions (width/height)
@@ -391,24 +395,27 @@ function generateTextWatermarkSVG({ text, width, height, rotation, fill, textSty
   // Center the rotation in the larger SVG canvas
   const centerX = svgWidth / 2;
   const centerY = svgHeight / 2;
+  const textAttributes = [
+    `x="${centerX}"`,
+    `y="${centerY}"`,
+    'text-anchor="middle"',
+    'dominant-baseline="middle"',
+    `font-family="${fontFamily}"`,
+    `font-size="${sanitizedFontSize}px"`,
+    ...(fitShape ? [`textLength="${sanitizedWidth}"`, 'lengthAdjust="spacingAndGlyphs"'] : []),
+    `fill="${color}"`,
+    `fill-opacity="${opacity}"`,
+    `transform="rotate(${sanitizedRotation} ${centerX} ${centerY})"`,
+  ]
+    .map((attribute) => `    ${attribute}`)
+    .join('\n');
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${svgWidth}" height="${svgHeight}" viewBox="0 0 ${svgWidth} ${svgHeight}" style="overflow: visible;">
-  <text
-    x="${centerX}"
-    y="${centerY}"
-    text-anchor="middle"
-    dominant-baseline="middle"
-    font-family="${fontFamily}"
-    font-size="${sanitizedFontSize}px"
-    textLength="${sanitizedWidth}"
-    lengthAdjust="spacingAndGlyphs"
-    fill="${color}"
-    fill-opacity="${opacity}"
-    transform="rotate(${sanitizedRotation} ${centerX} ${centerY})">${escapeXml(text)}</text>
-</svg>`;
+    <text ${textAttributes}>${escapeXml(text)}</text>
+  </svg>`;
 
   return {
-    dataUri: `data:image/svg+xml,${encodeURIComponent(svg)}`,
+    dataUri: `data:image/svg+xml;base64,${encodeUtf8Base64(svg)}`,
     svgWidth,
     svgHeight,
   };

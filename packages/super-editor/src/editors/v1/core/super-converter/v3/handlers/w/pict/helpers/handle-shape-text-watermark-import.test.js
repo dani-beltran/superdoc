@@ -1,6 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { handleShapeTextWatermarkImport } from './handle-shape-text-watermark-import';
 
+const decodeSvgDataUri = (src) => {
+  const [meta = '', payload = ''] = src.split(',');
+  if (meta.endsWith(';base64')) {
+    return Buffer.from(payload, 'base64').toString('utf8');
+  }
+  return decodeURIComponent(payload);
+};
+
 describe('handleShapeTextWatermarkImport', () => {
   describe('Basic text watermark import', () => {
     it('should import a basic text watermark with v:textpath', () => {
@@ -70,7 +78,7 @@ describe('handleShapeTextWatermarkImport', () => {
       expect(result.type).toBe('image');
       expect(result.attrs.vmlTextWatermark).toBe(true);
       expect(result.attrs.textWatermarkData.text).toBe('DRAFT MARK');
-      expect(result.attrs.src).toContain('data:image/svg+xml');
+      expect(result.attrs.src).toContain('data:image/svg+xml;base64,');
     });
 
     it('should extract text from string attribute', () => {
@@ -642,7 +650,7 @@ describe('handleShapeTextWatermarkImport', () => {
       const result = handleShapeTextWatermarkImport({ params: {}, pict });
 
       expect(result.attrs.textWatermarkData.textStyle.fontFamily).toBe('Calibri');
-      const decodedSvg = decodeURIComponent(result.attrs.src.replace('data:image/svg+xml,', ''));
+      const decodedSvg = decodeSvgDataUri(result.attrs.src);
       expect(decodedSvg).toContain('font-family="Calibri, Arial, sans-serif"');
     });
 
@@ -834,7 +842,7 @@ describe('handleShapeTextWatermarkImport', () => {
       };
 
       const result = handleShapeTextWatermarkImport({ params: {}, pict });
-      const decodedSvg = decodeURIComponent(result.attrs.src.replace('data:image/svg+xml,', ''));
+      const decodedSvg = decodeSvgDataUri(result.attrs.src);
 
       expect(decodedSvg).toMatch(/textLength="639\.866666666666[67]"/);
       expect(decodedSvg).toContain('lengthAdjust="spacingAndGlyphs"');
@@ -920,6 +928,36 @@ describe('handleShapeTextWatermarkImport', () => {
       expect(result.attrs.textWatermarkData.textpath.on).toBe(false);
       expect(result.attrs.textWatermarkData.textpath.fitshape).toBe(false);
       expect(result.attrs.textWatermarkData.textpath.textpathok).toBe(false);
+    });
+
+    it('should not stretch SVG text when fitshape is false', () => {
+      const pict = {
+        elements: [
+          {
+            name: 'v:shape',
+            attributes: {
+              style: 'width:300pt;height:80pt;rotation:315',
+            },
+            elements: [
+              {
+                name: 'v:textpath',
+                attributes: {
+                  fitshape: 'f',
+                  string: 'NATURAL WIDTH',
+                  style: 'font-family:&quot;Calibri&quot;;font-size:1pt',
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      const result = handleShapeTextWatermarkImport({ params: {}, pict });
+      const decodedSvg = decodeSvgDataUri(result.attrs.src);
+
+      expect(result.attrs.textWatermarkData.textpath.fitshape).toBe(false);
+      expect(decodedSvg).not.toContain('textLength=');
+      expect(decodedSvg).not.toContain('lengthAdjust=');
     });
   });
 
@@ -1312,7 +1350,7 @@ describe('handleShapeTextWatermarkImport', () => {
       const result = handleShapeTextWatermarkImport({ params: {}, pict });
 
       // XML special characters should be escaped in the SVG output
-      const decodedSrc = decodeURIComponent(result.attrs.src.replace('data:image/svg+xml,', ''));
+      const decodedSrc = decodeSvgDataUri(result.attrs.src);
       expect(decodedSrc).toContain('&lt;');
       expect(decodedSrc).toContain('&gt;');
       // But the actual text should be preserved
