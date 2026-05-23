@@ -17,6 +17,11 @@
  * @param {Object} options
  * @returns {Object|null}
  */
+// Word positions centered, rotated VML WordArt below the shape's geometric center.
+const ROTATED_CENTERED_WATERMARK_TOP_OFFSET_RATIO = 0.25;
+// Guard against malformed VML height values when calculating the WordArt offset.
+const MAX_ROTATED_CENTERED_WATERMARK_OFFSET_HEIGHT_PX = 10000;
+
 export function handleShapeTextWatermarkImport({ pict }) {
   const shape = pict.elements?.find((el) => el.name === 'v:shape');
   if (!shape) return null;
@@ -126,6 +131,14 @@ export function handleShapeTextWatermarkImport({ pict }) {
   });
 
   const svgDataUri = svgResult.dataUri;
+  const centerOffsetTop = getTextWatermarkCenterOffset({
+    hPosition,
+    vPosition,
+    hRelativeTo,
+    vRelativeTo,
+    height: heightPx,
+    rotation: sanitizedRotation,
+  });
 
   // Return as an image node (so it uses the Image extension for rendering)
   // but preserve all VML attributes for export round-trip
@@ -171,7 +184,7 @@ export function handleShapeTextWatermarkImport({ pict }) {
         // For center-aligned watermarks relative to margin, Word's margin values
         // are not suitable for browser rendering. Set to 0 to let center alignment work.
         horizontal: hPosition === 'center' && hRelativeTo === 'margin' ? 0 : convertToPixels(position.marginLeft),
-        top: vPosition === 'center' && vRelativeTo === 'margin' ? 0 : convertToPixels(position.marginTop),
+        top: vPosition === 'center' && vRelativeTo === 'margin' ? centerOffsetTop : convertToPixels(position.marginTop),
       },
       // Store text watermark specific data for export
       textWatermarkData: {
@@ -313,6 +326,19 @@ function parseVmlOpacity(value) {
     return Number.parseInt(normalized.slice(0, -1), 10) / 65536;
   }
   return Number.parseFloat(normalized);
+}
+
+function getTextWatermarkCenterOffset({ hPosition, vPosition, hRelativeTo, vRelativeTo, height, rotation }) {
+  const isCenteredMarginWatermark =
+    hPosition === 'center' && vPosition === 'center' && hRelativeTo === 'margin' && vRelativeTo === 'margin';
+  if (!isCenteredMarginWatermark || rotation === 0) {
+    return 0;
+  }
+
+  return (
+    sanitizeNumeric(height, 0, 0, MAX_ROTATED_CENTERED_WATERMARK_OFFSET_HEIGHT_PX) *
+    ROTATED_CENTERED_WATERMARK_TOP_OFFSET_RATIO
+  );
 }
 
 /**

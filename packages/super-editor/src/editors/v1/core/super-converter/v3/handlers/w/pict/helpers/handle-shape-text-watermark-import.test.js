@@ -232,8 +232,8 @@ describe('handleShapeTextWatermarkImport', () => {
 
       const result = handleShapeTextWatermarkImport({ params: {}, pict });
 
-      // For center-aligned watermarks relative to margin, both horizontal and vertical
-      // margin offsets are set to 0 to let center alignment work properly in the browser
+      // For non-rotated center-aligned watermarks relative to margin, both offsets
+      // are set to 0 to let center alignment work properly in the browser.
       expect(result.attrs.marginOffset.horizontal).toBe(0);
       expect(result.attrs.marginOffset.top).toBe(0);
     });
@@ -841,6 +841,7 @@ describe('handleShapeTextWatermarkImport', () => {
       expect(decodedSvg).toContain('font-size="268.7253333333333px"');
       expect(decodedSvg).toContain('fill="#C0C0C0"');
       expect(decodedSvg).toContain('fill-opacity="0.25"');
+      expect(result.attrs.marginOffset.top).toBeCloseTo(59.98, 1);
       expect(result.attrs.textWatermarkData.fill.color).toBe('silver');
       expect(result.attrs.textWatermarkData.fill.opacity).toBe(0.5);
     });
@@ -987,9 +988,10 @@ describe('handleShapeTextWatermarkImport', () => {
       // Should handle 345 degree rotation (15 degrees clockwise from horizontal)
       expect(result.attrs.textWatermarkData.rotation).toBe(345);
 
-      // For center-aligned watermarks, margins should be 0
+      // For center-aligned rotated text watermarks, horizontal stays centered and
+      // vertical gets a WordArt-specific correction from the original VML height.
       expect(result.attrs.marginOffset.horizontal).toBe(0);
-      expect(result.attrs.marginOffset.top).toBe(0);
+      expect(result.attrs.marginOffset.top).toBeCloseTo(28.2, 1);
 
       // Verify rotated bounding box is calculated correctly with 10% padding
       // Original: 481.8pt × 84.65pt ≈ 642.4px × 112.9px
