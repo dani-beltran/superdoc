@@ -4,31 +4,36 @@
  * TypeScript surface end-to-end.
  *
  * Stages:
- *   1. build:superdoc      - vite build + the postbuild validator chain
+ *   1. tier-discipline     - package.json#exports vs publicContract
+ *                            tier coverage, routing, and legacy-raw
+ *                            allowlist. Cheap (~10ms); runs first so
+ *                            tier drift fails fast before the slow
+ *                            build/matrix work.
+ *   2. build:superdoc      - vite build + the postbuild validator chain
  *                            (check-tsconfig-type-surface, ensure-types,
  *                            audit-bundle, audit-declarations,
  *                            check-export-coverage, verify-public-facade-emit,
  *                            report-declaration-reachability).
  *                            Skipped when `--skip-build` is passed (CI calls
  *                            `pnpm run build` separately in its own step).
- *   2. typecheck-matrix    - packs superdoc + installs the tarball into
+ *   3. typecheck-matrix    - packs superdoc + installs the tarball into
  *                            tests/consumer-typecheck/node_modules/, then
  *                            runs every consumer scenario.
- *   3. deep-type-audit     - strict gate on the supported-root public
+ *   4. deep-type-audit     - strict gate on the supported-root public
  *                            surface (must be 0 findings). Reuses the
- *                            install that stage 2 produced (no `--pack`).
- *   4. package-shape       - publint + attw against the packed manifest
- *                            (reuses the install from stage 2).
- *   5. snapshots           - super-editor / legacy / root no-growth
+ *                            install that stage 3 produced (no `--pack`).
+ *   5. package-shape       - publint + attw against the packed manifest
+ *                            (reuses the tarball from stage 3).
+ *   6. snapshots           - super-editor / legacy / root no-growth
  *                            snapshots (reuses the install).
- *   6. closure             - root-classification closure gate:
+ *   7. closure             - root-classification closure gate:
  *                            no supported-root/legacy-root export
  *                            references an internal-candidate type.
  *
- * Matrix runs BEFORE stages 3-6 on purpose: it packs `superdoc.tgz`
- * and installs the tarball into the consumer fixture once. Stages 3,
- * 5, and 6 (deep-type-audit, snapshots, closure) reuse the installed
- * fixture; stage 4 (package-shape-gate) reuses the packed tarball
+ * Matrix runs BEFORE stages 4-7 on purpose: it packs `superdoc.tgz`
+ * and installs the tarball into the consumer fixture once. Stages 4,
+ * 6, and 7 (deep-type-audit, snapshots, closure) reuse the installed
+ * fixture; stage 5 (package-shape-gate) reuses the packed tarball
  * directly. Without this ordering each downstream stage would
  * `--pack` separately and multiply the work.
  *
@@ -55,6 +60,16 @@ const flags = new Set(process.argv.slice(2));
 const skipBuild = flags.has('--skip-build');
 
 const stages = [
+  {
+    name: 'tier-discipline',
+    cwd: REPO_ROOT,
+    cmd: 'node',
+    args: ['scripts/check-public-contract-tiers.mjs'],
+    blurb:
+      'Public-contract tier discipline: package.json#exports vs publicContract ' +
+      '(tier coverage, routing, legacy-raw allowlist). Cheap; fast-fails before ' +
+      'the slow build/matrix stages.',
+  },
   {
     name: 'build:superdoc',
     cwd: REPO_ROOT,
