@@ -924,9 +924,10 @@ export class SuperDoc extends EventEmitter {
     this.provider = markRaw(provider);
 
     this.#assignUserColor();
-    this._cleanupAwareness = setupAwarenessHandler(provider, this, /** @type {InternalConfig} */ (this.config).user);
+    const internalConfig = /** @type {InternalConfig} */ (this.config);
+    this._cleanupAwareness = setupAwarenessHandler(provider, this, internalConfig.user);
 
-    /** @type {InternalConfig} */ (this.config).documents.forEach((doc) => {
+    internalConfig.documents.forEach((doc) => {
       doc.ydoc = ydoc;
       doc.provider = provider;
       doc.role = this.config.role;
