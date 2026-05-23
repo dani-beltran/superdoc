@@ -2,14 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Editor } from '../../core/Editor.js';
 import { COMMAND_CATALOG, type StoryLocator } from '@superdoc/document-api';
 
-const mocks = {
+const mocks = vi.hoisted(() => ({
   checkRevision: vi.fn(),
   getRevision: vi.fn(() => '0'),
   executeDomainCommand: vi.fn(),
   resolveTrackedChangeInStory: vi.fn(),
   getTrackedChangeIndex: vi.fn(),
   resolveStoryRuntime: vi.fn(),
-};
+}));
 
 vi.mock('./revision-tracker.js', () => ({
   checkRevision: mocks.checkRevision,
@@ -395,6 +395,105 @@ describe('track-changes-wrappers revision guard', () => {
 });
 
 describe('track-changes-wrappers projected id cache', () => {
+  it('keeps default paired replacements as one aggregate public list item', () => {
+    const editor = makeEditor();
+    const replacementSnapshot = {
+      address: { kind: 'entity', entityType: 'trackedChange', entityId: 'tc-replacement-1' },
+      runtimeRef: { storyKey: 'body', rawId: 'tc-replacement-1' },
+      story: { kind: 'story', storyType: 'body' },
+      type: 'insert',
+      excerpt: 'oldnew',
+      wordRevisionIds: { insert: '11', delete: '10' },
+      storyLabel: 'Body',
+      storyKind: 'body',
+      anchorKey: 'tc::body::tc-replacement-1',
+      hasInsert: true,
+      hasDelete: true,
+      hasFormat: false,
+      range: { from: 4, to: 10 },
+    };
+
+    mocks.getTrackedChangeIndex.mockReturnValue({
+      get: vi.fn(() => [replacementSnapshot]),
+      getAll: vi.fn(() => [replacementSnapshot]),
+      invalidate: vi.fn(),
+      invalidateAll: vi.fn(),
+      subscribe: vi.fn(),
+      dispose: vi.fn(),
+    });
+
+    const result = trackChangesListWrapper(editor);
+
+    expect(result.total).toBe(1);
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]).toMatchObject({
+      id: 'tc-replacement-1',
+      type: 'insert',
+      grouping: 'aggregate',
+      wordRevisionIds: { insert: '11', delete: '10' },
+    });
+    expect(result.items[0]?.id).not.toContain('#');
+
+    const deleteFiltered = trackChangesListWrapper(editor, { type: 'delete' });
+    expect(deleteFiltered.total).toBe(0);
+    expect(deleteFiltered.items).toEqual([]);
+  });
+
+  it('keeps independent replacement sides paired without aggregating them', () => {
+    const editor = makeEditor();
+    const insertedSnapshot = {
+      address: { kind: 'entity', entityType: 'trackedChange', entityId: 'tc-insert' },
+      runtimeRef: { storyKey: 'body', rawId: 'tc-insert' },
+      story: { kind: 'story', storyType: 'body' },
+      type: 'insert',
+      excerpt: 'new',
+      storyLabel: 'Body',
+      storyKind: 'body',
+      anchorKey: 'tc::body::tc-insert',
+      commandRawId: 'replacement-command-1',
+      replacementGroupId: 'replacement-1',
+      replacementSideId: 'replacement-1#inserted',
+      hasInsert: true,
+      hasDelete: false,
+      hasFormat: false,
+      range: { from: 4, to: 7 },
+    };
+    const deletedSnapshot = {
+      address: { kind: 'entity', entityType: 'trackedChange', entityId: 'tc-delete' },
+      runtimeRef: { storyKey: 'body', rawId: 'tc-delete' },
+      story: { kind: 'story', storyType: 'body' },
+      type: 'delete',
+      excerpt: 'old',
+      storyLabel: 'Body',
+      storyKind: 'body',
+      anchorKey: 'tc::body::tc-delete',
+      commandRawId: 'replacement-command-1',
+      replacementGroupId: 'replacement-1',
+      replacementSideId: 'replacement-1#deleted',
+      hasInsert: false,
+      hasDelete: true,
+      hasFormat: false,
+      range: { from: 7, to: 10 },
+    };
+
+    mocks.getTrackedChangeIndex.mockReturnValue({
+      get: vi.fn(() => [insertedSnapshot, deletedSnapshot]),
+      getAll: vi.fn(() => [insertedSnapshot, deletedSnapshot]),
+      invalidate: vi.fn(),
+      invalidateAll: vi.fn(),
+      subscribe: vi.fn(),
+      dispose: vi.fn(),
+    });
+
+    const result = trackChangesListWrapper(editor);
+
+    expect(result.total).toBe(2);
+    expect(result.items.map((item) => [item.id, item.grouping, item.pairedWithChangeId])).toEqual([
+      ['tc-insert', 'replacement-pair', 'tc-delete'],
+      ['tc-delete', 'replacement-pair', 'tc-insert'],
+    ]);
+  });
+
   it('caches list ids for reuse on the same editor revision', () => {
     const editor = makeEditor();
     const snapshot = {
