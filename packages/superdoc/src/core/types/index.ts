@@ -1335,9 +1335,11 @@ export interface SuperDocExceptionEditorPayload {
  * Consumers can narrow with `'stage' in payload` (store init) or
  * `'code' in payload` (editor lifecycle).
  *
- * SD-2916 tracks a follow-up to normalize these to a single shape; the
- * union exists today because three independent emit sites pre-date a
- * shared error contract.
+ * The union exists today because three independent emit sites
+ * (`initializeDocuments`, the restore path, and the editor lifecycle)
+ * pre-date a shared error contract. Normalizing them to a single
+ * payload shape is a separate follow-up; consumers can narrow with
+ * the `in` checks above in the meantime.
  */
 export type SuperDocExceptionPayload =
   | SuperDocExceptionStorePayload
