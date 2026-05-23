@@ -53,7 +53,7 @@ but have separate script chains because the validation needs differ.
 |---|---|---|
 | `check:public` | `check:public:superdoc` + `check:public:docapi` | Both public interfaces. The umbrella to run before merging. |
 | `check:public:superdoc` | `check:public-contract` (legacy alias) | SuperDoc package: vite build + postbuild chain, consumer typecheck matrix, deep-type audit. |
-| `check:public:docapi` | `docapi:check` (legacy alias) | Document API: contract parity, generated outputs are not stale, examples compile, overview alignment. **Requires generated artifacts to be up-to-date** — if it fails on staleness, run `generate:docapi` to refresh. |
+| `check:public:docapi` | `docapi:check` (legacy alias) | Document API: contract parity, generated outputs are not stale, examples compile, overview alignment. Clean-checkout safe: gitignored outputs (`packages/document-api/generated/`) are built in memory; tracked outputs (`apps/docs/document-api/reference/`, overview block) are still compared byte-for-byte. |
 | `report:public:superdoc` | `report:public-contract` (legacy alias) | Read-only tier metadata (supported / legacy / asset / deprecated). Not a gate. |
 
 ### TypeScript compiler
@@ -67,7 +67,7 @@ but have separate script chains because the validation needs differ.
 
 | Command | Runs | Mutates? |
 |---|---|---|
-| `generate:docapi` | `docapi:sync` (legacy alias) | yes — writes Document API artifacts under `packages/document-api/generated/` (gitignored; run before `check:public:docapi` if it fails on missing files). |
+| `generate:docapi` | `docapi:sync` (legacy alias) | yes — writes Document API artifacts under `packages/document-api/generated/` (gitignored). Run this when you want the artifacts materialized locally (e.g. for SDK builds or before publishing). `check:public:docapi` does NOT require running this first. |
 | `generate:all` | schemas, SDK clients, tool catalogs, reference docs | yes — multi-target generator. Some outputs are gitignored (`generated/`), others are committed (e.g. `apps/docs/document-api/reference/`); any tracked generated changes should be committed. |
 
 ### Legacy aliases
@@ -143,14 +143,16 @@ canonical source, and several artifacts are generated from it.
 |---|---|---|
 | `generate-contract-outputs.ts` | generate | Writes `generated/schemas/**` + `generated/agent/**` from the contract. Called by `generate:docapi`. |
 | `check-contract-parity.ts` | check | Asserts derived maps (`operation-registry`, `invoke`, etc.) project from `operation-definitions` correctly. |
-| `check-contract-outputs.ts` | check | Asserts the committed `generated/**` files match what regeneration would produce. Fails if stale. |
+| `check-contract-outputs.ts` | check | Builds all artifacts in memory and compares against the on-disk state. For tracked outputs (`apps/docs/document-api/reference/`, overview block) the disk must match exactly. For gitignored outputs (`packages/document-api/generated/`) the in-memory build is verified to succeed, but the files are not required on disk; if they happen to be present, content is still checked. |
 | `check-examples.ts` | check | Asserts contract examples compile. |
 | `check-overview-alignment.ts` | check | Asserts the documentation overview reflects the current operation set. |
 
-The four `check-*` scripts run together via `check:public:docapi`.
-Currently they require `generate:docapi` to have run first (the
-stale-file check trips otherwise). Making the check self-contained
-(in-memory generate and compare) is tracked as a follow-up.
+The four `check-*` scripts run together via `check:public:docapi` and
+are **clean-checkout safe**: a fresh `git clone` followed by
+`pnpm install && pnpm check:public` succeeds without `generate:docapi`
+having run first. `generate:docapi` remains the explicit way to
+materialize the gitignored artifacts when you need them locally (SDK
+builds, publishing).
 
 ---
 
