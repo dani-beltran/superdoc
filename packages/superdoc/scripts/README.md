@@ -178,12 +178,16 @@ canonical source, and several artifacts are generated from it.
 | `check-examples.ts` | check | Asserts contract examples compile. |
 | `check-overview-alignment.ts` | check | Asserts the documentation overview reflects the current operation set. |
 
-The four `check-*` scripts run together via `check:public:docapi` and
-are **clean-checkout safe**: a fresh `git clone` followed by
-`pnpm install && pnpm check:public` succeeds without `generate:docapi`
-having run first. `generate:docapi` remains the explicit way to
-materialize the gitignored artifacts when you need them locally (SDK
-builds, publishing).
+The four `check-*` scripts run together via `check:public:docapi`,
+which invokes the staged wrapper at `scripts/check-public-docapi.mjs`.
+Same shape as `check:public:superdoc`: cheap-to-expensive ordering,
+named stages (`contract-parity`, `contract-outputs`, `examples`,
+`overview-alignment`), per-stage timing, and a re-run hint on failure.
+
+**Clean-checkout safe**: a fresh `git clone` followed by `pnpm install
+&& pnpm check:public` succeeds without `generate:docapi` having run
+first. `generate:docapi` remains the explicit way to materialize the
+gitignored artifacts when you need them locally (SDK builds, publishing).
 
 ---
 

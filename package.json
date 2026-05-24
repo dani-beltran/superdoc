@@ -84,7 +84,7 @@
     "docapi:sync:check": "pnpm run generate:docapi && pnpm run check:public:docapi",
     "check:types": "tsc -b tsconfig.references.json",
     "check:public:superdoc": "node scripts/check-public-contract.mjs",
-    "check:public:docapi": "pnpm exec tsx packages/document-api/scripts/check-contract-parity.ts && pnpm exec tsx packages/document-api/scripts/check-contract-outputs.ts && pnpm exec tsx packages/document-api/scripts/check-examples.ts && pnpm exec tsx packages/document-api/scripts/check-overview-alignment.ts",
+    "check:public:docapi": "node scripts/check-public-docapi.mjs",
     "check:public": "pnpm run check:public:superdoc && pnpm run check:public:docapi",
     "generate:docapi": "pnpm exec tsx packages/document-api/scripts/generate-contract-outputs.ts",
     "report:public:superdoc": "node scripts/report-public-contract.mjs",
