@@ -759,7 +759,7 @@ describe('comments-wrappers: addCommentHandler multi-segment targets', () => {
     expect(editor.commands!.setTextSelection).toHaveBeenCalledWith({ from: 19, to: 27 });
   });
 
-  it('creates a tracked-change-linked comment without a text selection when a deletion target cannot be resolved live', () => {
+  it('fails closed when a tracked-change target cannot be resolved live', () => {
     const editor = {
       ...makeWriteEditor(),
       emit: vi.fn(),
@@ -777,39 +777,18 @@ describe('comments-wrappers: addCommentHandler multi-segment targets', () => {
     });
 
     const wrapper = createCommentsWrapper(editor);
-    const receipt = wrapper.add({
-      text: 'comment on deletion',
-      target: {
-        trackedChangeId: 'tc-del-1#deleted',
-      } as Parameters<typeof wrapper.add>[0]['target'],
-    });
-
-    expect(receipt.success).toBe(true);
+    expect(() =>
+      wrapper.add({
+        text: 'comment on deletion',
+        target: {
+          trackedChangeId: 'tc-del-1#deleted',
+        } as Parameters<typeof wrapper.add>[0]['target'],
+      }),
+    ).toThrowError(/Comment target could not be resolved/);
     expect(editor.commands!.setTextSelection as ReturnType<typeof vi.fn>).not.toHaveBeenCalled();
     expect(editor.commands!.addComment as ReturnType<typeof vi.fn>).not.toHaveBeenCalled();
-    expect(editor.converter!.comments).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          commentId: receipt.id,
-          commentText: 'comment on deletion',
-          trackedChange: true,
-          trackedChangeParentId: 'tc-del-1',
-          trackedChangeType: 'delete',
-        }),
-      ]),
-    );
-    expect((editor as { emit: ReturnType<typeof vi.fn> }).emit).toHaveBeenCalledWith(
-      'commentsUpdate',
-      expect.objectContaining({
-        type: 'add',
-        activeCommentId: receipt.id,
-        comment: expect.objectContaining({
-          commentId: receipt.id,
-          trackedChangeParentId: 'tc-del-1',
-          trackedChangeType: 'delete',
-        }),
-      }),
-    );
+    expect(editor.converter!.comments).toEqual([]);
+    expect((editor as { emit: ReturnType<typeof vi.fn> }).emit).not.toHaveBeenCalled();
   });
 
   it('treats a TextAddress with an undefined `segments` field as TextAddress, not TextTarget', () => {

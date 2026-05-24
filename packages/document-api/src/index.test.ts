@@ -891,11 +891,16 @@ describe('createDocumentApi', () => {
       },
     });
     const acceptAllResult = api.trackChanges.decide({ decision: 'accept', target: { scope: 'all' } });
+    const acceptAllInStoryResult = api.trackChanges.decide({
+      decision: 'accept',
+      target: { scope: 'all', story: footnoteStory },
+    });
     const rejectAllResult = api.trackChanges.decide({ decision: 'reject', target: { scope: 'all' } });
 
     expect(acceptResult.success).toBe(true);
     expect(rejectResult.success).toBe(true);
     expect(acceptAllResult.success).toBe(true);
+    expect(acceptAllInStoryResult.success).toBe(true);
     expect(rejectAllResult.success).toBe(true);
     expect(trackAdpt.accept).toHaveBeenCalledWith({ id: 'tc-1' }, undefined);
     expect(trackAdpt.reject).toHaveBeenCalledWith({ id: 'tc-1' }, undefined);
@@ -909,6 +914,7 @@ describe('createDocumentApi', () => {
       undefined,
     );
     expect(trackAdpt.acceptAll).toHaveBeenCalledWith({}, undefined);
+    expect(trackAdpt.acceptAll).toHaveBeenCalledWith({ story: footnoteStory }, undefined);
     expect(trackAdpt.rejectAll).toHaveBeenCalledWith({}, undefined);
   });
 
@@ -1050,7 +1056,7 @@ describe('createDocumentApi', () => {
       expectError(
         () => api.trackChanges.decide({ decision: 'accept', target: 'tc-1' } as any),
         'INVALID_TARGET',
-        '{ kind: "id" | "range" | "all" }',
+        '{ id }, { kind: "range", range }, or { scope: "all" }',
       );
     });
 
@@ -1059,7 +1065,7 @@ describe('createDocumentApi', () => {
       expectError(
         () => api.trackChanges.decide({ decision: 'accept', target: null } as any),
         'INVALID_TARGET',
-        '{ kind: "id" | "range" | "all" }',
+        '{ id }, { kind: "range", range }, or { scope: "all" }',
       );
     });
 
@@ -1068,7 +1074,7 @@ describe('createDocumentApi', () => {
       expectError(
         () => api.trackChanges.decide({ decision: 'accept', target: { foo: 'bar' } } as any),
         'INVALID_TARGET',
-        '{ kind: "id" | "range" | "all" }',
+        '{ id }, { kind: "range", range }, or { scope: "all" }',
       );
     });
 
@@ -1077,7 +1083,16 @@ describe('createDocumentApi', () => {
       expectError(
         () => api.trackChanges.decide({ decision: 'accept', target: { id: '' } } as any),
         'INVALID_TARGET',
-        '{ kind: "id" | "range" | "all" }',
+        'non-empty id',
+      );
+    });
+
+    it('rejects ambiguous targets that mix id and scope', () => {
+      const api = makeApi();
+      expectError(
+        () => api.trackChanges.decide({ decision: 'accept', target: { id: 'tc-1', scope: 'all' } } as any),
+        'INVALID_TARGET',
+        'exactly one',
       );
     });
   });

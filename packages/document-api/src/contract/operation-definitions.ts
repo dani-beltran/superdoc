@@ -419,12 +419,20 @@ export const INTENT_GROUP_META: Record<string, IntentGroupMeta> = {
       'Review and resolve tracked changes (insertions, deletions, replacements, format changes) in the document. ' +
       'Action "list" returns all tracked changes with optional filtering by type (insert, delete, replacement, format) and pagination (limit, offset). Each change includes an ID, type, author, timestamp, and content preview. ' +
       'Action "decide" accepts or rejects changes. Pass decision:"accept" to apply the change permanently, or decision:"reject" to discard it. ' +
-      'Target a single change with {id:"<changeId>"} or all changes at once with {scope:"all"}. ' +
+      'Target a single change with {id:"<changeId>"}, a partial selection with {kind:"range", range:{...}}, or all changes at once with {scope:"all"} (optionally plus story). ' +
       'Do NOT use this tool unless the document has tracked changes. Use superdoc_get_content info to check the tracked change count first.',
     inputExamples: [
       { action: 'list' },
       { action: 'list', type: 'replacement', limit: 10 },
       { action: 'decide', decision: 'accept', target: { id: '<changeId>' } },
+      {
+        action: 'decide',
+        decision: 'reject',
+        target: {
+          kind: 'range',
+          range: { kind: 'text', segments: [{ blockId: '<blockId>', range: { start: 0, end: 5 } }] },
+        },
+      },
       { action: 'decide', decision: 'reject', target: { scope: 'all' } },
     ],
   },
@@ -2499,7 +2507,7 @@ export const OPERATION_DEFINITIONS = {
   },
   'trackChanges.decide': {
     memberPath: 'trackChanges.decide',
-    description: 'Accept or reject tracked changes by ID, range, or scope: all.',
+    description: 'Accept or reject tracked changes by ID, range, or scope: all (optionally filtered by story).',
     expectedResult:
       'Returns a Receipt confirming the decision was applied; reports NO_OP if the change was already resolved and typed failures for unsupported or denied tracked-change decisions.',
     requiresDocumentContext: true,

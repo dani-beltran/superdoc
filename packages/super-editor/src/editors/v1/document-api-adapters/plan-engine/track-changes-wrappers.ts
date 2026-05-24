@@ -501,17 +501,27 @@ export function trackChangesRejectWrapper(
   return decideSingle(editor, 'reject', input.id, input.story, options);
 }
 
-function decideAll(editor: Editor, decision: ReviewDecision, options: RevisionGuardOptions | undefined): Receipt {
+function decideAll(
+  editor: Editor,
+  decision: ReviewDecision,
+  input: TrackChangesAcceptAllInput | TrackChangesRejectAllInput,
+  options: RevisionGuardOptions | undefined,
+): Receipt {
   const index = getTrackedChangeIndex(editor);
+  const requestedStoryKey = input.story && input.story !== 'all' ? buildStoryKey(input.story) : null;
   const allSnapshots = index.getAll();
-  if (allSnapshots.length === 0) {
+  const matchingSnapshots = requestedStoryKey
+    ? allSnapshots.filter((snapshot) => snapshot.runtimeRef.storyKey === requestedStoryKey)
+    : allSnapshots;
+
+  if (matchingSnapshots.length === 0) {
     return toNoOpReceipt(`${decision === 'accept' ? 'Accept' : 'Reject'} all tracked changes produced no change.`);
   }
 
   checkRevision(editor, options?.expectedRevision);
 
   const byStoryKey = new Map<string, { story: StoryLocator; snapshots: TrackedChangeSnapshot[] }>();
-  for (const snapshot of allSnapshots) {
+  for (const snapshot of matchingSnapshots) {
     const key = snapshot.runtimeRef.storyKey;
     const entry = byStoryKey.get(key);
     if (entry) {
@@ -569,18 +579,18 @@ function decideAll(editor: Editor, decision: ReviewDecision, options: RevisionGu
 
 export function trackChangesAcceptAllWrapper(
   editor: Editor,
-  _input: TrackChangesAcceptAllInput,
+  input: TrackChangesAcceptAllInput,
   options?: RevisionGuardOptions,
 ): Receipt {
-  return decideAll(editor, 'accept', options);
+  return decideAll(editor, 'accept', input, options);
 }
 
 export function trackChangesRejectAllWrapper(
   editor: Editor,
-  _input: TrackChangesRejectAllInput,
+  input: TrackChangesRejectAllInput,
   options?: RevisionGuardOptions,
 ): Receipt {
-  return decideAll(editor, 'reject', options);
+  return decideAll(editor, 'reject', input, options);
 }
 
 // ---------------------------------------------------------------------------

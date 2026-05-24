@@ -1,3 +1,4 @@
+// @ts-check
 import { Extension } from '@core/Extension.js';
 import { TrackDeleteMarkName, TrackInsertMarkName, TrackFormatMarkName } from './constants.js';
 import { TrackChangesBasePlugin, TrackChangesBasePluginKey } from './plugins/index.js';

@@ -271,6 +271,53 @@ describe('track-changes-wrappers revision guard', () => {
     expect(index.invalidate).toHaveBeenCalledWith(footnoteStory);
   });
 
+  it('scopes accept-all to the requested story when a bulk story filter is provided', () => {
+    const hostEditor = makeEditor();
+    const bodyEditor = makeEditor({ acceptAllTrackedChanges: vi.fn(() => true) });
+    const footnoteEditor = makeEditor({ acceptAllTrackedChanges: vi.fn(() => true) });
+    const bodyCommit = vi.fn();
+    const footnoteCommit = vi.fn();
+
+    const bodyStory = { kind: 'story', storyType: 'body' } as const;
+    const snapshots = [
+      {
+        story: bodyStory,
+        runtimeRef: { storyKey: 'body', rawId: 'raw-body' },
+      },
+      {
+        story: footnoteStory,
+        runtimeRef: { storyKey: 'fn:5', rawId: 'raw-fn' },
+      },
+    ];
+    const index = {
+      get: vi.fn(() => []),
+      getAll: vi.fn(() => snapshots),
+      invalidate: vi.fn(),
+      invalidateAll: vi.fn(),
+      subscribe: vi.fn(),
+      dispose: vi.fn(),
+    };
+
+    mocks.getTrackedChangeIndex.mockReturnValue(index);
+    mocks.resolveStoryRuntime.mockImplementation((_host: Editor, story: StoryLocator) => {
+      if (story.storyType === 'body') {
+        return { editor: bodyEditor, storyKey: 'body', locator: story, kind: 'body', commit: bodyCommit };
+      }
+
+      return { editor: footnoteEditor, storyKey: 'fn:5', locator: story, kind: 'note', commit: footnoteCommit };
+    });
+
+    const receipt = trackChangesAcceptAllWrapper(hostEditor, { story: footnoteStory });
+
+    expect(receipt).toEqual({ success: true });
+    expect(mocks.executeDomainCommand).toHaveBeenCalledTimes(1);
+    expect(mocks.executeDomainCommand).toHaveBeenCalledWith(footnoteEditor, expect.any(Function));
+    expect(bodyCommit).not.toHaveBeenCalled();
+    expect(footnoteCommit).toHaveBeenCalledWith(hostEditor);
+    expect(index.invalidate).toHaveBeenCalledTimes(1);
+    expect(index.invalidate).toHaveBeenCalledWith(footnoteStory);
+  });
+
   it('resolves range targets against v1 sdBlockId attributes', () => {
     const acceptTrackedChangesBetween = vi.fn(() => true);
     const invalidate = vi.fn();

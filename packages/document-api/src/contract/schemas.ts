@@ -5048,7 +5048,26 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
         target: {
           oneOf: [
             objectSchema({ id: { type: 'string' }, story: storyLocatorSchema }, ['id']),
-            objectSchema({ scope: { enum: ['all'] } }, ['scope']),
+            objectSchema(
+              {
+                kind: { const: 'range' },
+                range: textTargetSchema,
+                story: storyLocatorSchema,
+                part: { type: 'string', description: 'Optional part discriminator for the range target.' },
+              },
+              ['kind', 'range'],
+            ),
+            objectSchema(
+              {
+                scope: { enum: ['all'] },
+                story: {
+                  oneOf: [storyLocatorSchema, { const: 'all' }],
+                  description:
+                    "Optional explicit bulk filter. Omit or pass 'all' to target every revision-capable story, or pass a StoryLocator to scope the decision to one story.",
+                },
+              },
+              ['scope'],
+            ),
           ],
         },
       },

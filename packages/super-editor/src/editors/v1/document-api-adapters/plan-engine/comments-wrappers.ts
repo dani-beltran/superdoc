@@ -61,7 +61,7 @@ import { normalizeExcerpt, toNonEmptyString } from '../helpers/value-utils.js';
 import { getTrackedChangeIndex } from '../tracked-changes/tracked-change-index.js';
 import type { TrackedChangeSnapshot } from '../tracked-changes/tracked-change-snapshot.js';
 import { resolveSelectionTarget } from '../helpers/selection-target-resolver.js';
-import { resolveTrackedChangeInStory, splitProjectedTrackedChangeId } from '../helpers/tracked-change-resolver.js';
+import { resolveTrackedChangeInStory } from '../helpers/tracked-change-resolver.js';
 import { BODY_STORY_KEY, buildStoryKey } from '../story-runtime/story-key.js';
 
 // ---------------------------------------------------------------------------
@@ -341,58 +341,6 @@ function applyTextSelection(editor: Editor, from: number, to: number): boolean {
   }
 
   return false;
-}
-
-function addDetachedTrackedChangeComment(
-  editor: Editor,
-  input: AddCommentInput,
-  target: Extract<CommentTarget, { trackedChangeId: string }>,
-  options?: RevisionGuardOptions,
-): CommentsCreateReceipt {
-  if (options?.expectedRevision) {
-    checkRevision(editor, options.expectedRevision);
-  }
-
-  const commentId = uuidv4();
-  const now = Date.now();
-  const store = getCommentEntityStore(editor);
-  const user = (editor.options?.user ?? {}) as EditorUserIdentity;
-  const { baseId, side } = splitProjectedTrackedChangeId(target.trackedChangeId);
-  const trackedChangeType = side === 'deleted' ? 'delete' : side === 'inserted' ? 'insert' : null;
-  const trackedChangeStory = target.story ?? ({ kind: 'story', storyType: 'body' } as StoryLocator);
-
-  upsertCommentEntity(store, commentId, {
-    commentId,
-    commentText: input.text,
-    commentJSON: buildCommentJsonFromText(input.text),
-    parentCommentId: undefined,
-    createdTime: now,
-    creatorName: user.name,
-    creatorEmail: user.email,
-    creatorImage: user.image,
-    isDone: false,
-    isInternal: false,
-    fileId: editor.options?.documentId,
-    documentId: editor.options?.documentId,
-    trackedChange: true,
-    trackedChangeParentId: baseId,
-    trackedChangeType,
-    trackedChangeDisplayType: null,
-    trackedChangeStory,
-    trackedChangeStoryKind: trackedChangeStory.kind === 'story' ? trackedChangeStory.storyType : null,
-    trackedChangeStoryLabel:
-      trackedChangeStory.kind === 'story' && trackedChangeStory.storyType === 'body' ? 'Body' : null,
-    trackedChangeAnchorKey: null,
-    trackedChangeText: trackedChangeType === 'delete' ? '' : null,
-    deletedText: trackedChangeType === 'delete' ? '' : null,
-  });
-
-  const stored = findCommentEntity(store, commentId);
-  if (stored) {
-    emitCommentAdd(editor, buildCommentLifecyclePayload(stored), commentId);
-  }
-
-  return { success: true, id: commentId, inserted: [toCommentAddress(commentId)] };
 }
 
 function resolveCommentIdentity(
@@ -1081,19 +1029,7 @@ function addCommentHandler(
       },
     };
   }
-  let resolvedTarget: CommentTargetResolution;
-  try {
-    resolvedTarget = resolveCommentTarget(editor, target);
-  } catch (error) {
-    if (
-      isTrackedChangeCommentTargetShape(target) &&
-      error instanceof DocumentApiAdapterError &&
-      error.code === 'TARGET_NOT_FOUND'
-    ) {
-      return addDetachedTrackedChangeComment(editor, input, target, options);
-    }
-    throw error;
-  }
+  const resolvedTarget = resolveCommentTarget(editor, target);
   if (resolvedTarget.ok === false) {
     return { success: false, failure: resolvedTarget.failure };
   }
