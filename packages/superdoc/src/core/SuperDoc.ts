@@ -61,27 +61,28 @@ const DEFAULT_AWARENESS_PALETTE = Object.freeze([
 // The corresponding payload shapes for the SuperDocEventMap are
 // declared as interfaces below.
 import type {
-  User,
-  Document,
-  RuntimeDocument,
-  Modules,
-  Editor,
-  DocumentMode,
-  Config,
-  InternalConfig,
-  ExportParams,
-  UpgradeToCollaborationOptions,
-  SurfaceRequest,
-  SurfaceHandle,
+  AwarenessState,
   CollaborationProvider,
+  Config,
+  DocumentMode,
+  Editor,
+  ExportParams,
+  InternalConfig,
+  Modules,
   NavigableAddress,
+  RuntimeDocument,
   SearchMatch,
+  SuperDocExceptionPayload,
   SuperDocExceptionStorePayload,
+  SurfaceHandle,
+  SurfaceRequest,
+  UpgradeToCollaborationOptions,
+  User,
 } from './types/index.js';
+import type { Comment, FontsResolvedPayload, ListDefinitionsPayload, PresentationEditor } from '@superdoc/super-editor';
 import type * as Y from 'yjs';
-import type { PresentationEditor, FontsResolvedPayload, ListDefinitionsPayload, Comment } from '@superdoc/super-editor';
-import type { AwarenessState, SuperDocExceptionPayload } from './types/index.js';
-// Whiteboard is already imported as a value above (line 19).
+// `Whiteboard` is already imported as a value above (line 19); reuse it
+// as a type here without a separate `import type` declaration.
 import type { WhiteboardData } from './whiteboard/Whiteboard.js';
 
 // Event payload shapes (formerly JSDoc typedefs above the class).
