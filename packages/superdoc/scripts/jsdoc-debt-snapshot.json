@@ -102,7 +102,6 @@
     "packages/super-editor/src/editors/v1/extensions/track-changes/trackChangesHelpers/replaceAroundStep.js",
     "packages/super-editor/src/editors/v1/extensions/track-changes/trackChangesHelpers/replaceStep.js",
     "packages/super-editor/src/editors/v1/extensions/track-changes/trackChangesHelpers/trackedTransaction.js",
-    "packages/super-editor/src/editors/v1/extensions/underline/underline.js",
-    "packages/superdoc/src/index.js"
+    "packages/super-editor/src/editors/v1/extensions/underline/underline.js"
   ]
 }
