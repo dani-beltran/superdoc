@@ -1965,7 +1965,7 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
    * @param {string | RegExp} text The text or regex to search for
    * @returns {import('./types/index.js').SearchMatch[] | undefined} The search results
    */
-  search(text: string): SearchMatch[] | undefined {
+  search(text: string | RegExp): SearchMatch[] | undefined {
     return this.activeEditor?.commands.search(text, { searchModel: 'visible' });
   }
 
