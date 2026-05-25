@@ -23,6 +23,8 @@ import { encodeUtf8Base64 } from '../../../../../../helpers/base64.js';
 const ROTATED_CENTERED_WATERMARK_TOP_OFFSET_RATIO = 0.25;
 // Guard against malformed VML height values when calculating the WordArt offset.
 const MAX_ROTATED_CENTERED_WATERMARK_OFFSET_HEIGHT_PX = 10000;
+const DEFAULT_VML_TEXT_WATERMARK_OPACITY = 1;
+const DEFAULT_VML_TEXT_WATERMARK_ALIGNMENT = 'center';
 
 export function handleShapeTextWatermarkImport({ pict }) {
   const shape = pict.elements?.find((el) => el.name === 'v:shape');
@@ -60,8 +62,12 @@ export function handleShapeTextWatermarkImport({ pict }) {
   const rotation = parseFloat(styleObj.rotation) || 0;
 
   // Extract positioning attributes
-  const hPosition = styleObj['mso-position-horizontal'] || 'center';
-  const vPosition = styleObj['mso-position-vertical'] || 'center';
+  const explicitHPosition = styleObj['mso-position-horizontal'];
+  const explicitVPosition = styleObj['mso-position-vertical'];
+  const hasExplicitMarginLeft = styleObj['margin-left'] != null;
+  const hasExplicitMarginTop = styleObj['margin-top'] != null;
+  const hPosition = explicitHPosition || (hasExplicitMarginLeft ? undefined : DEFAULT_VML_TEXT_WATERMARK_ALIGNMENT);
+  const vPosition = explicitVPosition || (hasExplicitMarginTop ? undefined : DEFAULT_VML_TEXT_WATERMARK_ALIGNMENT);
   const hRelativeTo = styleObj['mso-position-horizontal-relative'] || 'margin';
   const vRelativeTo = styleObj['mso-position-vertical-relative'] || 'margin';
 
@@ -75,7 +81,7 @@ export function handleShapeTextWatermarkImport({ pict }) {
   const rawFillColor2 = fillAttrs.color2 || '#3f3f3f';
   const fillColor = sanitizeColor(rawFillColor, 'silver');
   const fillColor2 = sanitizeColor(rawFillColor2, '#3f3f3f');
-  const opacity = fillAttrs.opacity || '0.5';
+  const opacity = fillAttrs.opacity ?? String(DEFAULT_VML_TEXT_WATERMARK_OPACITY);
   const fillType = fillAttrs.type || 'solid';
 
   // Extract stroke properties
@@ -115,7 +121,7 @@ export function handleShapeTextWatermarkImport({ pict }) {
   const heightPx = convertToPixels(height);
 
   // Sanitize numeric values before use
-  const sanitizedOpacity = sanitizeNumeric(parseVmlOpacity(opacity), 0.5, 0, 1);
+  const sanitizedOpacity = sanitizeNumeric(parseVmlOpacity(opacity), DEFAULT_VML_TEXT_WATERMARK_OPACITY, 0, 1);
   const sanitizedRotation = sanitizeNumeric(rotation, 0, -360, 360);
 
   const svgResult = generateTextWatermarkSVG({
@@ -143,6 +149,27 @@ export function handleShapeTextWatermarkImport({ pict }) {
     height: heightPx,
     rotation: sanitizedRotation,
   });
+  const marginOffset = resolveTextWatermarkMarginOffset({
+    hPosition,
+    vPosition,
+    hRelativeTo,
+    vRelativeTo,
+    marginLeft: convertToPixels(position.marginLeft),
+    marginTop: convertToPixels(position.marginTop),
+    width: widthPx,
+    height: heightPx,
+    svgWidth: svgResult.svgWidth,
+    svgHeight: svgResult.svgHeight,
+    centerOffsetTop,
+    rotation: sanitizedRotation,
+  });
+
+  const anchorData = {
+    hRelativeFrom: hRelativeTo,
+    vRelativeFrom: vRelativeTo,
+  };
+  if (hPosition) anchorData.alignH = hPosition;
+  if (vPosition) anchorData.alignV = vPosition;
 
   // Return as an image node (so it uses the Image extension for rendering)
   // but preserve all VML attributes for export round-trip
@@ -173,23 +200,13 @@ export function handleShapeTextWatermarkImport({ pict }) {
           behindDoc: true,
         },
       },
-      anchorData: {
-        hRelativeFrom: hRelativeTo,
-        vRelativeFrom: vRelativeTo,
-        alignH: hPosition,
-        alignV: vPosition,
-      },
+      anchorData,
       // Size - use rotated bounding box dimensions to prevent clipping
       size: {
         width: svgResult.svgWidth,
         height: svgResult.svgHeight,
       },
-      marginOffset: {
-        // For center-aligned watermarks relative to margin, Word's margin values
-        // are not suitable for browser rendering. Set to 0 to let center alignment work.
-        horizontal: hPosition === 'center' && hRelativeTo === 'margin' ? 0 : convertToPixels(position.marginLeft),
-        top: vPosition === 'center' && vRelativeTo === 'margin' ? centerOffsetTop : convertToPixels(position.marginTop),
-      },
+      marginOffset,
       // Store text watermark specific data for export
       textWatermarkData: {
         text: watermarkText,
@@ -345,6 +362,56 @@ function getTextWatermarkCenterOffset({ hPosition, vPosition, hRelativeTo, vRela
   );
 }
 
+function resolveTextWatermarkMarginOffset({
+  hPosition,
+  vPosition,
+  hRelativeTo,
+  vRelativeTo,
+  marginLeft,
+  marginTop,
+  width,
+  height,
+  svgWidth,
+  svgHeight,
+  centerOffsetTop,
+  rotation,
+}) {
+  const isCenteredHorizontally = hPosition === 'center' && hRelativeTo === 'margin';
+  const isCenteredVertically = vPosition === 'center' && vRelativeTo === 'margin';
+
+  return {
+    // For explicitly centered margin watermarks, Word's margin values are not
+    // browser offsets. Let layout center horizontally and apply only the known
+    // rotated WordArt top correction vertically.
+    horizontal: isCenteredHorizontally
+      ? 0
+      : getAbsoluteShapeOffset({
+          position: hPosition,
+          margin: marginLeft,
+          shapeSize: width,
+          svgSize: svgWidth,
+          rotation,
+        }),
+    top: isCenteredVertically
+      ? centerOffsetTop
+      : getAbsoluteShapeOffset({
+          position: vPosition,
+          margin: marginTop,
+          shapeSize: height,
+          svgSize: svgHeight,
+          rotation,
+        }),
+  };
+}
+
+function getAbsoluteShapeOffset({ position, margin, shapeSize, svgSize, rotation }) {
+  if (position || rotation === 0) {
+    return margin;
+  }
+
+  return margin + shapeSize / 2 - svgSize / 2;
+}
+
 /**
  * Generate an SVG data URI for a text watermark with rotation.
  * Rotation must be baked into the SVG since the layout engine doesn't support
@@ -372,7 +439,7 @@ function generateTextWatermarkSVG({ text, width, height, rotation, fill, textSty
 
   // Sanitize all values from untrusted input
   const color = normalizeVmlColor(sanitizeColor(fill?.color, 'silver'));
-  const opacity = resolveRenderedTextWatermarkOpacity(sanitizeNumeric(fill?.opacity, 0.5, 0, 1));
+  const opacity = sanitizeNumeric(fill?.opacity, DEFAULT_VML_TEXT_WATERMARK_OPACITY, 0, 1);
   const fontFamily = resolveSvgFontFamily(sanitizeFontFamily(textStyle?.fontFamily));
   const sanitizedRotation = sanitizeNumeric(rotation, 0, -360, 360);
   const sanitizedWidth = sanitizeNumeric(width, 100, 1, 10000);
@@ -419,10 +486,6 @@ function generateTextWatermarkSVG({ text, width, height, rotation, fill, textSty
     svgWidth,
     svgHeight,
   };
-}
-
-function resolveRenderedTextWatermarkOpacity(opacity) {
-  return sanitizeNumeric(opacity * 0.5, 0.25, 0, 1);
 }
 
 function resolveSvgFontFamily(fontFamily) {

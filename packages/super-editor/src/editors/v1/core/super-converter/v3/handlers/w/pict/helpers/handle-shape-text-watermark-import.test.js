@@ -218,7 +218,7 @@ describe('handleShapeTextWatermarkImport', () => {
       expect(result.attrs.transformData).toBeUndefined();
     });
 
-    it('should parse margin offsets from style', () => {
+    it('should preserve explicit margin offsets when alignment is omitted', () => {
       const pict = {
         elements: [
           {
@@ -240,10 +240,10 @@ describe('handleShapeTextWatermarkImport', () => {
 
       const result = handleShapeTextWatermarkImport({ params: {}, pict });
 
-      // For non-rotated center-aligned watermarks relative to margin, both offsets
-      // are set to 0 to let center alignment work properly in the browser.
-      expect(result.attrs.marginOffset.horizontal).toBe(0);
-      expect(result.attrs.marginOffset.top).toBe(0);
+      expect(result.attrs.marginOffset.horizontal).toBeCloseTo(0.07, 1);
+      expect(result.attrs.marginOffset.top).toBeCloseTo(420.9, 1);
+      expect(result.attrs.anchorData.alignH).toBeUndefined();
+      expect(result.attrs.anchorData.alignV).toBeUndefined();
     });
 
     it('should parse positioning from style', () => {
@@ -333,6 +333,40 @@ describe('handleShapeTextWatermarkImport', () => {
       expect(result.attrs.marginOffset.top).toBeCloseTo(133.3, 1); // 100pt to pixels
       expect(result.attrs.anchorData.alignH).toBe('left');
       expect(result.attrs.anchorData.alignV).toBe('top');
+    });
+
+    it('should preserve the absolute VML shape center for rotated watermarks without explicit alignment', () => {
+      const pict = {
+        elements: [
+          {
+            name: 'v:shape',
+            attributes: {
+              style:
+                'position:absolute;margin-left:1in;margin-top:337.5pt;width:468pt;height:117pt;rotation:315;mso-position-horizontal-relative:margin;mso-position-vertical-relative:margin',
+              fillcolor: 'silver',
+              stroked: 'f',
+            },
+            elements: [
+              {
+                name: 'v:textpath',
+                attributes: {
+                  string: 'SOLID',
+                  style: 'font-family:&quot;Calibri&quot;;font-size:1pt',
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      const result = handleShapeTextWatermarkImport({ params: {}, pict });
+
+      expect(result.attrs.anchorData).toEqual({
+        hRelativeFrom: 'margin',
+        vRelativeFrom: 'margin',
+      });
+      expect(result.attrs.marginOffset.horizontal).toBeCloseTo(64.8, 1);
+      expect(result.attrs.marginOffset.top).toBeCloseTo(224.7, 1);
     });
 
     it('should preserve margin offsets for right-aligned watermarks', () => {
@@ -848,10 +882,40 @@ describe('handleShapeTextWatermarkImport', () => {
       expect(decodedSvg).toContain('lengthAdjust="spacingAndGlyphs"');
       expect(decodedSvg).toContain('font-size="268.7253333333333px"');
       expect(decodedSvg).toContain('fill="#C0C0C0"');
-      expect(decodedSvg).toContain('fill-opacity="0.25"');
+      expect(decodedSvg).toContain('fill-opacity="0.5"');
       expect(result.attrs.marginOffset.top).toBeCloseTo(59.98, 1);
       expect(result.attrs.textWatermarkData.fill.color).toBe('silver');
       expect(result.attrs.textWatermarkData.fill.opacity).toBe(0.5);
+    });
+
+    it('renders missing VML opacity as fully opaque', () => {
+      const pict = {
+        elements: [
+          {
+            name: 'v:shape',
+            attributes: {
+              style: 'width:300pt;height:80pt;rotation:315',
+              fillcolor: 'red',
+              stroked: 'f',
+            },
+            elements: [
+              {
+                name: 'v:textpath',
+                attributes: {
+                  string: 'SOLID',
+                  style: 'font-family:&quot;Calibri&quot;;font-size:1pt',
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      const result = handleShapeTextWatermarkImport({ params: {}, pict });
+      const decodedSvg = decodeSvgDataUri(result.attrs.src);
+
+      expect(result.attrs.textWatermarkData.fill.opacity).toBe(1);
+      expect(decodedSvg).toContain('fill-opacity="1"');
     });
   });
 
@@ -1295,8 +1359,8 @@ describe('handleShapeTextWatermarkImport', () => {
       // NaN and Infinity should be replaced with defaults
       // rotation: NaN becomes default 0
       expect(result.attrs.textWatermarkData.rotation).toBe(0);
-      // opacity: Infinity becomes default 0.5
-      expect(result.attrs.textWatermarkData.fill.opacity).toBe(0.5);
+      // opacity: Infinity becomes default 1
+      expect(result.attrs.textWatermarkData.fill.opacity).toBe(1);
     });
 
     it('should sanitize extreme dimension values', () => {
@@ -1392,7 +1456,7 @@ describe('handleShapeTextWatermarkImport', () => {
       // Should use defaults for empty values
       expect(result.attrs.textWatermarkData.fill.color).toBe('silver');
       expect(result.attrs.textWatermarkData.textStyle.fontFamily).toBe('Arial');
-      expect(result.attrs.textWatermarkData.fill.opacity).toBe(0.5);
+      expect(result.attrs.textWatermarkData.fill.opacity).toBe(1);
     });
   });
 });
