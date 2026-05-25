@@ -1642,7 +1642,7 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
   /**
    * Add a comments list to the superdoc
    * Requires the comments module to be enabled
-   * @param {Element} element The DOM element to render the comments list in
+   * @param {HTMLElement} element The DOM element to render the comments list in
    */
   addCommentsList(element: HTMLElement) {
     if (!this.config?.modules?.comments || this.config.role === 'viewer') return;
