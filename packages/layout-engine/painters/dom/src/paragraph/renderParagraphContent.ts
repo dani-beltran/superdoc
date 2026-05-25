@@ -25,6 +25,7 @@ import {
   type SdtBoundaryOptions,
 } from '../sdt/container.js';
 import { createParagraphDecorationLayers, stampBetweenBorderDataset, type BetweenBorderInfo } from './borders/index.js';
+import { resolveTextAlign } from '../features/inline-direction/index.js';
 import {
   applyParagraphLineIndentation,
   hasExplicitSegmentPositioning,
@@ -297,7 +298,7 @@ const applyBlockSdtChromeBounds = (
       content,
     );
     const alignmentSlack = Math.max(0, availableWidth - paintedLineWidth);
-    const alignment = block.attrs?.alignment;
+    const alignment = resolveTextAlign(block.attrs?.alignment, getParagraphInlineDirection(block.attrs) === 'rtl');
     const lineLeft =
       lineOffset + (alignment === 'center' ? alignmentSlack / 2 : alignment === 'right' ? alignmentSlack : 0);
     contentLeft = Math.min(contentLeft, lineLeft);
