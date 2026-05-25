@@ -48,7 +48,8 @@ export { DOCX, PDF, HTML, getFileObject, compareVersions };
 // First-class public API. Documented, advertised, supported long-term.
 // =============================================================================
 
-// Source: ./core/SuperDoc.js
+// Source: ./core/SuperDoc.ts. The `.js` import specifier is intentional
+// for ESM output and resolves to the .ts source during TypeScript builds.
 export { SuperDoc } from '../core/SuperDoc.js';
 
 // Source: ./core/theme/create-theme.ts
