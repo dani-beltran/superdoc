@@ -1,4 +1,5 @@
 import type { FieldAnnotationRun, ImageRun, MathRun, Run, TextRun } from '@superdoc/contracts';
+import { isEmptyInlineSdtPlaceholderRun } from '@superdoc/contracts';
 import type { FragmentRenderContext } from '../renderer.js';
 import type { RunRenderContext, TrackedChangesRenderConfig } from './types.js';
 import { renderFieldAnnotationRun } from './field-annotation-run.js';
@@ -11,6 +12,17 @@ export const isLineBreakRun = (run: Run): run is import('@superdoc/contracts').L
 export const isBreakRun = (run: Run): run is import('@superdoc/contracts').BreakRun => run.kind === 'break';
 export const isFieldAnnotationRun = (run: Run): run is FieldAnnotationRun => run.kind === 'fieldAnnotation';
 export const isMathRun = (run: Run): run is MathRun => run.kind === 'math';
+
+const renderEmptyInlineSdtPlaceholderRun = (run: TextRun, renderContext: RunRenderContext): HTMLElement | null => {
+  const elem = renderContext.doc.createElement('span');
+  elem.classList.add('superdoc-empty-inline-sdt-placeholder');
+  elem.setAttribute('aria-hidden', 'true');
+  elem.dataset.layoutEpoch = String(renderContext.layoutEpoch);
+  if (run.pmStart != null) elem.dataset.pmStart = String(run.pmStart);
+  if (run.pmEnd != null) elem.dataset.pmEnd = String(run.pmEnd);
+  renderContext.applySdtDataset(elem, run.sdt);
+  return elem;
+};
 
 /**
  * Render a single run as an HTML element (span or anchor).
@@ -46,6 +58,10 @@ export const renderRun = (
   // Handle BreakRun - similar to LineBreakRun, breaks are handled by the measurer
   if (isBreakRun(run)) {
     return null;
+  }
+
+  if (isEmptyInlineSdtPlaceholderRun(run)) {
+    return renderEmptyInlineSdtPlaceholderRun(run, renderContext);
   }
 
   // Handle TextRun

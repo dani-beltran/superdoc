@@ -3,6 +3,7 @@ import {
   calculateJustifySpacing,
   computeLinePmRange,
   expandRunsForInlineNewlines,
+  isEmptyInlineSdtPlaceholderRun,
   shouldApplyJustify,
   sliceRunsForLine,
   SPACE_CHARS,
@@ -488,6 +489,9 @@ const renderExplicitlyPositionedRuns = ({
     if (resolved) {
       if (!geoSdtWrapper) {
         geoSdtWrapper = runContext.createInlineSdtWrapper(resolved.sdt);
+        if (isEmptyInlineSdtPlaceholderRun(runForSdt)) {
+          geoSdtWrapper.dataset.empty = 'true';
+        }
         geoSdtId = thisRunSdtId;
         geoSdtWrapperLeft = elemLeftPx;
         geoSdtMaxRight = elemLeftPx;
@@ -615,6 +619,23 @@ const renderExplicitlyPositionedRuns = ({
       continue;
     }
 
+    if (isEmptyInlineSdtPlaceholderRun(baseRun)) {
+      const elem = renderRun(baseRun, context, runContext, trackedConfig);
+      if (elem) {
+        if (styleId) {
+          elem.setAttribute('styleid', styleId);
+        }
+        const segment = runSegments[0]!;
+        const baseX = segment.x !== undefined ? segment.x : cumulativeX;
+        const xPos = baseX + indentOffset;
+        elem.style.position = 'absolute';
+        elem.style.left = `${xPos}px`;
+        appendToLineGeo(elem, baseRun, xPos, segment.width);
+        cumulativeX = baseX + segment.width;
+      }
+      continue;
+    }
+
     // At this point, baseRun must be TextRun (has .text property)
     if (!('text' in baseRun)) {
       continue;
@@ -719,6 +740,9 @@ const renderInlineRuns = ({
       if (resolved) {
         if (!currentInlineSdtWrapper) {
           currentInlineSdtWrapper = runContext.createInlineSdtWrapper(resolved.sdt);
+          if (isEmptyInlineSdtPlaceholderRun(run)) {
+            currentInlineSdtWrapper.dataset.empty = 'true';
+          }
           runContext.syncInlineSdtWrapperTypography(currentInlineSdtWrapper, run);
           currentInlineSdtId = runSdtId;
         }
