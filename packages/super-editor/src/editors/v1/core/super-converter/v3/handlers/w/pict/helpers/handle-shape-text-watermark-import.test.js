@@ -555,6 +555,39 @@ describe('handleShapeTextWatermarkImport', () => {
       expect(percentResult.attrs.textWatermarkData.fill.opacity).toBe(0.5);
       expect(fixedResult.attrs.textWatermarkData.fill.opacity).toBe(0.5);
     });
+
+    it('should preserve explicit opacity="0" instead of coercing to default', () => {
+      const pict = {
+        elements: [
+          {
+            name: 'v:shape',
+            attributes: {
+              style: 'width:100pt',
+            },
+            elements: [
+              {
+                name: 'v:textpath',
+                attributes: {
+                  string: 'INVISIBLE',
+                },
+              },
+              {
+                name: 'v:fill',
+                attributes: {
+                  opacity: '0',
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      const result = handleShapeTextWatermarkImport({ params: {}, pict });
+      const decodedSvg = decodeSvgDataUri(result.attrs.src);
+
+      expect(result.attrs.textWatermarkData.fill.opacity).toBe(0);
+      expect(decodedSvg).toContain('fill-opacity="0"');
+    });
   });
 
   describe('Stroke properties', () => {
@@ -888,14 +921,30 @@ describe('handleShapeTextWatermarkImport', () => {
       expect(result.attrs.textWatermarkData.fill.opacity).toBe(0.5);
     });
 
-    it('renders missing VML opacity as fully opaque', () => {
+    it('renders a Word-native no-fill t136 watermark as fully opaque', () => {
       const pict = {
         elements: [
           {
+            name: 'v:shapetype',
+            attributes: { id: '_x0000_t136', 'o:spt': '136', adj: '10800' },
+            elements: [
+              {
+                name: 'v:path',
+                attributes: { textpathok: 't' },
+              },
+              {
+                name: 'v:textpath',
+                attributes: { on: 't', fitshape: 't' },
+              },
+            ],
+          },
+          {
             name: 'v:shape',
             attributes: {
-              style: 'width:300pt;height:80pt;rotation:315',
-              fillcolor: 'red',
+              id: '_x0000_s1025',
+              type: '#_x0000_t136',
+              style: 'margin-left:1in;margin-top:337.5pt;width:468pt;height:117pt;rotation:315',
+              fillcolor: 'silver',
               stroked: 'f',
             },
             elements: [
@@ -904,6 +953,8 @@ describe('handleShapeTextWatermarkImport', () => {
                 attributes: {
                   string: 'SOLID',
                   style: 'font-family:&quot;Calibri&quot;;font-size:1pt',
+                  trim: 't',
+                  fitpath: 't',
                 },
               },
             ],
@@ -916,6 +967,8 @@ describe('handleShapeTextWatermarkImport', () => {
 
       expect(result.attrs.textWatermarkData.fill.opacity).toBe(1);
       expect(decodedSvg).toContain('fill-opacity="1"');
+      expect(decodedSvg).toContain('textLength=');
+      expect(decodedSvg).toContain('lengthAdjust="spacingAndGlyphs"');
     });
   });
 
