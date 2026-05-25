@@ -164,12 +164,31 @@ function enumerateObligations() {
   return members;
 }
 
+/**
+ * Recursively walk FIXTURE_DIR and return every `.ts` / `.cts` / `.mts`
+ * file path, relative to FIXTURE_DIR. Manual recursion (not
+ * `readdirSync(..., { recursive: true })`) so the gate works on any
+ * Node version this repo supports without depending on the recursive
+ * option being available.
+ */
+function listFixtureFiles(dir, rel = '') {
+  const out = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const child = join(dir, entry.name);
+    const relPath = rel ? `${rel}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) {
+      out.push(...listFixtureFiles(child, relPath));
+    } else if (entry.isFile() && /\.(c|m)?ts$/.test(entry.name)) {
+      out.push(relPath);
+    }
+  }
+  return out;
+}
+
 function loadFixtures() {
-  const files = readdirSync(FIXTURE_DIR).filter(
-    (f) => f.endsWith('.ts') || f.endsWith('.cts') || f.endsWith('.mts'),
-  );
+  const files = listFixtureFiles(FIXTURE_DIR).sort();
   return files
-    .map((f) => `// === ${f} ===\n${readFileSync(join(FIXTURE_DIR, f), 'utf8')}`)
+    .map((rel) => `// === ${rel} ===\n${readFileSync(join(FIXTURE_DIR, rel), 'utf8')}`)
     .join('\n');
 }
 
