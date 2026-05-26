@@ -115,6 +115,28 @@ function listTsFiles(rootRel) {
 // ─── AST walk ─────────────────────────────────────────────────────────
 
 /**
+ * Render a member name from the AST node that carries it. Handles
+ * `Identifier`, `PrivateIdentifier` (returns `#name` so private
+ * methods don't collapse onto their enclosing class's key), and
+ * string/numeric literal property names.
+ *
+ * Returns null when the name shape is not one we render — caller
+ * falls through to the next ancestor.
+ */
+function renderName(nameNode) {
+  if (!nameNode) return null;
+  if (ts.isIdentifier(nameNode)) return String(nameNode.escapedText);
+  if (ts.isPrivateIdentifier(nameNode)) {
+    // `nameNode.text` is the original source ('#name'). escapedText
+    // may also include the leading '#' depending on TS version; using
+    // .text avoids depending on that detail.
+    return nameNode.text;
+  }
+  if (ts.isStringLiteral(nameNode) || ts.isNumericLiteral(nameNode)) return String(nameNode.text);
+  return null;
+}
+
+/**
  * Walk up from a node to find the nearest named declaration ancestor.
  * Used to anchor each violation to a stable enclosing-symbol name so
  * the baseline key survives line shifts caused by edits elsewhere in
@@ -129,18 +151,22 @@ function enclosingSymbolName(node) {
     // Direct .name on the node (FunctionDeclaration, MethodDeclaration,
     // ClassDeclaration, InterfaceDeclaration, TypeAliasDeclaration,
     // PropertyDeclaration / PropertySignature, GetAccessorDeclaration,
-    // EnumDeclaration, etc.).
-    if (n.name && ts.isIdentifier(n.name)) {
-      return String(n.name.escapedText);
+    // EnumDeclaration, etc.). Includes PrivateIdentifier so `#method`
+    // doesn't collapse onto its enclosing class's key.
+    if (n.name) {
+      const rendered = renderName(n.name);
+      if (rendered) return rendered;
     }
     // VariableStatement -> VariableDeclarationList -> VariableDeclaration[].
     // Use the first declared name as the anchor.
     if (ts.isVariableStatement(n) && n.declarationList && n.declarationList.declarations.length > 0) {
       const d = n.declarationList.declarations[0];
-      if (d.name && ts.isIdentifier(d.name)) return String(d.name.escapedText);
+      const rendered = renderName(d.name);
+      if (rendered) return rendered;
     }
-    if (ts.isVariableDeclaration(n) && n.name && ts.isIdentifier(n.name)) {
-      return String(n.name.escapedText);
+    if (ts.isVariableDeclaration(n)) {
+      const rendered = renderName(n.name);
+      if (rendered) return rendered;
     }
     n = n.parent;
   }
@@ -309,9 +335,9 @@ function main() {
       }
       console.log('');
       console.log(
-        'Type-bearing JSDoc is not allowed in .ts source on the public contract surface.\n' +
-          'Use TypeScript for shape (signatures, interfaces, `as Type` casts) and prose-only\n' +
-          'JSDoc for documentation. See ' +
+        'Type-bearing JSDoc is not allowed in .ts source under packages/superdoc/src\n' +
+          'or packages/super-editor/src. Use TypeScript for shape (signatures, interfaces,\n' +
+          '`as Type` casts) and prose-only JSDoc for documentation. See ' +
           POLICY_RELATIVE +
           ' for the rule and fix patterns.\n',
       );
