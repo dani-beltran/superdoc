@@ -49,7 +49,7 @@ Returns a CommentInfo object with the comment text, author, date, and thread met
 | `createdTime` | number | no |  |
 | `creatorEmail` | string | no |  |
 | `creatorName` | string | no |  |
-| `deletedText` | any | no |  |
+| `deletedText` | string \| null | no |  |
 | `importedId` | string | no |  |
 | `isInternal` | boolean | no |  |
 | `parentCommentId` | string | no |  |
@@ -60,11 +60,11 @@ Returns a CommentInfo object with the comment text, author, date, and thread met
 | `target.story` | StoryLocator | no | StoryLocator |
 | `text` | string | no |  |
 | `trackedChange` | boolean | no |  |
-| `trackedChangeAnchorKey` | any | no |  |
-| `trackedChangeDisplayType` | any | no |  |
-| `trackedChangeLink` | CommentTrackedChangeLink \\| null | no | One of: CommentTrackedChangeLink, null |
-| `trackedChangeStory` | StoryLocator \\| null | no | One of: StoryLocator, null |
-| `trackedChangeText` | any | no |  |
+| `trackedChangeAnchorKey` | string \| null | no |  |
+| `trackedChangeDisplayType` | string \| null | no |  |
+| `trackedChangeLink` | CommentTrackedChangeLink \| null | no | One of: CommentTrackedChangeLink, null |
+| `trackedChangeStory` | StoryLocator \| null | no | One of: StoryLocator, null |
+| `trackedChangeText` | string \| null | no |  |
 | `trackedChangeType` | enum | no | `"insert"`, `"delete"`, `"replacement"`, `"format"` |
 
 ### Example response

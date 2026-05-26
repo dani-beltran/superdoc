@@ -59,7 +59,7 @@ Returns a TrackChangeInfo object with the change type (`insert`, `delete`, `repl
 | `grouping` | enum | no | `"standalone"`, `"replacement-pair"`, `"unknown"` |
 | `id` | string | yes |  |
 | `insertedText` | string | no |  |
-| `pairedWithChangeId` | any | no |  |
+| `pairedWithChangeId` | string \| null | no |  |
 | `type` | enum | yes | `"insert"`, `"delete"`, `"replacement"`, `"format"` |
 | `wordRevisionIds` | object | no |  |
 | `wordRevisionIds.delete` | string | no |  |
@@ -81,7 +81,7 @@ Returns a TrackChangeInfo object with the change type (`insert`, `delete`, `repl
   },
   "grouping": "standalone",
   "id": "id-001",
-  "pairedWithChangeId": {},
+  "pairedWithChangeId": null,
   "type": "insert"
 }
 ```

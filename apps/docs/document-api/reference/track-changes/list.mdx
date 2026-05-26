@@ -26,7 +26,7 @@ Returns a TrackChangesListResult with tracked change entries (`insert`, `delete`
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
-| `in` | StoryLocator \\| `"all"` | no | One of: StoryLocator, `"all"` |
+| `in` | StoryLocator \| `"all"` | no | One of: StoryLocator, `"all"` |
 | `limit` | integer | no |  |
 | `offset` | integer | no |  |
 | `type` | enum | no | `"insert"`, `"delete"`, `"replacement"`, `"format"` |
@@ -75,7 +75,7 @@ Returns a TrackChangesListResult with tracked change entries (`insert`, `delete`
         "targetKind": "text"
       },
       "id": "id-001",
-      "pairedWithChangeId": {},
+      "pairedWithChangeId": null,
       "type": "insert"
     }
   ],
