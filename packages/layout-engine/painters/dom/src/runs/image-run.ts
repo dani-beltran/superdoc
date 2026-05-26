@@ -12,12 +12,39 @@ import { sanitizeUrl } from './links.js';
  */
 const MAX_DATA_URL_LENGTH = 10 * 1024 * 1024; // 10MB
 
-/**
- * Regular expression to validate data URL format for images.
- * Only allows common, safe image MIME types with base64 encoding.
- * Prevents XSS and malformed data URL attacks.
- */
-const VALID_IMAGE_DATA_URL = /^data:image\/(png|jpeg|jpg|gif|svg\+xml|webp|bmp|ico|tiff?);base64,/i;
+const VALID_IMAGE_DATA_URL_MIME_TYPES = new Set([
+  'image/png',
+  'image/jpeg',
+  'image/jpg',
+  'image/gif',
+  'image/svg+xml',
+  'image/webp',
+  'image/bmp',
+  'image/ico',
+  'image/tif',
+  'image/tiff',
+]);
+
+export function isValidImageDataUrl(src: string): boolean {
+  if (!src.startsWith('data:') || src.length > MAX_DATA_URL_LENGTH) {
+    return false;
+  }
+
+  const metadataEnd = src.indexOf(',');
+  if (metadataEnd === -1) {
+    return false;
+  }
+
+  const metadata = src.slice('data:'.length, metadataEnd);
+  const [rawMimeType = '', ...rawParameters] = metadata.split(';');
+  const mimeType = rawMimeType.toLowerCase();
+  if (!VALID_IMAGE_DATA_URL_MIME_TYPES.has(mimeType)) {
+    return false;
+  }
+
+  const isBase64 = rawParameters.some((parameter) => parameter.toLowerCase() === 'base64');
+  return isBase64 || mimeType === 'image/svg+xml';
+}
 
 /**
  * Maximum resize multiplier for image metadata.
@@ -116,9 +143,9 @@ export const buildImageFilters = (source: ImageFilterSource): string[] => {
  * Renders an ImageRun as an inline <img> element.
  *
  * SECURITY NOTES:
- * - Data URLs are validated against VALID_IMAGE_DATA_URL regex to ensure proper format
+ * - Data URLs are validated against an allowlist of image MIME types
  * - Size limit (MAX_DATA_URL_LENGTH) prevents DoS attacks from extremely large images
- * - Only allows safe image MIME types (png, jpeg, gif, etc.) with base64 encoding
+ * - Only allows safe image MIME types; non-base64 data URLs are limited to SVG
  * - Non-data URLs are sanitized through sanitizeUrl to prevent XSS
  *
  * METADATA ATTRIBUTE:
@@ -147,13 +174,8 @@ export const renderImageRun = (run: ImageRun, context: RunRenderContext): HTMLEl
   // but are safe for <img> elements when properly validated
   const isDataUrl = typeof run.src === 'string' && run.src.startsWith('data:');
   if (isDataUrl) {
-    // SECURITY: Validate data URL format and size
-    if (run.src.length > MAX_DATA_URL_LENGTH) {
-      // Reject data URLs that are too large (DoS prevention)
-      return null;
-    }
-    if (!VALID_IMAGE_DATA_URL.test(run.src)) {
-      // Reject data URLs with invalid MIME types or encoding
+    // SECURITY: Validate data URL MIME type, encoding, and size.
+    if (!isValidImageDataUrl(run.src)) {
       return null;
     }
     img.src = run.src;
@@ -370,4 +392,4 @@ export const renderImageRun = (run: ImageRun, context: RunRenderContext): HTMLEl
   return context.buildImageHyperlinkAnchor(img, run.hyperlink, 'inline-block');
 };
 
-export { MAX_DATA_URL_LENGTH, VALID_IMAGE_DATA_URL };
+export { MAX_DATA_URL_LENGTH };
