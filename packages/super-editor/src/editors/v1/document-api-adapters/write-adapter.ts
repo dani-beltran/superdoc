@@ -53,8 +53,8 @@ function getSharedTrackedInsertionMarkAtPosition(editor: Editor, pos: number): P
     | {
         content?: { size?: number };
         resolve?: (pos: number) => {
-          nodeBefore?: { marks?: ProseMirrorMark[] };
-          nodeAfter?: { marks?: ProseMirrorMark[] };
+          nodeBefore?: { marks?: readonly ProseMirrorMark[] };
+          nodeAfter?: { marks?: readonly ProseMirrorMark[] };
         };
       }
     | undefined;
