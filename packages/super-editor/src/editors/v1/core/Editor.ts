@@ -2,7 +2,7 @@ import type { EditorState, Transaction, Plugin } from 'prosemirror-state';
 import { Transform } from 'prosemirror-transform';
 import type { EditorView as PmEditorView } from 'prosemirror-view';
 import type { Node as PmNode, Schema } from 'prosemirror-model';
-import type { Doc as YDoc } from 'yjs';
+import type { Doc as YDoc, XmlFragment as YXmlFragment } from 'yjs';
 import type { EditorOptions, User, FieldValue, DocxFileEntry } from './types/EditorConfig.js';
 import type { EditorHelpers, ExtensionStorage, ProseMirrorJSON, PageStyles, Toolbar } from './types/EditorTypes.js';
 import type { ChainableCommandObject, CanObject, EditorCommands } from './types/ChainedCommands.js';
@@ -49,6 +49,7 @@ import { AnnotatorHelpers } from '@helpers/annotator.js';
 import { prepareCommentsForExport, prepareCommentsForImport } from '@extensions/comment/comments-helpers.js';
 import DocxZipper from '@core/DocxZipper.js';
 import { generateCollaborationData, cleanupCollaborationSideEffects } from '@extensions/collaboration/collaboration.js';
+import { normalizeYjsFragmentForSchema } from '@extensions/collaboration/normalize-yjs-fragment.js';
 import { seedPartsFromEditor } from '@extensions/collaboration/part-sync/seed-parts.js';
 import { onCollaborationProviderSynced } from './helpers/collaboration-provider-sync.js';
 import { useHighContrastMode } from '../composables/use-high-contrast-mode.js';
@@ -180,6 +181,9 @@ export interface OpenOptions {
 
   /** JSON content to initialize with */
   json?: ProseMirrorJSON | null;
+
+  /** Y.js XML fragment to hydrate from */
+  fragment?: YXmlFragment | null;
 
   /** Whether comments are enabled */
   isCommentsEnabled?: boolean;
@@ -379,6 +383,12 @@ export class Editor extends EventEmitter<EditorEventMap> {
    */
   #documentOpenTracked = false;
 
+  /**
+   * Fragment configured at construction time. This is reusable default config,
+   * unlike document-scoped fragments supplied to a single open() call.
+   */
+  #constructorFragment: YXmlFragment | null = null;
+
   options: EditorOptions = {
     element: null,
     selector: null,
@@ -430,7 +440,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
     onFocus: () => null,
     onBlur: () => null,
     onDestroy: () => null,
-    onContentError: ({ error }: { editor: Editor; error: Error }) => {
+    onContentError: ({ error }: { editor: Editor; error: unknown; disableCollaboration?: () => void }) => {
       throw error;
     },
     onTrackedChangesUpdate: () => null,
@@ -534,6 +544,8 @@ export class Editor extends EventEmitter<EditorEventMap> {
       resolvedOptions.element = null;
       resolvedOptions.selector = null;
     }
+
+    this.#constructorFragment = resolvedOptions.fragment ?? null;
 
     this.#checkHeadless(resolvedOptions);
     this.setOptions(resolvedOptions);
@@ -824,6 +836,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
       // Merge options with defaults
       const resolvedMode = options?.mode ?? this.options.mode ?? 'docx';
       const explicitIsNewFile = options?.isNewFile;
+      const hasOpenFragment = Object.prototype.hasOwnProperty.call(options ?? {}, 'fragment');
       const resolvedOptions = {
         ...this.options,
         mode: resolvedMode,
@@ -833,6 +846,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
         html: options?.html,
         markdown: options?.markdown,
         jsonOverride: options?.json ?? null,
+        fragment: hasOpenFragment ? (options?.fragment ?? null) : (this.options.fragment ?? this.#constructorFragment),
       };
 
       // Password for encrypted .docx — threaded to loadXmlData, then cleared
@@ -1100,6 +1114,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
     this.options.initialState = null;
     this.options.content = '';
     this.options.fileSource = null;
+    this.options.fragment = null;
 
     // Reset internal state
     this._state = undefined!;
@@ -2482,7 +2497,10 @@ export class Editor extends EventEmitter<EditorEventMap> {
             });
           else if (this.options.jsonOverride) doc = this.schema.nodeFromJSON(this.options.jsonOverride);
 
-          if (fragment) doc = yXmlFragmentToProseMirrorRootNode(fragment, this.schema);
+          if (fragment) {
+            normalizeYjsFragmentForSchema(fragment);
+            doc = yXmlFragmentToProseMirrorRootNode(fragment, this.schema);
+          }
         }
       }
 
@@ -3569,6 +3587,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
       html,
       markdown,
       json,
+      fragment,
       isCommentsEnabled,
       suppressDefaultDocxStyles,
       documentMode,
@@ -3586,6 +3605,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
       html,
       markdown,
       json,
+      fragment,
       isCommentsEnabled,
       suppressDefaultDocxStyles,
       documentMode: documentMode as 'editing' | 'viewing' | 'suggesting' | undefined,
