@@ -1,17 +1,17 @@
 # superdoc root export inventory (SD-3212 PR A0)
 
-Generated: 2026-05-25T11:25:51.224Z
+Generated: 2026-05-25T23:10:03.728Z
 Source: packed and installed `tests/consumer-typecheck/node_modules/superdoc`
 
 ## Counts
 
 | Source | Path | Count |
 |---|---|---|
-| types.import | `./dist/superdoc/src/public/index.d.ts` | 205 |
-| types.require | `./dist/superdoc/src/public/index.d.cts` | 205 |
+| types.import | `./dist/superdoc/src/public/index.d.ts` | 206 |
+| types.require | `./dist/superdoc/src/public/index.d.cts` | 206 |
 | import | `./dist/superdoc.es.js` | 41 |
 | require | `./dist/superdoc.cjs` | 41 |
-| **union** |  | **205** |
+| **union** |  | **206** |
 
 ## Divergences
 
@@ -19,7 +19,7 @@ Source: packed and installed `tests/consumer-typecheck/node_modules/superdoc`
 - types.require only (not in types.import): 0
 - ESM only (not in CJS): 0
 - CJS only (not in ESM): 0
-- typed but no runtime export (phantom risk): 164
+- typed but no runtime export (phantom risk): 165
 - runtime export but not typed (silent shadow on root): 0
 
 ### Type-only names (no runtime)
@@ -33,6 +33,7 @@ Source: packed and installed `tests/consumer-typecheck/node_modules/superdoc`
 - `BookmarkInfo`
 - `BoundingRect`
 - `CanObject`
+- `CanPerformPermissionParams`
 - `ChainableCommandObject`
 - `ChainedCommand`
 - `CollaborationConfig`
@@ -196,7 +197,7 @@ Source: packed and installed `tests/consumer-typecheck/node_modules/superdoc`
 | `AIWriter` | ✓ | ✓ | ✓ | ✓ | 1 |   | 0 | 0 | 4 |   |
 | `AnnotatorHelpers` | ✓ | ✓ | ✓ | ✓ | 1 |   | 0 | 0 | 1 |   |
 | `AwarenessState` | ✓ | ✓ |   |   | 3 | ✓ | 0 | 0 | 0 |   |
-| `AwarenessUser` | ✓ | ✓ |   |   | 0 |   | 0 | 0 | 0 |   |
+| `AwarenessUser` | ✓ | ✓ |   |   | 1 |   | 0 | 0 | 0 |   |
 | `BinaryData` | ✓ | ✓ |   |   | 3 | ✓ | 0 | 0 | 0 |   |
 | `BlankDOCX` | ✓ | ✓ | ✓ | ✓ | 0 |   | 0 | 0 | 1 |   |
 | `BlockNavigationAddress` | ✓ | ✓ |   |   | 1 | ✓ | 0 | 0 | 0 |   |
@@ -205,6 +206,7 @@ Source: packed and installed `tests/consumer-typecheck/node_modules/superdoc`
 | `BookmarkInfo` | ✓ | ✓ |   |   | 2 | ✓ | 1 | 0 | 1 | ✓ |
 | `BoundingRect` | ✓ | ✓ |   |   | 3 | ✓ | 0 | 0 | 0 |   |
 | `CanObject` | ✓ | ✓ |   |   | 3 | ✓ | 0 | 0 | 0 | ✓ |
+| `CanPerformPermissionParams` | ✓ | ✓ |   |   | 2 |   | 0 | 0 | 0 |   |
 | `ChainableCommandObject` | ✓ | ✓ |   |   | 3 | ✓ | 0 | 0 | 0 | ✓ |
 | `ChainedCommand` | ✓ | ✓ |   |   | 3 | ✓ | 0 | 0 | 0 | ✓ |
 | `CollaborationConfig` | ✓ | ✓ |   |   | 1 | ✓ | 0 | 0 | 0 |   |
@@ -249,7 +251,7 @@ Source: packed and installed `tests/consumer-typecheck/node_modules/superdoc`
 | `ExportDocxParams` | ✓ | ✓ |   |   | 2 | ✓ | 0 | 0 | 0 |   |
 | `ExportFormat` | ✓ | ✓ |   |   | 1 | ✓ | 0 | 0 | 0 |   |
 | `ExportOptions` | ✓ | ✓ |   |   | 3 | ✓ | 0 | 0 | 0 |   |
-| `ExportParams` | ✓ | ✓ |   |   | 2 | ✓ | 0 | 0 | 0 |   |
+| `ExportParams` | ✓ | ✓ |   |   | 3 | ✓ | 0 | 0 | 0 |   |
 | `ExportType` | ✓ | ✓ |   |   | 1 | ✓ | 0 | 0 | 0 |   |
 | `ExtensionCommandMap` | ✓ | ✓ |   |   | 2 | ✓ | 0 | 0 | 0 | ✓ |
 | `Extensions` | ✓ | ✓ | ✓ | ✓ | 2 |   | 14 | 6 | 3 | ✓ |
@@ -304,7 +306,7 @@ Source: packed and installed `tests/consumer-typecheck/node_modules/superdoc`
 | `PermissionParams` | ✓ | ✓ |   |   | 1 | ✓ | 0 | 0 | 0 |   |
 | `PositionHit` | ✓ | ✓ |   |   | 3 | ✓ | 0 | 0 | 0 |   |
 | `PresenceOptions` | ✓ | ✓ |   |   | 3 | ✓ | 0 | 0 | 0 |   |
-| `PresentationEditor` | ✓ | ✓ | ✓ | ✓ | 2 |   | 0 | 0 | 40 | ✓ |
+| `PresentationEditor` | ✓ | ✓ | ✓ | ✓ | 3 |   | 0 | 0 | 40 | ✓ |
 | `PresentationEditorOptions` | ✓ | ✓ |   |   | 3 | ✓ | 0 | 0 | 0 |   |
 | `ProofingCapabilities` | ✓ | ✓ |   |   | 3 | ✓ | 0 | 0 | 0 |   |
 | `ProofingCheckRequest` | ✓ | ✓ |   |   | 3 | ✓ | 0 | 0 | 0 |   |
@@ -341,7 +343,7 @@ Source: packed and installed `tests/consumer-typecheck/node_modules/superdoc`
 | `SlashMenu` | ✓ | ✓ | ✓ | ✓ | 1 |   | 0 | 0 | 1 |   |
 | `StoryLocator` | ✓ | ✓ |   |   | 1 | ✓ | 116 | 0 | 3 |   |
 | `SuperConverter` | ✓ | ✓ | ✓ | ✓ | 1 |   | 0 | 0 | 3 | ✓ |
-| `SuperDoc` | ✓ | ✓ | ✓ | ✓ | 13 |   | 1014 | 180 | 244 | ✓ |
+| `SuperDoc` | ✓ | ✓ | ✓ | ✓ | 19 |   | 1014 | 180 | 244 | ✓ |
 | `SuperDocExceptionEditorPayload` | ✓ | ✓ |   |   | 2 |   | 0 | 0 | 0 |   |
 | `SuperDocExceptionPayload` | ✓ | ✓ |   |   | 2 |   | 0 | 0 | 0 |   |
 | `SuperDocExceptionRestorePayload` | ✓ | ✓ |   |   | 1 |   | 0 | 0 | 0 |   |
@@ -353,10 +355,10 @@ Source: packed and installed `tests/consumer-typecheck/node_modules/superdoc`
 | `SuperToolbar` | ✓ | ✓ | ✓ | ✓ | 2 |   | 0 | 0 | 4 | ✓ |
 | `SurfaceComponentProps` | ✓ | ✓ |   |   | 1 | ✓ | 0 | 0 | 0 |   |
 | `SurfaceFloatingPlacement` | ✓ | ✓ |   |   | 1 | ✓ | 0 | 0 | 0 |   |
-| `SurfaceHandle` | ✓ | ✓ |   |   | 1 | ✓ | 2 | 0 | 0 |   |
+| `SurfaceHandle` | ✓ | ✓ |   |   | 2 | ✓ | 2 | 0 | 0 |   |
 | `SurfaceMode` | ✓ | ✓ |   |   | 1 | ✓ | 0 | 0 | 0 |   |
 | `SurfaceOutcome` | ✓ | ✓ |   |   | 1 | ✓ | 0 | 0 | 0 |   |
-| `SurfaceRequest` | ✓ | ✓ |   |   | 1 | ✓ | 0 | 0 | 0 |   |
+| `SurfaceRequest` | ✓ | ✓ |   |   | 2 | ✓ | 0 | 0 | 0 |   |
 | `SurfaceResolution` | ✓ | ✓ |   |   | 1 | ✓ | 0 | 0 | 0 |   |
 | `SurfaceResolver` | ✓ | ✓ |   |   | 1 | ✓ | 0 | 0 | 0 |   |
 | `SurfacesModuleConfig` | ✓ | ✓ |   |   | 1 | ✓ | 0 | 0 | 0 |   |

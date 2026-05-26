@@ -7,16 +7,16 @@ Input: tests/consumer-typecheck/snapshots/superdoc-root-exports.json (205 names,
 
 | Bucket | Count |
 |---|---|
-| supported-root | 137 |
+| supported-root | 138 |
 | legacy-root | 60 |
 | move-to-subpath | 0 |
 | internal-candidate | 8 |
 | NEEDS-REVIEW | 0 |
-| **total** | **205** |
+| **total** | **206** |
 
-Confidence: high=102, medium=101, needs-review=0.
+Confidence: high=103, medium=101, needs-review=0.
 
-## supported-root (137)
+## supported-root (138)
 
 | Name | Confidence | Source | Rationale |
 |---|---|---|---|
@@ -27,6 +27,7 @@ Confidence: high=102, medium=101, needs-review=0.
 | `BlocksListResult` | high | doc-api | Document API navigation/address/selection type. Promoted into the root facade by SD-3185. |
 | `BookmarkAddress` | high | doc-api | Document API navigation/address/selection type. Promoted into the root facade by SD-3185. |
 | `BookmarkInfo` | high | doc-api | Document API navigation/address/selection type. Promoted into the root facade by SD-3185. |
+| `CanPerformPermissionParams` | high | config-supported | Configuration type for a supported feature. Input shape for SuperDoc#canPerformPermission, promoted from an anonymous inline parameter to a named public type. |
 | `CollaborationConfig` | medium | config-supported | Configuration type for a supported feature. |
 | `CollaborationProvider` | medium | collab | Collaboration/awareness type defined in core/types/index.ts. Customer-facing for collab-provider integrations (e.g., AwarenessState types the documented onAwarenessUpdate callback). |
 | `Comment` | medium | core | Customer-facing core API type or runtime export. Type-reachable through documented config / callback / event / method surfaces; runtime exports are documented utilities. |

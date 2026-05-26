@@ -997,6 +997,31 @@ type PermissionResolverParams = {
   superdoc?: SuperDoc | null;
 };
 
+/**
+ * Input shape for `SuperDoc#canPerformPermission`. All fields are
+ * optional; an empty payload short-circuits to `false`. `role` and
+ * `isInternal` fall back to `Config.role` / `Config.isInternal` when
+ * omitted. `comment` and `trackedChange` carry open index signatures
+ * because the runtime forwards the full payload to the resolver
+ * context, and consumer comment / tracked-change shapes vary; the
+ * named fields below are the ones the method itself reads. Distinct
+ * from the internal `PermissionResolverParams`, which is what the
+ * resolver callback receives (with resolved `currentUser` and
+ * `superdoc` context attached).
+ */
+export interface CanPerformPermissionParams {
+  /** The permission key to check (e.g. `'comment.create'`). Required at runtime; omitting returns `false`. */
+  permission?: string;
+  /** Override `Config.role` for this check. */
+  role?: string;
+  /** Override `Config.isInternal` for this check. */
+  isInternal?: boolean;
+  /** The comment object being acted on, if any. */
+  comment?: (object & Record<string, unknown>) | null;
+  /** The tracked-change payload (as emitted by the editor) being acted on, if any. */
+  trackedChange?: ({ id?: string; commentId?: string; comment?: unknown } & Record<string, unknown>) | null;
+}
+
 /** Modules registered with the SuperDoc instance. */
 export interface Modules {
   /**

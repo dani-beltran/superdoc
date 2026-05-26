@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-25T11:25:51.224Z",
+  "generatedAt": "2026-05-25T23:10:03.728Z",
   "ticket": "SD-3212 PR A0",
   "package": "superdoc",
   "rootExport": {
@@ -26,6 +26,7 @@
         "BookmarkInfo",
         "BoundingRect",
         "CanObject",
+        "CanPerformPermissionParams",
         "ChainableCommandObject",
         "ChainedCommand",
         "CollaborationConfig",
@@ -237,6 +238,7 @@
         "BookmarkInfo",
         "BoundingRect",
         "CanObject",
+        "CanPerformPermissionParams",
         "ChainableCommandObject",
         "ChainedCommand",
         "CollaborationConfig",
@@ -529,11 +531,11 @@
     }
   },
   "counts": {
-    "types.import": 205,
-    "types.require": 205,
+    "types.import": 206,
+    "types.require": 206,
     "import": 41,
     "require": 41,
-    "union": 205
+    "union": 206
   },
   "divergences": {
     "typesImportVsRequire": {
@@ -555,6 +557,7 @@
         "BookmarkInfo",
         "BoundingRect",
         "CanObject",
+        "CanPerformPermissionParams",
         "ChainableCommandObject",
         "ChainedCommand",
         "CollaborationConfig",

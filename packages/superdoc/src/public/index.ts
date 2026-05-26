@@ -61,6 +61,7 @@ export type { AwarenessState } from '../core/types/index.js';
 export type { AwarenessUser } from '../core/types/index.js';
 export type { BlockNavigationAddress } from '../core/types/index.js';
 export type { BookmarkAddress } from '../core/types/index.js';
+export type { CanPerformPermissionParams } from '../core/types/index.js';
 export type { CollaborationConfig } from '../core/types/index.js';
 export type { CommentAddress } from '../core/types/index.js';
 export type { CommentsType } from '../core/types/index.js';

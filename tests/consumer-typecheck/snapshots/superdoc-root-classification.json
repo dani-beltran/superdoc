@@ -1,14 +1,14 @@
 {
   "generatedAt": "2026-05-19T11:33:50.546Z",
   "summary": {
-    "total": 205,
+    "total": 206,
     "byBucket": {
       "legacy-root": 60,
       "internal-candidate": 8,
-      "supported-root": 137
+      "supported-root": 138
     },
     "byConfidence": {
-      "high": 102,
+      "high": 103,
       "medium": 101,
       "low": 2
     }
@@ -141,6 +141,17 @@
       "rationale": "Editor command typing infrastructure. editor.commands.* is deprecated; Document API (editor.doc.*) is the supported programmatic surface. Keep typed for compat.",
       "confidence": "high",
       "source": "commands",
+      "inDts": true,
+      "inDcts": true,
+      "inEsm": false,
+      "inCjs": false
+    },
+    {
+      "name": "CanPerformPermissionParams",
+      "bucket": "supported-root",
+      "rationale": "Configuration type for a supported feature. Input shape for SuperDoc#canPerformPermission, promoted from an anonymous inline parameter to a named public type so consumers get IDE help and the contract is stable across migrations.",
+      "confidence": "high",
+      "source": "config-supported",
       "inDts": true,
       "inDcts": true,
       "inEsm": false,

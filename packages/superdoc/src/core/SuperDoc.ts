@@ -63,6 +63,7 @@ const DEFAULT_AWARENESS_PALETTE = Object.freeze([
 import type {
   AwarenessState,
   AwarenessUser,
+  CanPerformPermissionParams,
   CollaborationProvider,
   Config,
   DocumentMode,
@@ -1561,13 +1562,7 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
     isInternal = this.config.isInternal,
     comment = null,
     trackedChange = null,
-  }: {
-    permission?: string;
-    role?: string;
-    isInternal?: boolean;
-    comment?: (object & Record<string, unknown>) | null;
-    trackedChange?: ({ id?: string; commentId?: string; comment?: unknown } & Record<string, unknown>) | null;
-  } = {}) {
+  }: CanPerformPermissionParams = {}): boolean {
     if (!permission) return false;
 
     let resolvedComment = comment ?? trackedChange?.comment ?? null;

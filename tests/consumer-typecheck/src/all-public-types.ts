@@ -31,6 +31,7 @@ import type {
   BookmarkInfo,
   BoundingRect,
   CanObject,
+  CanPerformPermissionParams,
   ChainableCommandObject,
   ChainedCommand,
   CollaborationConfig,
@@ -204,6 +205,7 @@ const _real_BookmarkAddress: AssertNotAny<BookmarkAddress> = true;
 const _real_BookmarkInfo: AssertNotAny<BookmarkInfo> = true;
 const _real_BoundingRect: AssertNotAny<BoundingRect> = true;
 const _real_CanObject: AssertNotAny<CanObject> = true;
+const _real_CanPerformPermissionParams: AssertNotAny<CanPerformPermissionParams> = true;
 const _real_ChainableCommandObject: AssertNotAny<ChainableCommandObject> = true;
 const _real_ChainedCommand: AssertNotAny<ChainedCommand> = true;
 const _real_CollaborationConfig: AssertNotAny<CollaborationConfig> = true;
