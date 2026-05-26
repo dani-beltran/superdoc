@@ -4940,7 +4940,6 @@ export class PresentationEditor extends EventEmitter {
    * This method encapsulates the common focus and blur logic used when
    * selecting both inline and block images.
    * @private
-   * @returns {void}
    */
   #focusEditorAfterImageSelection(): void {
     this.#shouldScrollSelectionIntoView = true;
@@ -6918,7 +6917,6 @@ export class PresentationEditor extends EventEmitter {
    * This method is called after layout completes to ensure cursor positioning
    * is based on stable layout data.
    *
-   * @returns {void}
    *
    * @remarks
    * Edge cases handled:

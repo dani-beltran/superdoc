@@ -216,8 +216,7 @@ const rangeIsTrackedInsertionOnly = (doc: PmNode, from: number, to: number): boo
 const getSingleTrackedInsertionMarkInRange = (doc: PmNode, from: number, to: number): PmMark | null => {
   if (!rangeIsTrackedInsertionOnly(doc, from, to)) return null;
 
-  /** @type {import('prosemirror-model').Mark[]} */
-  const insertionMarks = [];
+  const insertionMarks: PmMark[] = [];
   const seenIds = new Set<string>();
   doc.nodesBetween(from, to, (node, pos) => {
     if (!node.isInline || !node.isLeaf) return;
@@ -993,7 +992,6 @@ export class Editor extends EventEmitter<EditorEventMap> {
    * This prevents race conditions and ensures the editor is always in a valid state,
    * even when operations fail.
    *
-   * @template T - The return type of the operation
    * @param during - State to set while the operation is running
    * @param success - State to set if the operation succeeds
    * @param failure - State to set if the operation fails

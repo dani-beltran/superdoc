@@ -1759,8 +1759,8 @@ export interface Config {
  * call sites cast `this.config` to this type so they can access these
  * invariants without per-site null guards.
  *
- * Use this from internal SuperDoc callsites that need the augmented shape
- * (e.g. `/** @type {InternalConfig} *\/ (this.config).socket = ...`).
+ * Use this from internal SuperDoc callsites that need the augmented
+ * shape, e.g. `(this.config as InternalConfig).socket = ...`.
  */
 export interface InternalConfig extends Config {
   /**
