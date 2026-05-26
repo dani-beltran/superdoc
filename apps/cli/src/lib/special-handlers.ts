@@ -8,7 +8,6 @@
  * capability should move into document-api.
  */
 
-import { createHash } from 'node:crypto';
 import { INLINE_PROPERTY_REGISTRY } from '@superdoc/document-api';
 import type { CliExposedOperationId } from '../cli/operation-set.js';
 import type { EditorWithDoc } from './document.js';
@@ -59,15 +58,6 @@ function asTrackChangeAddress(value: unknown): { kind: string; entityType: strin
   };
 }
 
-function stableTrackChangeSignature(change: TrackChangeLike): string {
-  const type = typeof change.type === 'string' ? change.type : '';
-  const author = typeof change.author === 'string' ? change.author : '';
-  const authorEmail = typeof change.authorEmail === 'string' ? change.authorEmail : '';
-  const date = typeof change.date === 'string' ? change.date : '';
-  const excerpt = typeof change.excerpt === 'string' ? change.excerpt : '';
-  return `${type}|${author}|${authorEmail}|${date}|${excerpt}`;
-}
-
 function normalizeStableTrackChangeId(value: unknown, rawToStableId: ReadonlyMap<string, string>): unknown {
   if (typeof value !== 'string' || value.length === 0) return value;
   return rawToStableId.get(value) ?? value;
@@ -103,7 +93,10 @@ function normalizeTrackChangeOverlap(value: unknown, rawToStableId: ReadonlyMap<
 
 /**
  * Builds stable-ID ↔ raw-ID mappings from a track-changes list result.
- * The CLI uses SHA-1-based stable IDs instead of adapter raw IDs.
+ * The CLI preserves the adapter's logical ids when they are present.
+ * The mapping is still retained so pre-invoke hooks can translate ids from
+ * list/get payloads back into the exact raw/runtime ids that mutating
+ * adapters expect.
  */
 function buildStableIdMappings(rawListResult: unknown): {
   normalizedResult: unknown;
@@ -117,7 +110,6 @@ function buildStableIdMappings(rawListResult: unknown): {
 
   const stableToRawId = new Map<string, string>();
   const rawToStableId = new Map<string, string>();
-  const signatureCounts = new Map<string, number>();
 
   const entries = asArray(record.items)
     .map((entry) => asRecord(entry))
@@ -128,11 +120,7 @@ function buildStableIdMappings(rawListResult: unknown): {
         asTrackChangeAddress(entry.address)?.entityId;
       if (!rawId) return { entry };
 
-      const signature = stableTrackChangeSignature(entry);
-      const hash = createHash('sha1').update(signature).digest('hex').slice(0, 24);
-      const nextCount = (signatureCounts.get(hash) ?? 0) + 1;
-      signatureCounts.set(hash, nextCount);
-      const stableId = nextCount === 1 ? hash : `${hash}-${nextCount}`;
+      const stableId = rawId;
 
       stableToRawId.set(stableId, rawId);
       rawToStableId.set(rawId, stableId);

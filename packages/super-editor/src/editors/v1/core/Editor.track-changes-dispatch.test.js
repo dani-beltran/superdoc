@@ -15,11 +15,16 @@ const FOREIGN_INSERT_ID = 'foreign-insert';
 const INSERTED_TEXT = 'here is my new text, do you like it?';
 const INSERTED_TAIL = 'do you like it?';
 const INSERTED_TEXT_AFTER_DIRECT_DELETE = INSERTED_TEXT.replace(INSERTED_TAIL, '');
+const DIRECT_INSERT_TEXT = 'MID';
+const IMPORTED_TRACKED_INSERTION_TEXT = 'lazy ';
+const IMPORTED_TRACKED_INSERTION_TEXT_AFTER_DIRECT_INSERT = 'laMIDzy ';
+const TEST_PARAGRAPH_BLOCK_ID = 'test-paragraph-1';
 const CURRENT_DIR = dirname(fileURLToPath(import.meta.url));
 const WORD_REPLACEMENT_FIXTURE = resolve(
   CURRENT_DIR,
   '../../../../../../tests/behavior/tests/comments/fixtures/sd-1960-word-replacement-no-comments.docx',
 );
+const BASIC_TEXT_INSERTION_OPEN_FIXTURE = resolve(CURRENT_DIR, '../tests/data/basic-text-insertion-open.docx');
 
 const findTextRange = (editor, text) => {
   let found = null;
@@ -62,7 +67,7 @@ const setDocumentWithTrackedInsertion = (editor, { author = ALICE, id = FOREIGN_
   const doc = schema.nodes.doc.create(
     {},
     schema.nodes.paragraph.create(
-      {},
+      { sdBlockId: TEST_PARAGRAPH_BLOCK_ID },
       schema.nodes.run.create({}, [
         schema.text('hello there '),
         schema.text(INSERTED_TEXT, [insertMark]),
@@ -79,19 +84,23 @@ const setDocumentWithTrackedInsertion = (editor, { author = ALICE, id = FOREIGN_
   );
 };
 
-const setDocumentWithSeparateRunTrackedInsertion = (editor, { author = ALICE, id = FOREIGN_INSERT_ID } = {}) => {
+const setDocumentWithSeparateRunTrackedInsertion = (
+  editor,
+  { author = ALICE, id = FOREIGN_INSERT_ID, sourceId = '' } = {},
+) => {
   const { schema } = editor;
   const insertMark = schema.marks[TrackInsertMarkName].create({
     id,
     author: author.name,
     authorEmail: author.email,
     date: FIXED_DATE,
+    sourceId,
   });
   const doc = schema.nodes.doc.create(
     {},
-    schema.nodes.paragraph.create({}, [
+    schema.nodes.paragraph.create({ sdBlockId: TEST_PARAGRAPH_BLOCK_ID }, [
       schema.nodes.run.create({}, schema.text('The quick brown fox jumps over the ')),
-      schema.nodes.run.create({}, schema.text('lazy ', [insertMark])),
+      schema.nodes.run.create({}, schema.text(IMPORTED_TRACKED_INSERTION_TEXT, [insertMark])),
       schema.nodes.run.create({}, schema.text('dog.')),
     ]),
   );
@@ -104,6 +113,7 @@ const setDocumentWithSeparateRunTrackedInsertion = (editor, { author = ALICE, id
   );
 };
 
+const firstBlockId = (editor) => editor.state.doc.firstChild?.attrs?.sdBlockId ?? TEST_PARAGRAPH_BLOCK_ID;
 const deleteText = (editor, text) => {
   const { from, to } = findTextRange(editor, text);
   editor.dispatch(editor.state.tr.delete(from, to).setMeta('inputType', 'deleteContentBackward'));
@@ -393,7 +403,9 @@ describe('Editor dispatch tracked-change meta', () => {
     const comments = editor.doc.comments.list();
     expect(comments.total).toBe(1);
     expect(comments.items).toEqual(
-      expect.arrayContaining([expect.objectContaining({ trackedChangeType: 'insert', trackedChangeText: 'live--comment' })]),
+      expect.arrayContaining([
+        expect.objectContaining({ trackedChangeType: 'insert', trackedChangeText: 'live--comment' }),
+      ]),
     );
   });
 
@@ -428,6 +440,186 @@ describe('Editor dispatch tracked-change meta', () => {
         overlapParentId: FOREIGN_INSERT_ID,
       }),
     );
+  });
+
+  it('mutates another user tracked insertion in place on direct insert while local track mode is off', () => {
+    ({ editor } = initTestEditor({
+      mode: 'text',
+      content: '<p></p>',
+      user: BOB,
+      useImmediateSetTimeout: false,
+    }));
+    setDocumentWithTrackedInsertion(editor);
+
+    const insertPos = findTextRange(editor, INSERTED_TEXT).from + 4;
+    editor.dispatch(editor.state.tr.insertText('ZZ', insertPos).setMeta('inputType', 'insertText'));
+
+    expect(textForMarkId(editor, TrackInsertMarkName, FOREIGN_INSERT_ID)).toBe(
+      'hereZZ is my new text, do you like it?',
+    );
+    expect(
+      markEntries(editor, TrackInsertMarkName).filter(({ mark }) => mark.attrs?.id !== FOREIGN_INSERT_ID),
+    ).toHaveLength(0);
+    expect(markEntries(editor, TrackDeleteMarkName)).toHaveLength(0);
+  });
+
+  it('updates the existing insertion review item on direct insert inside another user tracked insertion', () => {
+    ({ editor } = initTestEditor({
+      mode: 'text',
+      content: '<p></p>',
+      user: BOB,
+      useImmediateSetTimeout: false,
+    }));
+    setDocumentWithTrackedInsertion(editor);
+
+    const emitSpy = vi.spyOn(editor, 'emit');
+    const insertPos = findTextRange(editor, INSERTED_TEXT).from + 4;
+    editor.dispatch(editor.state.tr.insertText('ZZ', insertPos).setMeta('inputType', 'insertText'));
+
+    expect(editor.doc.comments.list().items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          trackedChangeType: 'insert',
+          trackedChangeText: 'hereZZ is my new text, do you like it?',
+        }),
+      ]),
+    );
+
+    const addChildInsertionEvent = emitSpy.mock.calls.find(
+      ([eventName, payload]) =>
+        eventName === 'commentsUpdate' &&
+        payload?.type === 'trackedChange' &&
+        payload?.event === 'add' &&
+        payload?.trackedChangeType === TrackInsertMarkName &&
+        payload?.trackedChangeText === 'ZZ',
+    )?.[1];
+
+    expect(addChildInsertionEvent).toBeUndefined();
+  });
+
+  it('keeps the tracked-change id and linked review comment id stable on direct insert inside a live tracked insertion', () => {
+    ({ editor } = initTestEditor({
+      mode: 'text',
+      content: '<p></p>',
+      user: { id: 'cli', name: 'CLI' },
+      useImmediateSetTimeout: false,
+    }));
+
+    const insertReceipt = editor.doc.insert({ value: 'live-review-comment' }, { changeMode: 'tracked' });
+    expect(insertReceipt.success).toBe(true);
+
+    const beforeTrackedChanges = editor.doc.trackChanges.list().items;
+    const beforeComments = editor.doc.comments.list().items;
+
+    expect(beforeTrackedChanges).toHaveLength(1);
+    expect(beforeComments).toHaveLength(1);
+
+    const beforeChangeId = beforeTrackedChanges[0].id;
+    const beforeCommentId = beforeComments[0].commentId;
+
+    const reviewStart = editor.state.doc.textContent.indexOf('review');
+    expect(reviewStart).toBeGreaterThanOrEqual(0);
+    const insertOffset = reviewStart + 2;
+
+    const receipt = editor.doc.insert(
+      {
+        value: 'ZZ',
+        target: {
+          kind: 'selection',
+          start: { kind: 'text', blockId: firstBlockId(editor), offset: insertOffset },
+          end: { kind: 'text', blockId: firstBlockId(editor), offset: insertOffset },
+        },
+      },
+      { changeMode: 'direct' },
+    );
+
+    expect(receipt.success).toBe(true);
+
+    const afterTrackedChanges = editor.doc.trackChanges.list().items;
+    const afterComments = editor.doc.comments.list().items;
+
+    expect(afterTrackedChanges).toHaveLength(1);
+    expect(afterComments).toHaveLength(1);
+    expect(afterTrackedChanges[0].id).toBe(beforeChangeId);
+    expect(afterComments[0].commentId).toBe(beforeCommentId);
+    expect(afterTrackedChanges[0].insertedText).toBe('live-reZZview-comment');
+    expect(afterComments[0].trackedChangeText).toBe('live-reZZview-comment');
+  });
+
+  it('mutates an imported-style separate-run tracked insertion in place from document-api direct insert', () => {
+    ({ editor } = initTestEditor({
+      mode: 'text',
+      content: '<p></p>',
+      user: BOB,
+      useImmediateSetTimeout: false,
+    }));
+    setDocumentWithSeparateRunTrackedInsertion(editor, { sourceId: '11' });
+
+    const beforeTrackedChanges = editor.doc.trackChanges.list().items;
+    expect(beforeTrackedChanges).toHaveLength(1);
+    const beforeChangeId = beforeTrackedChanges[0].id;
+
+    const insertOffset = 'The quick brown fox jumps over the la'.length;
+    const receipt = editor.doc.insert(
+      {
+        value: DIRECT_INSERT_TEXT,
+        target: {
+          kind: 'selection',
+          start: { kind: 'text', blockId: firstBlockId(editor), offset: insertOffset },
+          end: { kind: 'text', blockId: firstBlockId(editor), offset: insertOffset },
+        },
+      },
+      { changeMode: 'direct' },
+    );
+
+    expect(receipt.success).toBe(true);
+    expect(textForMarkId(editor, TrackInsertMarkName, FOREIGN_INSERT_ID)).toBe(
+      IMPORTED_TRACKED_INSERTION_TEXT_AFTER_DIRECT_INSERT,
+    );
+    expect(markEntries(editor, TrackDeleteMarkName)).toHaveLength(0);
+
+    const afterTrackedChanges = editor.doc.trackChanges.list().items;
+    expect(afterTrackedChanges).toHaveLength(1);
+    expect(afterTrackedChanges[0].id).toBe(beforeChangeId);
+    expect(afterTrackedChanges[0].insertedText).toBe(IMPORTED_TRACKED_INSERTION_TEXT_AFTER_DIRECT_INSERT);
+  });
+
+  it('keeps imported tracked insertions semantically updated after document-api direct insert inside the imported text', async () => {
+    const fixture = await readFile(BASIC_TEXT_INSERTION_OPEN_FIXTURE);
+    editor = await Editor.open(fixture, {
+      isHeadless: true,
+      user: BOB,
+    });
+
+    const beforeTrackedChanges = editor.doc.trackChanges.list().items;
+    expect(beforeTrackedChanges).toHaveLength(1);
+    const beforeChangeId = beforeTrackedChanges[0].id;
+
+    const match = editor.doc.query.match({
+      select: { type: 'text', pattern: 'zy ', caseSensitive: true },
+      require: 'first',
+      includeNodes: true,
+    });
+    const targetStart = match?.items?.[0]?.target?.start;
+    expect(targetStart).toBeDefined();
+
+    const receipt = editor.doc.insert(
+      {
+        value: DIRECT_INSERT_TEXT,
+        target: {
+          kind: 'selection',
+          start: targetStart,
+          end: targetStart,
+        },
+      },
+      { changeMode: 'direct' },
+    );
+
+    expect(receipt.success).toBe(true);
+    const afterTrackedChanges = editor.doc.trackChanges.list().items;
+    expect(afterTrackedChanges).toHaveLength(1);
+    expect(afterTrackedChanges[0].id).toBe(beforeChangeId);
+    expect(afterTrackedChanges[0].insertedText).toBe(IMPORTED_TRACKED_INSERTION_TEXT_AFTER_DIRECT_INSERT);
   });
 
   it('protects an imported-style separate-run tracked insertion from direct doc.replace', () => {

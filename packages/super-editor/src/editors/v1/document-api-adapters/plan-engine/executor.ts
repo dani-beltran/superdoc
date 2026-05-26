@@ -1021,18 +1021,59 @@ function resolveInheritedMarksAt(editor: Editor, tr: Transaction, absPos: number
     const state = editor.state as unknown as { doc: { resolve?: unknown } };
     if (typeof state?.doc?.resolve !== 'function') {
       const $pos = tr.doc.resolve(absPos);
-      return $pos.marks();
+      return mergeDirectInsertTrackedInsertionMark(tr, absPos, $pos.marks());
     }
     const resolved = getFormattingStateAtPos(
       editor.state as unknown as import('prosemirror-state').EditorState,
       absPos,
       editor as unknown as undefined,
     );
-    return (resolved?.resolvedMarks as ProseMirrorMark[]) ?? [];
+    return mergeDirectInsertTrackedInsertionMark(tr, absPos, (resolved?.resolvedMarks as ProseMirrorMark[]) ?? []);
   } catch {
     const $pos = tr.doc.resolve(absPos);
-    return $pos.marks();
+    return mergeDirectInsertTrackedInsertionMark(tr, absPos, $pos.marks());
   }
+}
+
+function getSharedTrackedInsertionMarkAt(tr: Transaction, absPos: number): ProseMirrorMark | null {
+  const maxPos = typeof tr.doc.content?.size === 'number' ? tr.doc.content.size : absPos;
+  const boundedPos = Math.max(0, Math.min(maxPos, absPos));
+  const $pos = tr.doc.resolve(boundedPos);
+  const beforeInsert = $pos.nodeBefore?.marks?.find((mark) => mark.type?.name === TrackInsertMarkName) ?? null;
+  const afterInsert = $pos.nodeAfter?.marks?.find((mark) => mark.type?.name === TrackInsertMarkName) ?? null;
+  const beforeId = typeof beforeInsert?.attrs?.id === 'string' ? beforeInsert.attrs.id : null;
+  const afterId = typeof afterInsert?.attrs?.id === 'string' ? afterInsert.attrs.id : null;
+
+  if (!beforeInsert || !afterInsert || !beforeId || beforeId !== afterId) {
+    return null;
+  }
+
+  return beforeInsert;
+}
+
+function mergeDirectInsertTrackedInsertionMark(
+  tr: Transaction,
+  absPos: number,
+  marks: readonly ProseMirrorMark[],
+): readonly ProseMirrorMark[] {
+  if (tr.getMeta?.('skipTrackChanges') !== true) {
+    return marks;
+  }
+
+  const sharedInsert = getSharedTrackedInsertionMarkAt(tr, absPos);
+  if (!sharedInsert) {
+    return marks;
+  }
+
+  const sharedInsertId = typeof sharedInsert.attrs?.id === 'string' ? sharedInsert.attrs.id : null;
+  if (
+    sharedInsertId &&
+    marks.some((mark) => mark.type?.name === TrackInsertMarkName && mark.attrs?.id === sharedInsertId)
+  ) {
+    return marks;
+  }
+
+  return [...marks, sharedInsert];
 }
 
 export function executeTextInsert(

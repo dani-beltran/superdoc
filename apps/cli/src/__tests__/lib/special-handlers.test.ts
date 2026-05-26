@@ -54,8 +54,8 @@ describe('special track-changes handlers', () => {
     const parent = result.items[0] as TrackChangeItem & { overlap: Overlap };
     const child = result.items[1] as TrackChangeItem;
 
-    expect(parent.id).not.toBe('raw-parent');
-    expect(child.id).not.toBe('raw-child');
+    expect(parent.id).toBe('raw-parent');
+    expect(child.id).toBe('raw-child');
     expect(parent.overlap.visualLayers[0].id).toBe(parent.id);
     expect(parent.overlap.visualLayers[1].id).toBe(child.id);
     expect(parent.overlap.preferredContextTargetId).toBe(child.id);

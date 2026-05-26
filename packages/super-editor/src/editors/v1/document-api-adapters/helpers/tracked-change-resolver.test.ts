@@ -77,11 +77,13 @@ describe('groupTrackedChanges', () => {
 
     expect(grouped).toHaveLength(2);
     expect(grouped[0]?.rawId).toBe(`word:${TrackInsertMarkName}:11`);
+    expect(grouped[0]?.id).toBe(`word:${TrackInsertMarkName}:11`);
     expect(grouped[0]?.commandRawId).toBe('tc-1');
     expect(grouped[0]?.hasInsert).toBe(true);
     expect(grouped[0]?.hasDelete).toBe(false);
     expect(grouped[0]?.wordRevisionIds).toEqual({ insert: '11' });
     expect(grouped[1]?.rawId).toBe(`word:${TrackDeleteMarkName}:10`);
+    expect(grouped[1]?.id).toBe(`word:${TrackDeleteMarkName}:10`);
     expect(grouped[1]?.commandRawId).toBe('tc-1');
     expect(grouped[1]?.hasInsert).toBe(false);
     expect(grouped[1]?.hasDelete).toBe(true);
@@ -98,6 +100,7 @@ describe('groupTrackedChanges', () => {
 
     expect(grouped).toHaveLength(1);
     expect(grouped[0]?.rawId).toBe('tc-1');
+    expect(grouped[0]?.id).toBe('tc-1');
     expect(grouped[0]?.from).toBe(1);
     expect(grouped[0]?.to).toBe(10);
     expect(grouped[0]?.hasInsert).toBe(true);
@@ -114,7 +117,7 @@ describe('groupTrackedChanges', () => {
     expect(grouped).toHaveLength(2);
   });
 
-  it('generates deterministic stable ids', () => {
+  it('keeps stable ids tied to the logical grouped raw id', () => {
     vi.mocked(getTrackChanges).mockReturnValue([
       { ...makeTrackMark(TrackInsertMarkName, 'tc-1', { author: 'Ada' }), from: 2, to: 5 },
     ] as never);
@@ -128,7 +131,8 @@ describe('groupTrackedChanges', () => {
     };
     const second = groupTrackedChanges(editor);
 
-    expect(first[0]?.id).toBe(second[0]?.id);
+    expect(first[0]?.id).toBe('tc-1');
+    expect(second[0]?.id).toBe('tc-1');
   });
 
   it('caches results by document reference', () => {
@@ -281,7 +285,7 @@ describe('resolveTrackedChange', () => {
     vi.clearAllMocks();
   });
 
-  it('finds a grouped change by derived id', () => {
+  it('finds a grouped change by canonical id', () => {
     vi.mocked(getTrackChanges).mockReturnValue([
       { ...makeTrackMark(TrackInsertMarkName, 'tc-1'), from: 1, to: 5 },
     ] as never);
@@ -306,7 +310,7 @@ describe('toCanonicalTrackedChangeId', () => {
     vi.clearAllMocks();
   });
 
-  it('maps a raw id to its canonical derived id', () => {
+  it('maps a raw id to its canonical stable id', () => {
     vi.mocked(getTrackChanges).mockReturnValue([
       { ...makeTrackMark(TrackInsertMarkName, 'tc-1'), from: 1, to: 5 },
     ] as never);
@@ -314,7 +318,7 @@ describe('toCanonicalTrackedChangeId', () => {
     const editor = makeEditor();
     const canonical = toCanonicalTrackedChangeId(editor, 'tc-1');
     expect(typeof canonical).toBe('string');
-    expect(canonical).not.toBe('tc-1');
+    expect(canonical).toBe('tc-1');
   });
 
   it('returns null for unknown raw ids', () => {

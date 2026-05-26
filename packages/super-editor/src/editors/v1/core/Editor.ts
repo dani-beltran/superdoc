@@ -213,11 +213,7 @@ const rangeIsTrackedInsertionOnly = (doc: PmNode, from: number, to: number): boo
   return sawTrackedInsertion && !sawUntrackedInline && !sawNonInsertionTrackedMark;
 };
 
-const getSingleTrackedInsertionMarkInRange = (
-  doc: PmNode,
-  from: number,
-  to: number,
-): PmMark | null => {
+const getSingleTrackedInsertionMarkInRange = (doc: PmNode, from: number, to: number): PmMark | null => {
   if (!rangeIsTrackedInsertionOnly(doc, from, to)) return null;
 
   /** @type {import('prosemirror-model').Mark[]} */
@@ -237,27 +233,41 @@ const getSingleTrackedInsertionMarkInRange = (
   return insertionMarks.length === 1 ? insertionMarks[0] : null;
 };
 
-const resolveDirectInsertionDeleteCommentMeta = (
+const getSingleTrackedInsertionMarkAtCollapsedPosition = (doc: PmNode, pos: number): PmMark | null => {
+  const boundedPos = Math.max(0, Math.min(doc.content.size, pos));
+  const $pos = doc.resolve(boundedPos);
+  const beforeInsert = $pos.nodeBefore?.marks?.find((mark) => mark.type?.name === TrackInsertMarkName) ?? null;
+  const afterInsert = $pos.nodeAfter?.marks?.find((mark) => mark.type?.name === TrackInsertMarkName) ?? null;
+  const beforeId = typeof beforeInsert?.attrs?.id === 'string' ? beforeInsert.attrs.id : null;
+  const afterId = typeof afterInsert?.attrs?.id === 'string' ? afterInsert.attrs.id : null;
+  if (!beforeInsert || !afterInsert || !beforeId || beforeId !== afterId) return null;
+  return beforeInsert;
+};
+
+const resolveDirectInsertionMutationCommentMeta = (
   state: EditorState,
   tr: Transaction,
-):
-  | {
-      insertedMark: PmMark;
-      deletionMark: null;
-      formatMark: null;
-      deletionNodes: [];
-      step: ReplaceStep;
-      emitCommentEvent: true;
-    }
-  | null => {
+): {
+  insertedMark: PmMark;
+  deletionMark: null;
+  formatMark: null;
+  deletionNodes: [];
+  step: ReplaceStep;
+  emitCommentEvent: true;
+} | null => {
   if (!tr.docChanged || tr.steps.length !== 1) return null;
 
   const [step] = tr.steps;
-  if (!(step instanceof ReplaceStep) || step.from === step.to || step.slice.content.size !== 0) return null;
+  if (!(step instanceof ReplaceStep)) return null;
 
   const docs = (tr as unknown as { docs?: PmNode[] }).docs ?? [];
   const docBeforeStep = docs[0] ?? state.doc;
-  const insertedMark = getSingleTrackedInsertionMarkInRange(docBeforeStep, step.from, step.to);
+  const insertedMark =
+    step.from !== step.to && step.slice.content.size === 0
+      ? getSingleTrackedInsertionMarkInRange(docBeforeStep, step.from, step.to)
+      : step.from === step.to && step.slice.content.size > 0
+        ? getSingleTrackedInsertionMarkAtCollapsedPosition(docBeforeStep, step.from)
+        : null;
   if (!insertedMark) return null;
 
   return {
@@ -297,6 +307,37 @@ const fragmentHasTrackedReviewMark = (fragment: {
   return found;
 };
 
+const collapsedInsertionExtendsTrackedInsertion = (
+  doc: PmNode,
+  pos: number,
+  slice: { content?: { descendants?: (fn: (node: PmNode) => false | void) => void } },
+): boolean => {
+  const enclosingInsert = getSingleTrackedInsertionMarkAtCollapsedPosition(doc, pos);
+  if (!enclosingInsert) return false;
+  if (!slice.content) return true;
+
+  const enclosingInsertId = typeof enclosingInsert.attrs?.id === 'string' ? enclosingInsert.attrs.id : null;
+  if (!enclosingInsertId) return false;
+
+  let compatible = true;
+  slice.content.descendants?.((node) => {
+    if (!compatible || !node.isInline) return compatible ? undefined : false;
+    const trackedMarks = (node.marks ?? []).filter(isTrackedReviewMark);
+    if (!trackedMarks.length) return;
+
+    const allMatchEnclosingInsertion = trackedMarks.every(
+      (mark) => mark.type?.name === TrackInsertMarkName && mark.attrs?.id === enclosingInsertId,
+    );
+    if (!allMatchEnclosingInsertion) {
+      compatible = false;
+      return false;
+    }
+    return undefined;
+  });
+
+  return compatible;
+};
+
 const collapsedInsertionExtendsTrackedReviewMark = (
   doc: PmNode,
   pos: number,
@@ -315,7 +356,21 @@ const stepTouchesTrackedReviewState = (step: unknown, doc: PmNode): boolean => {
     // Direct deletes wholly inside an unresolved insertion mutate that
     // insertion in place to match Word. They should not be rerouted into a
     // synthetic tracked delete.
-    if (step.from !== step.to && step.slice.content.size === 0 && rangeIsTrackedInsertionOnly(doc, step.from, step.to)) {
+    if (
+      step.from !== step.to &&
+      step.slice.content.size === 0 &&
+      rangeIsTrackedInsertionOnly(doc, step.from, step.to)
+    ) {
+      return false;
+    }
+    // Direct typing strictly inside a single unresolved insertion should
+    // extend that insertion in place. Re-routing through trackedTransaction
+    // would create a child insertion and split the parent suggestion.
+    if (
+      step.from === step.to &&
+      step.slice.content.size > 0 &&
+      collapsedInsertionExtendsTrackedInsertion(doc, step.from, step.slice)
+    ) {
       return false;
     }
     if (rangeHasTrackedReviewMark(doc, step.from, step.to)) return true;
@@ -3025,7 +3080,10 @@ export class Editor extends EventEmitter<EditorEventMap> {
       const trackChangesState = TrackChangesBasePluginKey.getState(prevState);
       const isTrackChangesActive = trackChangesState?.isTrackChangesActive ?? false;
       const skipTrackChanges = transactionToApply.getMeta('skipTrackChanges') === true;
-      const directInsertionDeleteCommentMeta = resolveDirectInsertionDeleteCommentMeta(prevState, transactionToApply);
+      const directInsertionMutationCommentMeta = resolveDirectInsertionMutationCommentMeta(
+        prevState,
+        transactionToApply,
+      );
       const protectsExistingTrackedReviewState = transactionTouchesTrackedReviewState(prevState, transactionToApply);
       if (protectsExistingTrackedReviewState && skipTrackChanges) {
         transactionToApply.setMeta('protectTrackedReviewState', true);
@@ -3033,8 +3091,12 @@ export class Editor extends EventEmitter<EditorEventMap> {
 
       const shouldTrack =
         ((isTrackChangesActive || forceTrackChanges) && !skipTrackChanges) || protectsExistingTrackedReviewState;
-      if (!shouldTrack && directInsertionDeleteCommentMeta && !transactionToApply.getMeta(TrackChangesBasePluginKey)) {
-        transactionToApply.setMeta(TrackChangesBasePluginKey, directInsertionDeleteCommentMeta);
+      if (
+        !shouldTrack &&
+        directInsertionMutationCommentMeta &&
+        !transactionToApply.getMeta(TrackChangesBasePluginKey)
+      ) {
+        transactionToApply.setMeta(TrackChangesBasePluginKey, directInsertionMutationCommentMeta);
       }
       if (shouldTrack && forceTrackChanges && !this.options.user) {
         throw new Error('forceTrackChanges requires a user to be configured on the editor instance.');

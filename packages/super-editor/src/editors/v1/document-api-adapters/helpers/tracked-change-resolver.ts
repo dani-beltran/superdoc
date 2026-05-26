@@ -14,12 +14,10 @@ import {
   TrackInsertMarkName,
 } from '../../extensions/track-changes/constants.js';
 import { getTrackChanges } from '../../extensions/track-changes/trackChangesHelpers/getTrackChanges.js';
-import { normalizeExcerpt, toNonEmptyString } from './value-utils.js';
+import { toNonEmptyString } from './value-utils.js';
 import { resolveStoryRuntime } from '../story-runtime/resolve-story-runtime.js';
 import { buildStoryKey, BODY_STORY_KEY } from '../story-runtime/story-key.js';
 import type { TrackedChangeRuntimeRef } from './tracked-change-runtime-ref.js';
-
-const DERIVED_ID_LENGTH = 24;
 
 type RawTrackedMark = {
   mark: {
@@ -65,56 +63,19 @@ function getRawTrackedMarks(editor: Editor): RawTrackedMark[] {
 }
 
 /**
- * Browser-safe hash producing a {@link DERIVED_ID_LENGTH}-char hex string.
+ * Returns the stable public id for one grouped tracked change.
  *
- * Uses FNV-1a-inspired mixing across three independent accumulators to produce
- * a 96-bit (24-hex-char) digest. This is NOT cryptographic — it only needs to
- * be deterministic with low collision probability for tracked-change IDs.
- */
-function portableHash(input: string): string {
-  let h1 = 0x811c9dc5;
-  let h2 = 0x01000193;
-  let h3 = 0xdeadbeef;
-
-  for (let i = 0; i < input.length; i++) {
-    const c = input.charCodeAt(i);
-    h1 = Math.imul(h1 ^ c, 0x01000193);
-    h2 = Math.imul(h2 ^ c, 0x5bd1e995);
-    h3 = Math.imul(h3 ^ c, 0x1b873593);
-  }
-
-  h1 = Math.imul(h1 ^ (h1 >>> 16), 0x85ebca6b);
-  h2 = Math.imul(h2 ^ (h2 >>> 16), 0xcc9e2d51);
-  h3 = Math.imul(h3 ^ (h3 >>> 16), 0x1b873593);
-
-  return (
-    (h1 >>> 0).toString(16).padStart(8, '0') +
-    (h2 >>> 0).toString(16).padStart(8, '0') +
-    (h3 >>> 0).toString(16).padStart(8, '0')
-  ).slice(0, DERIVED_ID_LENGTH);
-}
-
-/**
- * Derives a deterministic ID for a tracked change from the current document state.
+ * Track-change ids must survive in-place refinement of the same logical change
+ * (for example direct editing inside an open insertion). The grouped raw id is
+ * already the stable logical identity:
+ * - native changes → raw mark id
+ * - imported Word changes → source-wrapper key (`word:trackInsert:1`, etc.)
  *
- * The ID is computed from the change type, ProseMirror positions, author,
- * date, and a text excerpt. It is stable for a given document state but will
- * change if the document is edited, since positions shift. These are NOT
- * persistent identifiers — they are ephemeral keys valid only for the
- * current transaction snapshot.
+ * Using the raw group key keeps the public id stable while still allowing the
+ * canonical-id map to collapse paired replacement aliases at the API edge.
  */
-function deriveTrackedChangeId(editor: Editor, change: Omit<GroupedTrackedChange, 'id'>): string {
-  const type = resolveTrackedChangeType(change);
-  const excerpt =
-    (change.excerpt !== undefined ? change.excerpt : undefined) ??
-    normalizeExcerpt(editor.state.doc.textBetween(change.from, change.to, ' ', '\ufffc')) ??
-    '';
-  const author = toNonEmptyString(change.attrs.author) ?? '';
-  const authorEmail = toNonEmptyString(change.attrs.authorEmail) ?? '';
-  const date = toNonEmptyString(change.attrs.date) ?? '';
-  const signature = `${type}|${change.from}|${change.to}|${author}|${authorEmail}|${date}|${excerpt}`;
-
-  return portableHash(signature);
+function deriveTrackedChangeId(change: Omit<GroupedTrackedChange, 'id'>): string {
+  return change.rawId;
 }
 
 export function resolveTrackedChangeType(change: ChangeTypeInput): TrackChangeType {
@@ -391,7 +352,7 @@ export function groupTrackedChanges(editor: Editor): GroupedTrackedChange[] {
       };
       return {
         ...withExcerpt,
-        id: deriveTrackedChangeId(editor, withExcerpt),
+        id: deriveTrackedChangeId(withExcerpt),
       };
     })
     .sort((a, b) => {
