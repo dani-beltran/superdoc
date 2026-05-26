@@ -1362,7 +1362,7 @@ export class EditorInputManager {
     const linkEl = target?.closest?.('a.superdoc-link') as HTMLAnchorElement | null;
     this.#pendingTocLinkNav = null;
     if (linkEl) {
-      if (linkEl.closest('.superdoc-toc-entry')) {
+      if (linkEl.closest(`.${DOM_CLASS_NAMES.TOC_ENTRY}`)) {
         this.#pendingTocLinkNav = linkEl;
       } else {
         this.#handleLinkClick(event, linkEl);

@@ -3092,7 +3092,7 @@ export class DomPainter {
 
       // Add TOC-specific styling class
       if (isTocEntry) {
-        fragmentEl.classList.add('superdoc-toc-entry');
+        fragmentEl.classList.add(DOM_CLASS_NAMES.TOC_ENTRY);
         const tocId = block.attrs?.tocId;
         if (typeof tocId === 'string' && tocId.length > 0) {
           fragmentEl.dataset.tocId = tocId;

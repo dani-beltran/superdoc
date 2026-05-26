@@ -264,6 +264,12 @@ const LINK_AND_TOC_STYLES = `
   background-color: var(--sd-content-controls-block-hover-bg, #f2f2f2);
 }
 
+/* Pointer-events stay on (default) so the stripe extends the parent entry's
+   hit-test area through the paragraph-spacing gap. Without this, moving the
+   cursor between two adjacent entries fires mouseout on the upper entry with
+   relatedTarget = the page (not a TOC entry), the coordinator drops the
+   group-hover class, and the grey disappears for a frame before the next
+   entry's mouseover restores it — visible as a flicker. */
 .superdoc-toc-entry.toc-group-hover::after {
   content: '';
   position: absolute;
@@ -272,7 +278,6 @@ const LINK_AND_TOC_STYLES = `
   top: 100%;
   height: var(--toc-gap-below, 0px);
   background-color: var(--sd-content-controls-block-hover-bg, #f2f2f2);
-  pointer-events: none;
 }
 
 /* Remove focus outlines from layout engine elements */

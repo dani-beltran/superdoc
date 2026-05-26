@@ -2,6 +2,7 @@ import { NodeSelection, Selection, TextSelection } from 'prosemirror-state';
 import { ContextMenuPluginKey } from '@extensions/context-menu/context-menu.js';
 import { CellSelection } from 'prosemirror-tables';
 import { PresentationPostPaintPipeline } from './dom/PresentationPostPaintPipeline.js';
+import { HoverGroupCoordinator } from './dom/HoverGroupCoordinator.js';
 import { ProofingSessionManager } from './proofing/ProofingSessionManager.js';
 import { PresentationPainterAdapter } from './rendering/PresentationPainterAdapter.js';
 import { resolveLayout } from '@superdoc/layout-resolved';
@@ -243,7 +244,7 @@ function parseRenderedNoteTarget(blockId: string): RenderedNoteTarget | null {
   return null;
 }
 import { splitRunsAtDecorationBoundaries } from './layout/SplitRunsAtDecorationBoundaries.js';
-import { DOM_CLASS_NAMES, buildSdtBlockSelector } from '@superdoc/dom-contract';
+import { DOM_CLASS_NAMES } from '@superdoc/dom-contract';
 import {
   ensureEditorNativeSelectionStyles,
   ensureEditorFieldAnnotationInteractionStyles,
@@ -560,18 +561,14 @@ export class PresentationEditor extends EventEmitter {
     id: string | null;
     elements: HTMLElement[];
   } | null = null;
-  #lastHoveredStructuredContentBlock: {
-    id: string | null;
-    elements: HTMLElement[];
-  } | null = null;
   /**
-   * TOC group hover state — mirror of #lastHoveredStructuredContentBlock
-   * for paragraph fragments sharing the same `data-toc-id`.
+   * Group-hover coordinators. SDT and TOC entries each highlight every
+   * fragment that shares an id, so they share the same "hover one, class the
+   * whole group" mechanic. Wired in #initializeHoverCoordinators after
+   * painterHost/painterAdapter exist.
    */
-  #lastHoveredTocGroup: {
-    id: string;
-    elements: HTMLElement[];
-  } | null = null;
+  #sdtHoverCoordinator: HoverGroupCoordinator | null = null;
+  #tocHoverCoordinator: HoverGroupCoordinator | null = null;
 
   // Remote cursor/presence state management
   /** Manager for remote cursor rendering and awareness subscriptions */
@@ -681,10 +678,11 @@ export class PresentationEditor extends EventEmitter {
 
     // Hover coordination — structured-content blocks and TOC entries each
     // group their fragments by id so the whole control greys out together.
-    this.#painterHost.addEventListener('mouseover', this.#handleStructuredContentBlockMouseEnter);
-    this.#painterHost.addEventListener('mouseout', this.#handleStructuredContentBlockMouseLeave);
-    this.#painterHost.addEventListener('mouseover', this.#handleTocEntryMouseEnter);
-    this.#painterHost.addEventListener('mouseout', this.#handleTocEntryMouseLeave);
+    this.#initializeHoverCoordinators();
+    this.#painterHost.addEventListener('mouseover', this.#sdtHoverCoordinator!.handleMouseEnter);
+    this.#painterHost.addEventListener('mouseout', this.#sdtHoverCoordinator!.handleMouseLeave);
+    this.#painterHost.addEventListener('mouseover', this.#tocHoverCoordinator!.handleMouseEnter);
+    this.#painterHost.addEventListener('mouseout', this.#tocHoverCoordinator!.handleMouseLeave);
 
     const win = this.#visibleHost?.ownerDocument?.defaultView ?? window;
     this.#domIndexObserverManager = new DomPositionIndexObserverManager({
@@ -6687,120 +6685,34 @@ export class PresentationEditor extends EventEmitter {
     this.#setSelectedStructuredContentBlockClass(elements, id);
   }
 
-  #handleStructuredContentBlockMouseEnter = (event: MouseEvent) => {
-    const target = event.target as HTMLElement;
-    const block = target.closest(`.${DOM_CLASS_NAMES.BLOCK_SDT}`);
+  /**
+   * Build the SDT and TOC hover coordinators. Called once after painterHost
+   * and painterAdapter are ready. The two groups differ only in the entry
+   * selector, id key, element lookup, and (for TOC) the gap-fill side effect
+   * — everything else (mouseover/mouseout, cross-fragment retain, after-paint
+   * reapply) lives in HoverGroupCoordinator.
+   */
+  #initializeHoverCoordinators(): void {
+    if (this.#sdtHoverCoordinator || this.#tocHoverCoordinator) return;
 
-    if (!block || !(block instanceof HTMLElement)) return;
-
-    // Don't show hover effect if already selected
-    if (block.classList.contains('ProseMirror-selectednode')) return;
-
-    const rawId = block.dataset.sdtId;
-    if (!rawId) return;
-
-    this.#setHoveredStructuredContentBlockClass(rawId);
-  };
-
-  #handleStructuredContentBlockMouseLeave = (event: MouseEvent) => {
-    const target = event.target as HTMLElement;
-    const block = target.closest(`.${DOM_CLASS_NAMES.BLOCK_SDT}`) as HTMLElement | null;
-
-    if (!block) return;
-
-    const relatedTarget = event.relatedTarget as HTMLElement | null;
-    if (relatedTarget && block.dataset.sdtId) {
-      const escapedCheckId =
-        typeof CSS !== 'undefined' && CSS.escape
-          ? CSS.escape(block.dataset.sdtId)
-          : block.dataset.sdtId.replace(/"/g, '\\"');
-      if (relatedTarget.closest(buildSdtBlockSelector(escapedCheckId))) {
-        return;
-      }
-    }
-
-    this.#clearHoveredStructuredContentBlockClass();
-  };
-
-  #clearHoveredStructuredContentBlockClass() {
-    if (!this.#lastHoveredStructuredContentBlock) return;
-    this.#lastHoveredStructuredContentBlock.elements.forEach((element) => {
-      element.classList.remove(DOM_CLASS_NAMES.SDT_GROUP_HOVER);
-    });
-    this.#lastHoveredStructuredContentBlock = null;
-  }
-
-  #setHoveredStructuredContentBlockClass(id: string) {
-    if (this.#lastHoveredStructuredContentBlock?.id === id) return;
-
-    this.#clearHoveredStructuredContentBlockClass();
-
-    if (!this.#painterHost) return;
-
-    const elements = this.#painterAdapter.getStructuredContentBlockElementsById(id);
-
-    if (elements.length === 0) return;
-
-    elements.forEach((element) => {
-      if (!element.classList.contains('ProseMirror-selectednode')) {
-        element.classList.add(DOM_CLASS_NAMES.SDT_GROUP_HOVER);
-      }
+    this.#sdtHoverCoordinator = new HoverGroupCoordinator({
+      entrySelector: `.${DOM_CLASS_NAMES.BLOCK_SDT}`,
+      getId: (entry) => entry.dataset.sdtId,
+      queryGroup: (id) => this.#painterAdapter.getStructuredContentBlockElementsById(id),
+      hoverClass: DOM_CLASS_NAMES.SDT_GROUP_HOVER,
+      // PM-selected SDTs render with their selection style — leave it alone
+      // so the hover greying doesn't mask the selection feedback.
+      shouldApplyTo: (element) => !element.classList.contains('ProseMirror-selectednode'),
     });
 
-    this.#lastHoveredStructuredContentBlock = { id, elements };
-  }
-
-  /** TOC analogue of {@link #handleStructuredContentBlockMouseEnter}, keyed by `data-toc-id`. */
-  #handleTocEntryMouseEnter = (event: MouseEvent) => {
-    const target = event.target as HTMLElement | null;
-    const entry = target?.closest?.(`.${DOM_CLASS_NAMES.TOC_ENTRY}`) as HTMLElement | null;
-    if (!entry) return;
-
-    const tocId = entry.dataset.tocId;
-    if (!tocId) return;
-
-    this.#setHoveredTocGroup(tocId);
-  };
-
-  #handleTocEntryMouseLeave = (event: MouseEvent) => {
-    const target = event.target as HTMLElement | null;
-    const entry = target?.closest?.(`.${DOM_CLASS_NAMES.TOC_ENTRY}`) as HTMLElement | null;
-    if (!entry) return;
-
-    const tocId = entry.dataset.tocId;
-    if (!tocId) return;
-
-    const relatedTarget = event.relatedTarget as HTMLElement | null;
-    if (relatedTarget) {
-      const nextEntry = relatedTarget.closest?.(`.${DOM_CLASS_NAMES.TOC_ENTRY}`) as HTMLElement | null;
-      if (nextEntry && nextEntry.dataset.tocId === tocId) {
-        return;
-      }
-    }
-
-    this.#clearHoveredTocGroup();
-  };
-
-  #clearHoveredTocGroup() {
-    if (!this.#lastHoveredTocGroup) return;
-    this.#lastHoveredTocGroup.elements.forEach((element) => {
-      element.classList.remove(DOM_CLASS_NAMES.TOC_GROUP_HOVER);
-      element.style.removeProperty('--toc-gap-below');
+    this.#tocHoverCoordinator = new HoverGroupCoordinator({
+      entrySelector: `.${DOM_CLASS_NAMES.TOC_ENTRY}`,
+      getId: (entry) => entry.dataset.tocId,
+      queryGroup: (id) => this.#queryTocEntryElementsById(id),
+      hoverClass: DOM_CLASS_NAMES.TOC_GROUP_HOVER,
+      onApply: (elements) => this.#applyTocGapFill(elements),
+      onClear: (element) => element.style.removeProperty('--toc-gap-below'),
     });
-    this.#lastHoveredTocGroup = null;
-  }
-
-  #setHoveredTocGroup(id: string) {
-    if (this.#lastHoveredTocGroup?.id === id) return;
-
-    this.#clearHoveredTocGroup();
-
-    const elements = this.#queryTocEntryElementsById(id);
-    if (elements.length === 0) return;
-
-    elements.forEach((element) => element.classList.add(DOM_CLASS_NAMES.TOC_GROUP_HOVER));
-    this.#applyTocGapFill(elements);
-    this.#lastHoveredTocGroup = { id, elements };
   }
 
   /**
@@ -6838,54 +6750,10 @@ export class PresentationEditor extends EventEmitter {
 
   #queryTocEntryElementsById(id: string): HTMLElement[] {
     if (!this.#painterHost) return [];
-    const escapedId = typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(id) : id.replace(/"/g, '\\"');
+    const escapedId = escapeAttrValue(id);
     return Array.from(
       this.#painterHost.querySelectorAll<HTMLElement>(`.${DOM_CLASS_NAMES.TOC_ENTRY}[data-toc-id="${escapedId}"]`),
     );
-  }
-
-  /** Restore JS-driven `toc-group-hover` after a repaint, mirror of #reapplySdtGroupHover. */
-  #reapplyTocGroupHover(): void {
-    if (!this.#lastHoveredTocGroup) return;
-
-    const { id } = this.#lastHoveredTocGroup;
-    const elements = this.#queryTocEntryElementsById(id);
-
-    if (elements.length === 0) {
-      this.#lastHoveredTocGroup = null;
-      return;
-    }
-
-    elements.forEach((element) => element.classList.add(DOM_CLASS_NAMES.TOC_GROUP_HOVER));
-    this.#applyTocGapFill(elements);
-    this.#lastHoveredTocGroup = { id, elements };
-  }
-
-  /**
-   * Re-applies the sdt-group-hover class after a paint cycle.
-   * DOM elements are rebuilt during repaint, so the hover class added by
-   * mouse events is lost. This restores hover state from the cached state.
-   */
-  #reapplySdtGroupHover(): void {
-    if (!this.#lastHoveredStructuredContentBlock || !this.#painterHost) return;
-
-    const { id } = this.#lastHoveredStructuredContentBlock;
-    if (!id) return;
-
-    const elements = this.#painterAdapter.getStructuredContentBlockElementsById(id);
-
-    if (elements.length === 0) {
-      this.#lastHoveredStructuredContentBlock = null;
-      return;
-    }
-
-    elements.forEach((element) => {
-      if (!element.classList.contains('ProseMirror-selectednode')) {
-        element.classList.add(DOM_CLASS_NAMES.SDT_GROUP_HOVER);
-      }
-    });
-
-    this.#lastHoveredStructuredContentBlock = { id, elements };
   }
 
   /**
@@ -6911,8 +6779,8 @@ export class PresentationEditor extends EventEmitter {
       domPositionIndex: this.#domPositionIndex,
       proofingAnnotations: this.#buildProofingAnnotations(),
       rebuildDomPositionIndex: () => this.#rebuildDomPositionIndex(),
-      reapplyStructuredContentHover: () => this.#reapplySdtGroupHover(),
-      reapplyTocGroupHover: () => this.#reapplyTocGroupHover(),
+      reapplyStructuredContentHover: () => this.#sdtHoverCoordinator?.reapply(),
+      reapplyTocGroupHover: () => this.#tocHoverCoordinator?.reapply(),
     });
   }
 
