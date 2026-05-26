@@ -254,6 +254,38 @@ describe('Editor collaboration seeding', () => {
     }
   });
 
+  it('hydrates from a fragment attached via setOptions before open()', async () => {
+    const seedYdoc = new YDoc();
+    const seedEditor = createTestEditor();
+    const fragmentEditor = createTestEditor();
+
+    try {
+      await seedEditor.open(undefined, { mode: 'docx' });
+      const crossReferenceDoc = createCrossReferencePmDoc(seedEditor);
+      seedEditor.dispatch(seedEditor.state.tr.replaceWith(0, seedEditor.state.doc.content.size, crossReferenceDoc));
+      seedEditorStateToYDoc(seedEditor, seedYdoc);
+      addCachedResultRunToYjsCrossReference(seedYdoc);
+
+      fragmentEditor.setOptions({ fragment: seedYdoc.getXmlFragment('supereditor') });
+      await fragmentEditor.open(undefined, { mode: 'docx', isNewFile: false });
+
+      const fragmentCrossReferences = collectCrossReferences(fragmentEditor);
+      expect(fragmentCrossReferences).toHaveLength(1);
+      expect(fragmentCrossReferences[0].attrs.instruction).toBe('REF _Ref228977094 \\r \\h');
+      expect(fragmentCrossReferences[0].attrs.resolvedText).toBe('\u200e1');
+    } finally {
+      if (seedEditor.lifecycleState === 'ready') {
+        seedEditor.close();
+      }
+      if (fragmentEditor.lifecycleState === 'ready') {
+        fragmentEditor.close();
+      }
+      seedEditor.destroy();
+      fragmentEditor.destroy();
+      seedYdoc.destroy();
+    }
+  });
+
   it('hydrates from a fragment supplied to the editor constructor', async () => {
     const seedYdoc = new YDoc();
     const seedEditor = createTestEditor();

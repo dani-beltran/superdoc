@@ -834,7 +834,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
         html: options?.html,
         markdown: options?.markdown,
         jsonOverride: options?.json ?? null,
-        fragment: hasOpenFragment ? (options?.fragment ?? null) : this.#constructorFragment,
+        fragment: hasOpenFragment ? (options?.fragment ?? null) : (this.options.fragment ?? this.#constructorFragment),
       };
 
       // Password for encrypted .docx — threaded to loadXmlData, then cleared
