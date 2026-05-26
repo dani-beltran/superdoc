@@ -223,4 +223,49 @@ describe('translateParagraphNode', () => {
       expect(idMap.get('1')).toBe(idMap.get('2'));
     });
   });
+
+  it('merges adjacent plain text runs in final-doc export mode after tracked wrappers are removed', () => {
+    const params = {
+      ...baseParams(),
+      isFinalDoc: true,
+    };
+    generateParagraphProperties.mockReturnValue(null);
+    translateChildNodes.mockReturnValue([
+      { name: 'w:r', elements: [{ name: 'w:t', elements: [{ type: 'text', text: 'ABC' }] }] },
+      { name: 'w:r', elements: [{ name: 'w:t', elements: [{ type: 'text', text: 'XYZ' }] }] },
+    ]);
+
+    const result = translateParagraphNode(params);
+
+    expect(result.elements).toHaveLength(1);
+    expect(result.elements[0]).toEqual({
+      name: 'w:r',
+      elements: [{ name: 'w:t', elements: [{ type: 'text', text: 'ABCXYZ' }] }],
+    });
+  });
+
+  it('does not merge adjacent final-doc runs when run properties differ', () => {
+    const params = {
+      ...baseParams(),
+      isFinalDoc: true,
+    };
+    generateParagraphProperties.mockReturnValue(null);
+    translateChildNodes.mockReturnValue([
+      {
+        name: 'w:r',
+        elements: [{ name: 'w:t', elements: [{ type: 'text', text: 'ABC' }] }],
+      },
+      {
+        name: 'w:r',
+        elements: [
+          { name: 'w:rPr', elements: [{ name: 'w:b' }] },
+          { name: 'w:t', elements: [{ type: 'text', text: 'XYZ' }] },
+        ],
+      },
+    ]);
+
+    const result = translateParagraphNode(params);
+
+    expect(result.elements).toHaveLength(2);
+  });
 });

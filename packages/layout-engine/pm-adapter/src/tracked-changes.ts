@@ -67,7 +67,6 @@ export const isTextRun = (run: Run): run is TextRun => {
  * @param run - The run to strip tracked change from
  */
 export const stripTrackedChangeFromRun = (run: Run): void => {
-  if (!isTextRun(run)) return;
   if ('trackedChange' in run && run.trackedChange) {
     delete run.trackedChange;
   }
@@ -272,11 +271,39 @@ export const selectTrackedChangeMeta = (
   return existing;
 };
 
-const normalizeTrackedChangeLayers = (run: TextRun): TrackedChangeMeta[] => {
+const normalizeTrackedChangeLayers = (run: TextRun | BreakRun): TrackedChangeMeta[] => {
   if (Array.isArray(run.trackedChanges) && run.trackedChanges.length > 0) {
     return run.trackedChanges;
   }
   return run.trackedChange ? [run.trackedChange] : [];
+};
+
+const isTrackedChangeRun = (run: Run): run is TextRun | BreakRun => {
+  return isTextRun(run) || run.kind === 'break';
+};
+
+const runHasTrackedChangeKind = (run: Run, kind: TrackedChangeKind): boolean => {
+  if (!isTrackedChangeRun(run)) return false;
+  return normalizeTrackedChangeLayers(run).some((layer) => layer.kind === kind);
+};
+
+const stripTrackedChangeKindsFromRun = (run: Run, kinds: readonly TrackedChangeKind[]): void => {
+  if (!isTrackedChangeRun(run)) return;
+
+  const hiddenKinds = new Set(kinds);
+  const remainingLayers = normalizeTrackedChangeLayers(run).filter((layer) => !hiddenKinds.has(layer.kind));
+
+  if (remainingLayers.length === 0) {
+    stripTrackedChangeFromRun(run);
+    return;
+  }
+
+  run.trackedChange = remainingLayers[0];
+  if (remainingLayers.length > 1) {
+    run.trackedChanges = remainingLayers;
+  } else {
+    delete run.trackedChanges;
+  }
 };
 
 /**
@@ -488,15 +515,14 @@ export const applyTrackedChangesModeToRuns = (
       filtered.push(run);
       return;
     }
-    const tracked = run.trackedChange;
-    if (!tracked) {
+    if (!isTrackedChangeRun(run) || normalizeTrackedChangeLayers(run).length === 0) {
       filtered.push(run);
       return;
     }
-    if (hideInsertions && tracked.kind === 'insert') {
+    if (hideInsertions && runHasTrackedChangeKind(run, 'insert')) {
       return;
     }
-    if (hideDeletions && tracked.kind === 'delete') {
+    if (hideDeletions && runHasTrackedChangeKind(run, 'delete')) {
       return;
     }
     filtered.push(run);
@@ -527,13 +553,8 @@ export const applyTrackedChangesModeToRuns = (
     // Note: We only strip 'insert' and 'delete' kinds, not 'format' kind which should remain visible.
     if ((config.mode === 'original' || config.mode === 'final') && config.enabled) {
       filtered.forEach((run) => {
-        if (
-          isTextRun(run) &&
-          run.trackedChange &&
-          (run.trackedChange.kind === 'insert' || run.trackedChange.kind === 'delete')
-        ) {
-          delete run.trackedChange;
-          delete run.trackedChanges;
+        if (runHasTrackedChangeKind(run, 'insert') || runHasTrackedChangeKind(run, 'delete')) {
+          stripTrackedChangeKindsFromRun(run, ['insert', 'delete']);
         }
       });
     }

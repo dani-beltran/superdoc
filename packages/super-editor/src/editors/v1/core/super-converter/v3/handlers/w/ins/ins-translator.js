@@ -99,6 +99,10 @@ function decode(params) {
 
   const translatedTextNode = exportSchemaToJson({ ...params, node });
 
+  if (params.isFinalDoc) {
+    return translatedTextNode;
+  }
+
   return {
     name: 'w:ins',
     attributes: {

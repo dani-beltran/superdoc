@@ -10,6 +10,7 @@ vi.mock('../helpers/comment-target-resolver.js', () => ({
 }));
 
 vi.mock('../helpers/index-cache.js', () => ({
+  getBlockIndex: vi.fn(() => ({ candidates: [] })),
   getInlineIndex: vi.fn(() => ({ byType: new Map() })),
   clearIndexCache: vi.fn(),
 }));
@@ -37,11 +38,13 @@ vi.mock('../helpers/adapter-utils.js', () => ({
 }));
 
 import { listCommentAnchors } from '../helpers/comment-target-resolver.js';
+import { getBlockIndex } from '../helpers/index-cache.js';
 import { resolveTextTarget } from '../helpers/adapter-utils.js';
 import { executeDomainCommand } from './plan-wrappers.js';
 import { getTrackedChangeIndex } from '../tracked-changes/tracked-change-index.js';
 
 const listCommentAnchorsMock = listCommentAnchors as unknown as ReturnType<typeof vi.fn>;
+const getBlockIndexMock = getBlockIndex as unknown as ReturnType<typeof vi.fn>;
 const resolveTextTargetMock = resolveTextTarget as unknown as ReturnType<typeof vi.fn>;
 const executeDomainCommandMock = executeDomainCommand as unknown as ReturnType<typeof vi.fn>;
 const getTrackedChangeIndexMock = getTrackedChangeIndex as unknown as ReturnType<typeof vi.fn>;
@@ -83,6 +86,7 @@ function mockTextBetweenSequence(editor: Editor, ...values: string[]): void {
 
 beforeEach(() => {
   listCommentAnchorsMock.mockReturnValue([]);
+  getBlockIndexMock.mockReturnValue({ candidates: [] });
   getTrackedChangeIndexMock.mockReturnValue({ getAll: () => [] } as never);
 });
 
@@ -617,6 +621,7 @@ describe('comments-wrappers: addCommentHandler multi-segment targets', () => {
         doc: {
           content: { size: 200 },
           textBetween: vi.fn(() => ''),
+          nodesBetween: vi.fn(),
         },
       },
       commands: {
@@ -628,8 +633,15 @@ describe('comments-wrappers: addCommentHandler multi-segment targets', () => {
     } as unknown as Editor;
   }
 
+  function mockBlockOrder(...blockIds: string[]): void {
+    getBlockIndexMock.mockReturnValue({
+      candidates: blockIds.map((nodeId, index) => ({ nodeId, pos: index * 10 })),
+    });
+  }
+
   it('rejects a multi-segment target with segments out of document order', () => {
     const editor = makeWriteEditor();
+    mockBlockOrder('pB', 'pA');
     // segments[0] resolves to a later PM range than segments[1] — the
     // caller built an out-of-order TextTarget (e.g. stitched two
     // selections together backwards).
@@ -658,17 +670,14 @@ describe('comments-wrappers: addCommentHandler multi-segment targets', () => {
     expect(editor.commands!.addComment).not.toHaveBeenCalled();
   });
 
-  it('rejects a multi-segment target with a non-empty text gap between segments', () => {
+  it('rejects a multi-segment target when it skips blocks in document order', () => {
     const editor = makeWriteEditor();
-    // segments[0] and segments[1] are in order, but there is text
-    // between them (pm positions 10..20 are selected, 30..40 selected,
-    // positions 20..30 have real text the caller did not select).
+    mockBlockOrder('p1', 'p2', 'p3');
     resolveTextTargetMock.mockImplementation((_editor, target) => {
       if (target.blockId === 'p1') return { from: 10, to: 20 };
       if (target.blockId === 'p3') return { from: 30, to: 40 };
       return null;
     });
-    (editor.state!.doc as { textBetween: ReturnType<typeof vi.fn> }).textBetween = vi.fn(() => 'unselected text');
 
     const wrapper = createCommentsWrapper(editor);
     const receipt = wrapper.add({
@@ -690,15 +699,12 @@ describe('comments-wrappers: addCommentHandler multi-segment targets', () => {
 
   it('accepts a contiguous multi-segment target and spans the full PM range', () => {
     const editor = makeWriteEditor();
-    // Two adjacent textblocks — the flattened PM gap between them is
-    // just block-boundary tokens, which textBetween(prev.to, curr.from, '')
-    // renders as an empty string.
+    mockBlockOrder('pA', 'pB');
     resolveTextTargetMock.mockImplementation((_editor, target) => {
       if (target.blockId === 'pA') return { from: 10, to: 20 };
       if (target.blockId === 'pB') return { from: 22, to: 30 };
       return null;
     });
-    (editor.state!.doc as { textBetween: ReturnType<typeof vi.fn> }).textBetween = vi.fn(() => '');
     // Simulate a successful plan execution so the handler reaches the
     // success branch after validation + applyTextSelection.
     executeDomainCommandMock.mockReturnValue({
@@ -721,6 +727,62 @@ describe('comments-wrappers: addCommentHandler multi-segment targets', () => {
     // PM range [first.from, last.to].
     expect(editor.commands!.setTextSelection).toHaveBeenCalledWith({ from: 10, to: 30 });
     expect(receipt.success).toBe(true);
+  });
+
+  it('accepts a multi-paragraph target when the gap contains only ignorable anchor atoms', () => {
+    const editor = makeWriteEditor();
+    mockBlockOrder('pA', 'pB');
+    resolveTextTargetMock.mockImplementation((_editor, target) => {
+      if (target.blockId === 'pA') return { from: 10, to: 20 };
+      if (target.blockId === 'pB') return { from: 22, to: 30 };
+      return null;
+    });
+    executeDomainCommandMock.mockReturnValue({
+      steps: [{ effect: 'changed' }],
+    } as unknown as ReturnType<typeof executeDomainCommand>);
+
+    const wrapper = createCommentsWrapper(editor);
+    const receipt = wrapper.add({
+      text: 'comment',
+      target: {
+        kind: 'text',
+        segments: [
+          { blockId: 'pA', range: { start: 0, end: 10 } },
+          { blockId: 'pB', range: { start: 0, end: 8 } },
+        ],
+      },
+    });
+
+    expect(receipt.success).toBe(true);
+    expect(editor.commands!.setTextSelection).toHaveBeenCalledWith({ from: 10, to: 30 });
+  });
+
+  it('accepts contiguous block segments even when boundary blocks leave text between them', () => {
+    const editor = makeWriteEditor();
+    mockBlockOrder('pA', 'pB');
+    resolveTextTargetMock.mockImplementation((_editor, target) => {
+      if (target.blockId === 'pA') return { from: 10, to: 18 };
+      if (target.blockId === 'pB') return { from: 31, to: 45 };
+      return null;
+    });
+    executeDomainCommandMock.mockReturnValue({
+      steps: [{ effect: 'changed' }],
+    } as unknown as ReturnType<typeof executeDomainCommand>);
+
+    const wrapper = createCommentsWrapper(editor);
+    const receipt = wrapper.add({
+      text: 'comment',
+      target: {
+        kind: 'text',
+        segments: [
+          { blockId: 'pA', range: { start: 10, end: 18 } },
+          { blockId: 'pB', range: { start: 12, end: 26 } },
+        ],
+      },
+    });
+
+    expect(receipt.success).toBe(true);
+    expect(editor.commands!.setTextSelection).toHaveBeenCalledWith({ from: 10, to: 45 });
   });
 
   it('accepts trackedChangeId targets from the tracked-change index when live resolution misses a body deletion', () => {
@@ -949,26 +1011,13 @@ describe('comments-wrappers: addCommentHandler multi-segment targets', () => {
     expect(editor.commands!.addComment).not.toHaveBeenCalled();
   });
 
-  it('rejects a multi-segment TextTarget whose gap contains only an inline atom', () => {
-    // Regression: `textBetween(prev.to, curr.from, '')` returns '' when
-    // the gap is composed entirely of inline atoms (images, math, etc),
-    // because PM omits leaves from textBetween by default. The contiguity
-    // check must use a leafText callback so atom-only gaps still reject.
+  it('rejects a multi-segment TextTarget that repeats the same block', () => {
+    // Split same-block segments would silently anchor a larger range than
+    // the caller explicitly passed. Callers should collapse them into one
+    // TextAddress/TextSegment before invoking comments.create.
     const editor = makeWriteEditor();
-    resolveTextTargetMock.mockImplementation((_editor, target) => {
-      if (target.blockId === 'p1') return { from: 5, to: 10 };
-      if (target.blockId === 'p1-after-image') return { from: 12, to: 17 };
-      return null;
-    });
-    // Simulate a gap that contains an inline atom: textBetween with
-    // empty blockSeparator but a leafText callback returns the leaf
-    // sentinel for the atom.
-    (editor.state!.doc as { textBetween: ReturnType<typeof vi.fn> }).textBetween = vi.fn(
-      (_from: number, _to: number, blockSep: string, leafText?: () => string) => {
-        if (typeof leafText === 'function') return leafText();
-        return blockSep ?? '';
-      },
-    );
+    mockBlockOrder('p1');
+    resolveTextTargetMock.mockReturnValueOnce({ from: 5, to: 10 }).mockReturnValueOnce({ from: 12, to: 17 });
 
     const wrapper = createCommentsWrapper(editor);
     const receipt = wrapper.add({
@@ -977,14 +1026,14 @@ describe('comments-wrappers: addCommentHandler multi-segment targets', () => {
         kind: 'text',
         segments: [
           { blockId: 'p1', range: { start: 0, end: 5 } },
-          { blockId: 'p1-after-image', range: { start: 0, end: 5 } },
+          { blockId: 'p1', range: { start: 7, end: 12 } },
         ],
       },
     });
 
     expect(receipt.success).toBe(false);
     expect(receipt.failure?.code).toBe('INVALID_TARGET');
-    expect(receipt.failure?.message).toContain('atoms');
+    expect(receipt.failure?.message).toContain('document order');
     expect(editor.commands!.addComment).not.toHaveBeenCalled();
   });
 });

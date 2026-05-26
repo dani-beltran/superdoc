@@ -300,6 +300,70 @@ describe('overlap-compiler: different-user child insertion inside other-user ins
     expect(childChange.insertedSegments[0].attrs.overlapParentId).toBe(parentId);
     expect(childChange.authorEmail).toBe(ALICE.email);
   });
+
+  it('continues the same child change across contiguous typing inside the parent insertion', () => {
+    const parentId = 'ins-bob';
+    const { state: initialState } = stateFromTrackedSpans({
+      schema,
+      spans: [
+        { text: 'Hi ' },
+        { text: 'world', marks: [insertMark({ id: parentId, authorEmail: BOB.email, date: FIXED_DATE })] },
+      ],
+    });
+
+    const first = runCompile({
+      state: initialState,
+      intent: makeTextInsertIntent({
+        at: 6,
+        content: sliceFromText(schema, 'X'),
+        user: ALICE,
+        date: FIXED_DATE,
+        source: 'native',
+      }),
+    });
+    expect(first.ok).toBe(true);
+    const childId = first.createdChangeIds[0];
+
+    const secondState = EditorState.create({ schema, doc: first.tr.doc });
+    const second = runCompile({
+      state: secondState,
+      intent: makeTextInsertIntent({
+        at: first.selection.pos,
+        content: sliceFromText(schema, 'Y'),
+        user: ALICE,
+        date: FIXED_DATE,
+        source: 'native',
+      }),
+    });
+    expect(second.ok).toBe(true);
+
+    const thirdState = EditorState.create({ schema, doc: second.tr.doc });
+    const third = runCompile({
+      state: thirdState,
+      intent: makeTextInsertIntent({
+        at: second.selection.pos,
+        content: sliceFromText(schema, 'Z'),
+        user: ALICE,
+        date: FIXED_DATE,
+        source: 'native',
+      }),
+    });
+    expect(third.ok).toBe(true);
+    expect(textOf(third.tr)).toBe('Hi woXYZrld');
+
+    expect(second.createdChangeIds).toEqual([]);
+    expect(second.updatedChangeIds).toEqual([childId]);
+    expect(third.createdChangeIds).toEqual([]);
+    expect(third.updatedChangeIds).toEqual([childId]);
+
+    const graph = buildReviewGraph({ state: { doc: third.tr.doc } });
+    expect(graph.changes.size).toBe(2);
+    const childChange = Array.from(graph.changes.values()).find((change) => change.id === childId);
+    expect(childChange).toBeDefined();
+    expect(childChange.authorEmail).toBe(ALICE.email);
+    expect(childChange.insertedSegments[0].attrs.overlapParentId).toBe(parentId);
+    expect(childChange.insertedSegments.map((segment) => segment.text).join('')).toBe('XYZ');
+  });
 });
 
 describe('overlap-compiler: text-insert at exact location inside other-user deletion (SD-3210)', () => {

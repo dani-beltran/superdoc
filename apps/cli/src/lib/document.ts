@@ -494,7 +494,12 @@ export async function exportOptionalSessionOutput(
   }
 }
 
-export async function exportToPath(editor: Editor, outputPath: string, force = false): Promise<FileOutputMeta> {
+export async function exportToPath(
+  editor: Editor,
+  outputPath: string,
+  force = false,
+  options: { isFinalDoc?: boolean } = {},
+): Promise<FileOutputMeta> {
   const exists = await pathExists(outputPath);
   if (exists && !force) {
     throw new CliError('OUTPUT_EXISTS', `Output path already exists: ${outputPath}`, {
@@ -505,7 +510,7 @@ export async function exportToPath(editor: Editor, outputPath: string, force = f
 
   let exported: unknown;
   try {
-    exported = await editor.exportDocument();
+    exported = await editor.exportDocument({ isFinalDoc: options.isFinalDoc });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new CliError('DOCUMENT_EXPORT_FAILED', 'Failed to export document.', {

@@ -1208,6 +1208,44 @@ export const useCommentsStore = defineStore('comments', () => {
   };
 
   /**
+   * Replace-file swaps reuse the same document id. Drop the previous document's
+   * imported threads before hydrating the replacement so stale comments never
+   * survive long enough to render beside the new content.
+   *
+   * @param {string | null | undefined} documentId
+   * @returns {void}
+   */
+  function resetCommentsForReplacedDocument(documentId) {
+    const activeDocumentId = documentId != null ? String(documentId) : null;
+    if (!activeDocumentId) return;
+
+    const removedComments = commentsList.value.filter((comment) =>
+      belongsToDocument(comment, activeDocumentId, { allowSingleDocumentMismatch: true }),
+    );
+    if (!removedComments.length) return;
+
+    const removedAliasIds = new Set();
+    removedComments.forEach((comment) => {
+      getCommentAliasIds(comment).forEach((id) => removedAliasIds.add(id));
+    });
+
+    commentsList.value = commentsList.value.filter((comment) => !removedComments.includes(comment));
+
+    if (removedAliasIds.size) {
+      const nextPositions = { ...(editorCommentPositions.value || {}) };
+      removedAliasIds.forEach((id) => {
+        delete nextPositions[id];
+      });
+      editorCommentPositions.value = nextPositions;
+    }
+
+    const activeCommentId = activeComment.value != null ? String(activeComment.value) : null;
+    if (activeCommentId && removedAliasIds.has(activeCommentId)) {
+      clearActiveCommentSelection();
+    }
+  }
+
+  /**
    * Initialize loaded comments into SuperDoc by mapping the imported
    * comment data to SuperDoc useComment objects.
    *
@@ -1216,12 +1254,17 @@ export const useCommentsStore = defineStore('comments', () => {
    * @param {Object} param0
    * @param {Array} param0.comments The comments to be loaded
    * @param {String} param0.documentId The document ID
+   * @param {boolean} [param0.replacedFile] Whether this load replaces an existing document in place
    * @returns {void}
    */
-  const processLoadedDocxComments = async ({ superdoc, editor, comments, documentId }) => {
+  const processLoadedDocxComments = async ({ superdoc, editor, comments, documentId, replacedFile = false }) => {
     const document = superdocStore.getDocument(documentId);
     if (document?.commentThreadingProfile) {
       document.commentThreadingProfile.value = editor?.converter?.commentThreadingProfile || null;
+    }
+
+    if (replacedFile) {
+      resetCommentsForReplacedDocument(documentId);
     }
 
     comments.forEach((comment) => {
@@ -1270,6 +1313,11 @@ export const useCommentsStore = defineStore('comments', () => {
 
       addComment({ superdoc, comment: newComment });
     });
+
+    if (replacedFile) {
+      bootstrapImportedTrackedChangeComments(editor, superdoc);
+      return;
+    }
 
     setTimeout(() => {
       // Do not block the first rendering of the doc. Rebuild tracked-change

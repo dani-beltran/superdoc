@@ -65,7 +65,7 @@ Returns a CommentInfo object with the comment text, author, date, and thread met
 | `trackedChangeLink` | CommentTrackedChangeLink \\| null | no | One of: CommentTrackedChangeLink, null |
 | `trackedChangeStory` | StoryLocator \\| null | no | One of: StoryLocator, null |
 | `trackedChangeText` | any | no |  |
-| `trackedChangeType` | enum | no | `"insert"`, `"delete"`, `"format"` |
+| `trackedChangeType` | enum | no | `"insert"`, `"delete"`, `"replacement"`, `"format"` |
 
 ### Example response
 
@@ -205,6 +205,7 @@ Returns a CommentInfo object with the comment text, author, date, and thread met
       "enum": [
         "insert",
         "delete",
+        "replacement",
         "format"
       ]
     }

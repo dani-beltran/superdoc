@@ -197,6 +197,51 @@ export function restoreStashedCommentEntityTree(editor: Editor, rootCommentId: s
   return restored;
 }
 
+function isDanglingOpenRootComment(entry: CommentEntityRecord, anchoredIds: ReadonlySet<string>): boolean {
+  const commentId = toNonEmptyString(entry.commentId);
+  const importedId = toNonEmptyString(entry.importedId);
+  if (!commentId) return false;
+  if (toNonEmptyString(entry.parentCommentId)) return false;
+  if (isCommentResolved(entry)) return false;
+  if (entry.trackedChange === true || toNonEmptyString(entry.trackedChangeParentId)) return false;
+  if (anchoredIds.has(commentId)) return false;
+  if (importedId && anchoredIds.has(importedId)) return false;
+  return true;
+}
+
+export function reconcileCommentEntityStoreWithAnchors(
+  editor: Editor,
+  anchoredCommentIds: Iterable<string>,
+): { restored: CommentEntityRecord[]; removed: CommentEntityRecord[] } {
+  const anchoredIds = new Set(
+    Array.from(anchoredCommentIds, (value) => toNonEmptyString(value)).filter((value): value is string => !!value),
+  );
+
+  const restored: CommentEntityRecord[] = [];
+  for (const anchoredId of anchoredIds) {
+    restored.push(...restoreStashedCommentEntityTree(editor, anchoredId));
+  }
+
+  const store = getCommentEntityStore(editor);
+  const removed: CommentEntityRecord[] = [];
+  const prunedRootIds = new Set<string>();
+
+  for (const entry of [...store]) {
+    const commentId = toNonEmptyString(entry.commentId);
+    if (!commentId || prunedRootIds.has(commentId)) continue;
+    if (!isDanglingOpenRootComment(entry, anchoredIds)) continue;
+
+    const removedTree = removeCommentEntityTree(store, commentId);
+    if (!removedTree.length) continue;
+
+    stashRemovedCommentEntities(editor, removedTree);
+    removed.push(...removedTree);
+    prunedRootIds.add(commentId);
+  }
+
+  return { restored, removed };
+}
+
 function collectTextFragments(value: unknown, sink: string[]): void {
   if (!value) return;
 
@@ -361,7 +406,8 @@ export function syncCommentEntitiesFromCollaboration(
     if (typeof raw.createdTime === 'number') patch.createdTime = raw.createdTime;
     // Tracked-change linkage
     if (typeof raw.trackedChange === 'boolean') patch.trackedChange = raw.trackedChange;
-    if (typeof raw.trackedChangeType === 'string') patch.trackedChangeType = raw.trackedChangeType as TrackChangeType;
+    const normalizedTrackedChangeType = normalizeTrackedChangeType(raw.trackedChangeType);
+    if (normalizedTrackedChangeType !== undefined) patch.trackedChangeType = normalizedTrackedChangeType;
     if (raw.trackedChangeType === null) patch.trackedChangeType = null;
     if (typeof raw.trackedChangeDisplayType === 'string') patch.trackedChangeDisplayType = raw.trackedChangeDisplayType;
     if (raw.trackedChangeDisplayType === null) patch.trackedChangeDisplayType = null;
@@ -411,6 +457,35 @@ function toNonEmptyString(value: unknown): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+function normalizeTrackedChangeType(value: unknown): TrackChangeType | undefined {
+  switch (toNonEmptyString(value)) {
+    case 'insert':
+    case 'trackInsert':
+      return 'insert';
+    case 'delete':
+    case 'trackDelete':
+      return 'delete';
+    case 'replacement':
+    case 'both':
+      return 'replacement';
+    case 'format':
+    case 'trackFormat':
+      return 'format';
+    default:
+      return undefined;
+  }
+}
+
+function normalizeTrackedChangeLink(
+  link: CommentTrackedChangeLink | null | undefined,
+): CommentTrackedChangeLink | null | undefined {
+  if (!link) return link;
+  return {
+    ...link,
+    trackedChangeType: normalizeTrackedChangeType(link.trackedChangeType),
+  };
+}
+
 export function toCommentInfo(
   entry: CommentEntityRecord,
   options: {
@@ -424,7 +499,7 @@ export function toCommentInfo(
   const status = options.status ?? (isCommentResolved(entry) ? 'resolved' : 'open');
   const trackedChangeLink =
     options.trackedChangeLink !== undefined
-      ? options.trackedChangeLink
+      ? normalizeTrackedChangeLink(options.trackedChangeLink)
       : entry.trackedChange === true ||
           entry.trackedChangeType != null ||
           entry.trackedChangeAnchorKey != null ||
@@ -432,7 +507,7 @@ export function toCommentInfo(
           entry.deletedText != null
         ? {
             trackedChange: true,
-            trackedChangeType: entry.trackedChangeType ?? undefined,
+            trackedChangeType: normalizeTrackedChangeType(entry.trackedChangeType),
             trackedChangeDisplayType: entry.trackedChangeDisplayType ?? null,
             trackedChangeStory: entry.trackedChangeStory ?? null,
             trackedChangeAnchorKey: entry.trackedChangeAnchorKey ?? null,

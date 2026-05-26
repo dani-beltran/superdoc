@@ -7,6 +7,7 @@ import {
   findCommentEntity,
   getCommentEntityStore,
   isCommentResolved,
+  reconcileCommentEntityStoreWithAnchors,
   removeCommentEntityTree,
   restoreStashedCommentEntityTree,
   stashRemovedCommentEntities,
@@ -150,6 +151,42 @@ describe('stashRemovedCommentEntities / restoreStashedCommentEntityTree', () => 
   it('returns empty when there is no stashed tree for the comment id', () => {
     const editor = makeEditorWithConverter();
     expect(restoreStashedCommentEntityTree(editor, 'missing')).toEqual([]);
+  });
+});
+
+describe('reconcileCommentEntityStoreWithAnchors', () => {
+  it('stashes a dangling open root thread when its anchor disappears and restores it when the anchor returns', () => {
+    const editor = makeEditorWithConverter([
+      { commentId: 'c1', commentText: 'Root' },
+      { commentId: 'c2', parentCommentId: 'c1', commentText: 'Reply' },
+    ]);
+
+    const firstPass = reconcileCommentEntityStoreWithAnchors(editor, []);
+    expect(firstPass.restored).toEqual([]);
+    expect(firstPass.removed.map((entry) => entry.commentId).sort()).toEqual(['c1', 'c2']);
+    expect(getCommentEntityStore(editor)).toEqual([]);
+
+    const secondPass = reconcileCommentEntityStoreWithAnchors(editor, ['c1']);
+    expect(secondPass.removed).toEqual([]);
+    expect(secondPass.restored.map((entry) => entry.commentId).sort()).toEqual(['c1', 'c2']);
+    expect(findCommentEntity(getCommentEntityStore(editor), 'c1')?.commentText).toBe('Root');
+    expect(findCommentEntity(getCommentEntityStore(editor), 'c2')?.commentText).toBe('Reply');
+  });
+
+  it('does not prune resolved or tracked-change-linked root comments when they are temporarily unanchored', () => {
+    const editor = makeEditorWithConverter([
+      { commentId: 'resolved-root', commentText: 'Resolved', isDone: true },
+      { commentId: 'tracked-root', commentText: 'Tracked', trackedChangeParentId: 'tc-1' },
+    ]);
+
+    const result = reconcileCommentEntityStoreWithAnchors(editor, []);
+
+    expect(result.removed).toEqual([]);
+    expect(
+      getCommentEntityStore(editor)
+        .map((entry) => entry.commentId)
+        .sort(),
+    ).toEqual(['resolved-root', 'tracked-root']);
   });
 });
 
@@ -353,6 +390,35 @@ describe('syncCommentEntitiesFromCollaboration (SD-3214)', () => {
       commentText: 'user-authored tracked comment',
       creatorName: 'A',
     });
+  });
+
+  it('normalizes legacy collaboration tracked change types before storing them', () => {
+    const editor = makeEditorWithConverter();
+    syncCommentEntitiesFromCollaboration(editor, [
+      {
+        commentId: 'track-insert',
+        commentText: 'insert comment',
+        trackedChange: true,
+        trackedChangeType: 'trackInsert',
+      },
+      {
+        commentId: 'replacement',
+        commentText: 'replacement comment',
+        trackedChange: true,
+        trackedChangeType: 'both',
+      },
+    ]);
+
+    const store = getCommentEntityStore(editor);
+    expect(findCommentEntity(store, 'track-insert')?.trackedChangeType).toBe('insert');
+    expect(findCommentEntity(store, 'replacement')?.trackedChangeType).toBe('replacement');
+
+    const insertInfo = toCommentInfo(findCommentEntity(store, 'track-insert')!);
+    const replacementInfo = toCommentInfo(findCommentEntity(store, 'replacement')!);
+    expect(insertInfo.trackedChangeType).toBe('insert');
+    expect(insertInfo.trackedChangeLink?.trackedChangeType).toBe('insert');
+    expect(replacementInfo.trackedChangeType).toBe('replacement');
+    expect(replacementInfo.trackedChangeLink?.trackedChangeType).toBe('replacement');
   });
 
   it('skips entries without a commentId', () => {

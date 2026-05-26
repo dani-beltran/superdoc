@@ -2,6 +2,55 @@ import { translateChildNodes } from '@converter/v2/exporter/helpers/index.js';
 import { generateParagraphProperties } from './generate-paragraph-properties.js';
 
 const isTrackedChangeWrapper = (el) => el?.name === 'w:ins' || el?.name === 'w:del';
+const stableStringify = (value) => JSON.stringify(value ?? null);
+
+const getMergeableTextRunParts = (element) => {
+  if (element?.name !== 'w:r' || !Array.isArray(element.elements) || element.elements.length === 0) return null;
+
+  const [first, second, ...rest] = element.elements;
+  if (rest.length > 0) return null;
+
+  const runProperties = first?.name === 'w:rPr' ? first : null;
+  const textNode = runProperties ? second : first;
+  if (textNode?.name !== 'w:t' || !Array.isArray(textNode.elements) || textNode.elements.length !== 1) return null;
+
+  const textChild = textNode.elements[0];
+  if (typeof textChild?.text !== 'string') return null;
+
+  return {
+    runProperties,
+    textNode,
+    textChild,
+  };
+};
+
+function mergeAdjacentFinalTextRuns(elements) {
+  if (!Array.isArray(elements) || elements.length < 2) return elements;
+
+  const result = [];
+
+  elements.forEach((element) => {
+    const previous = result[result.length - 1];
+    const previousParts = getMergeableTextRunParts(previous);
+    const currentParts = getMergeableTextRunParts(element);
+
+    const canMerge =
+      previousParts &&
+      currentParts &&
+      stableStringify(previous?.attributes) === stableStringify(element?.attributes) &&
+      stableStringify(previousParts.runProperties) === stableStringify(currentParts.runProperties) &&
+      stableStringify(previousParts.textNode?.attributes) === stableStringify(currentParts.textNode?.attributes);
+
+    if (!canMerge) {
+      result.push(element);
+      return;
+    }
+
+    previousParts.textChild.text += currentParts.textChild.text;
+  });
+
+  return result;
+}
 
 const getCommentReferenceNode = (el) => {
   if (el?.name !== 'w:r' || !Array.isArray(el.elements)) return null;
@@ -171,6 +220,10 @@ export function translateParagraphNode(params) {
 
   // Merge consecutive tracked changes with the same ID, including comment markers between them
   elements = mergeConsecutiveTrackedChanges(elements);
+
+  if (params.isFinalDoc) {
+    elements = mergeAdjacentFinalTextRuns(elements);
+  }
 
   // Replace current paragraph with content of html annotation
   const htmlAnnotationChild = elements.find((element) => element.name === 'htmlAnnotation');

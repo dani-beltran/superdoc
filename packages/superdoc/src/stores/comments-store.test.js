@@ -1642,6 +1642,95 @@ describe('comments-store', () => {
     expect(editorDispatch).toHaveBeenCalledWith(tr);
   });
 
+  it('replaces stale document threads immediately when a new file is loaded into the same document id', async () => {
+    const editorDispatch = vi.fn();
+    const tr = { setMeta: vi.fn() };
+    const editor = {
+      converter: { commentThreadingProfile: 'range-based' },
+      state: {},
+      view: { state: { tr }, dispatch: editorDispatch },
+      options: { documentId: 'doc-1' },
+    };
+
+    trackChangesHelpersMock.getTrackChanges.mockReturnValue([{ mark: { attrs: { id: 'tc-new' } } }]);
+    groupChangesMock.mockReturnValue([{ insertedMark: { mark: { attrs: { id: 'tc-new' } } } }]);
+
+    store.commentsList = [
+      {
+        commentId: 'tc-old',
+        trackedChange: true,
+        trackedChangeText: 'Old tracked text',
+        fileId: 'doc-1',
+      },
+      {
+        commentId: 'tc-old-reply',
+        parentCommentId: 'tc-old',
+        fileId: 'doc-1',
+      },
+      {
+        commentId: 'regular-old',
+        commentText: 'Old regular comment',
+        fileId: 'doc-1',
+      },
+    ];
+
+    store.processLoadedDocxComments({
+      superdoc: __mockSuperdoc,
+      editor,
+      comments: [
+        {
+          commentId: 'regular-new',
+          creatorName: 'Imported Author',
+          creatorEmail: 'imported@example.com',
+          createdTime: 123,
+          elements: [
+            {
+              type: 'paragraph',
+              content: [
+                {
+                  type: 'run',
+                  content: [
+                    {
+                      type: 'text',
+                      text: 'Replacement comment',
+                      attrs: {
+                        type: 'element',
+                        attributes: {},
+                      },
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      documentId: 'doc-1',
+      replacedFile: true,
+    });
+
+    expect(store.commentsList).toHaveLength(2);
+    expect(store.commentsList.find((comment) => comment.commentId === 'tc-old')).toBeUndefined();
+    expect(store.commentsList.find((comment) => comment.commentId === 'tc-old-reply')).toBeUndefined();
+    expect(store.commentsList.find((comment) => comment.commentId === 'regular-old')).toBeUndefined();
+    expect(store.commentsList).toEqual([
+      expect.objectContaining({
+        commentId: 'regular-new',
+        fileId: 'doc-1',
+        docxCommentJSON: expect.any(Array),
+      }),
+      expect.objectContaining({
+        commentId: 'tc-new',
+        trackedChange: true,
+        trackedChangeText: 'tracked-tc-new',
+        fileId: 'doc-1',
+      }),
+    ]);
+    expect(createOrUpdateTrackedChangeCommentMock).toHaveBeenCalledTimes(1);
+    expect(tr.setMeta).toHaveBeenCalledWith('CommentsPluginKey', { type: 'force' });
+    expect(editorDispatch).toHaveBeenCalledWith(tr);
+  });
+
   it('reopens resolved tracked-change comments when synced marks reappear', () => {
     const editorDispatch = vi.fn();
     const tr = { setMeta: vi.fn() };

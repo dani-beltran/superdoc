@@ -256,6 +256,20 @@ const findSegmentAcrossEmptyStructuralGap = (ctx, pos) => {
   return nearest;
 };
 
+const findAdjacentInsertedSegment = (ctx, pos) => {
+  const left = ctx.graph.segments.find(
+    (segment) => segment.side === SegmentSide.Inserted && segment.to === pos && isSameUserForRefinement(ctx, segment),
+  );
+  if (left) return left;
+
+  return (
+    ctx.graph.segments.find(
+      (segment) =>
+        segment.side === SegmentSide.Inserted && segment.from === pos && isSameUserForRefinement(ctx, segment),
+    ) ?? null
+  );
+};
+
 const isEmptyStructuralGap = (ctx, from, to) => {
   if (to <= from) return false;
   if (!sharesTextblock(ctx.tr.doc, from, to)) return false;
@@ -395,6 +409,7 @@ const compileTextInsert = (ctx, intent) => {
   const boundaryAdjacent =
     !overlapParent && containing && (containing.to === at || containing.from === at) ? containing : null;
   const emptyGapAdjacent = !overlapParent && !boundaryAdjacent ? findSegmentAcrossEmptyStructuralGap(ctx, at) : null;
+  const exactAdjacentInserted = findAdjacentInsertedSegment(ctx, at);
 
   // Same-user refinement targets: own insertion that strictly contains `at`,
   // an own-insertion edge we are adjacent to, OR the same edge separated only
@@ -404,8 +419,9 @@ const compileTextInsert = (ctx, intent) => {
   // matching the legacy `findTrackedMarkBetween({ authorEmail: '' })`
   // behavior. Permission and overlap-parent decisions still go through the
   // high-confidence `classifySegment` gate.
-  const refinementTarget =
-    overlapParent && overlapParent.side === SegmentSide.Inserted && isSameUserForRefinement(ctx, overlapParent)
+  const refinementTarget = exactAdjacentInserted
+    ? exactAdjacentInserted
+    : overlapParent && overlapParent.side === SegmentSide.Inserted && isSameUserForRefinement(ctx, overlapParent)
       ? overlapParent
       : boundaryAdjacent &&
           boundaryAdjacent.side === SegmentSide.Inserted &&

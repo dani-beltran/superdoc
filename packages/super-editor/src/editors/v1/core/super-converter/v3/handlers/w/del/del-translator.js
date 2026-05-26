@@ -99,6 +99,11 @@ function decode(params) {
   node.marks = marks.filter((m) => m.type !== 'trackDelete');
 
   const translatedTextNode = exportSchemaToJson({ ...params, node });
+
+  if (params.isFinalDoc) {
+    return null;
+  }
+
   // ECMA-376 renames w:t → w:delText inside <w:del>. Other inline content —
   // w:noBreakHyphen, w:tab, w:br, etc. — stays as-is; the deletion is
   // conveyed by the <w:del> wrapper alone. Guard the rename so non-text

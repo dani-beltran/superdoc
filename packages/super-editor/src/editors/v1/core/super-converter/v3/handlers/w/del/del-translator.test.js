@@ -197,6 +197,38 @@ describe('w:del translator', () => {
       expect(result.attributes['w:id']).toBe('456');
     });
 
+    it('drops deleted content entirely in final-doc export mode', () => {
+      const mockTrackedMark = {
+        type: 'trackDelete',
+        attrs: {
+          id: '123',
+          sourceId: '',
+          author: 'Test',
+          authorEmail: 'test@example.com',
+          date: '2025-10-09T12:00:00Z',
+        },
+      };
+
+      exportSchemaToJson.mockReturnValue({ elements: [{ name: 'w:t', text: 'deleted text' }] });
+
+      const node = {
+        type: 'text',
+        text: 'deleted text',
+        marks: [mockTrackedMark, { type: 'italic', attrs: { value: true } }],
+      };
+
+      const result = config.decode({ node, isFinalDoc: true });
+
+      expect(result).toBeNull();
+      expect(exportSchemaToJson).toHaveBeenCalledWith(
+        expect.objectContaining({
+          node: expect.objectContaining({
+            marks: [{ type: 'italic', attrs: { value: true } }],
+          }),
+        }),
+      );
+    });
+
     it('returns null if node is missing or invalid', () => {
       expect(config.decode({ node: null })).toBeNull();
       expect(config.decode({ node: {} })).toBeNull();

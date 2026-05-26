@@ -18,6 +18,8 @@ import { Z_ORDER_RELATIVE_HEIGHT_MAX, Z_ORDER_RELATIVE_HEIGHT_MIN } from '../ima
 
 type JsonSchema = Record<string, unknown>;
 
+const trackChangeTypeValues = ['insert', 'delete', 'replacement', 'format'] as const;
+
 /** JSON Schema descriptors for a single operation's input, output, and result variants. */
 export interface OperationSchemaSet {
   /** Schema describing the operation's accepted input payload. */
@@ -283,7 +285,7 @@ const SHARED_DEFS: Record<string, JsonSchema> = {
   ),
   CommentTrackedChangeLink: objectSchema({
     trackedChange: { const: true },
-    trackedChangeType: { enum: ['insert', 'delete', 'format'] },
+    trackedChangeType: { enum: [...trackChangeTypeValues] },
     trackedChangeDisplayType: { type: ['string', 'null'] },
     trackedChangeStory: { oneOf: [ref('StoryLocator'), { type: 'null' }] },
     trackedChangeAnchorKey: { type: ['string', 'null'] },
@@ -1493,7 +1495,7 @@ const commentInfoSchema = objectSchema(
     creatorName: { type: 'string' },
     creatorEmail: { type: 'string' },
     trackedChange: { type: 'boolean' },
-    trackedChangeType: { enum: ['insert', 'delete', 'format'] },
+    trackedChangeType: { enum: [...trackChangeTypeValues] },
     trackedChangeDisplayType: { type: ['string', 'null'] },
     trackedChangeStory: { oneOf: [storyLocatorSchema, { type: 'null' }] },
     trackedChangeAnchorKey: { type: ['string', 'null'] },
@@ -1518,7 +1520,7 @@ const commentDomainItemSchema = discoveryItemSchema(
     creatorName: { type: 'string' },
     creatorEmail: { type: 'string' },
     trackedChange: { type: 'boolean' },
-    trackedChangeType: { enum: ['insert', 'delete', 'format'] },
+    trackedChangeType: { enum: [...trackChangeTypeValues] },
     trackedChangeDisplayType: { type: ['string', 'null'] },
     trackedChangeStory: { oneOf: [storyLocatorSchema, { type: 'null' }] },
     trackedChangeAnchorKey: { type: ['string', 'null'] },
@@ -1557,7 +1559,7 @@ const trackChangeInfoSchema = objectSchema(
   {
     address: trackedChangeAddressSchema,
     id: { type: 'string' },
-    type: { enum: ['insert', 'delete', 'replacement', 'format'] },
+    type: { enum: [...trackChangeTypeValues] },
     grouping: { enum: ['standalone', 'replacement-pair', 'unknown'] },
     pairedWithChangeId: { type: ['string', 'null'] },
     wordRevisionIds: trackChangeWordRevisionIdsSchema,
@@ -1575,7 +1577,7 @@ const trackChangeInfoSchema = objectSchema(
 const trackChangeDomainItemSchema = discoveryItemSchema(
   {
     address: trackedChangeAddressSchema,
-    type: { enum: ['insert', 'delete', 'replacement', 'format'] },
+    type: { enum: [...trackChangeTypeValues] },
     grouping: { enum: ['standalone', 'replacement-pair', 'unknown'] },
     pairedWithChangeId: { type: ['string', 'null'] },
     wordRevisionIds: trackChangeWordRevisionIdsSchema,
@@ -3165,7 +3167,7 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
               },
               type: {
                 type: 'string',
-                enum: ['insert', 'delete', 'replacement', 'format'],
+                enum: [...trackChangeTypeValues],
                 description:
                   "Entity-level type. In paired replacement mode, a delete+insert pair shares one entity with type 'replacement'; per-half type lives on block.textSpans[].trackedChanges[].",
               },
@@ -5025,7 +5027,7 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
       limit: { type: 'integer', description: 'Maximum number of tracked changes to return.' },
       offset: { type: 'integer', description: 'Number of tracked changes to skip for pagination.' },
       type: {
-        enum: ['insert', 'delete', 'replacement', 'format'],
+        enum: [...trackChangeTypeValues],
         description: "Filter by change type: 'insert', 'delete', 'replacement', or 'format'.",
       },
       in: {

@@ -215,6 +215,39 @@ describe('w:ins translator', () => {
       expect(result.attributes['w:id']).toBe('456');
     });
 
+    it('returns accepted content directly in final-doc export mode', () => {
+      const mockTrackedMark = {
+        type: 'trackInsert',
+        attrs: {
+          id: '123',
+          sourceId: '',
+          author: 'Test',
+          authorEmail: 'test@example.com',
+          date: '2025-10-09T12:00:00Z',
+        },
+      };
+      const mockTranslatedNode = { name: 'w:r', elements: [{ name: 'w:t', text: 'added text' }] };
+
+      exportSchemaToJson.mockReturnValue(mockTranslatedNode);
+
+      const node = {
+        type: 'text',
+        text: 'added text',
+        marks: [mockTrackedMark, { type: 'bold' }],
+      };
+
+      const result = config.decode({ node, isFinalDoc: true });
+
+      expect(result).toEqual(mockTranslatedNode);
+      expect(exportSchemaToJson).toHaveBeenCalledWith(
+        expect.objectContaining({
+          node: expect.objectContaining({
+            marks: [{ type: 'bold' }],
+          }),
+        }),
+      );
+    });
+
     it('allocates Word ids in the current OOXML part namespace under overlap', () => {
       const mockTrackedMark = {
         type: 'trackInsert',

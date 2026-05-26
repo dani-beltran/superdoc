@@ -373,6 +373,7 @@ const onCommentsLoaded = ({ editor, comments, replacedFile }) => {
         editor,
         comments,
         documentId: editor.options.documentId,
+        replacedFile,
       });
     });
   }

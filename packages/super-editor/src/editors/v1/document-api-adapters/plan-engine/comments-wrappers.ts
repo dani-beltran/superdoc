@@ -40,7 +40,7 @@ import { TextSelection } from 'prosemirror-state';
 import { v4 as uuidv4 } from 'uuid';
 import { DocumentApiAdapterError } from '../errors.js';
 import { requireEditorCommand } from '../helpers/mutation-helpers.js';
-import { clearIndexCache } from '../helpers/index-cache.js';
+import { clearIndexCache, getBlockIndex } from '../helpers/index-cache.js';
 import { checkRevision, getRevision } from './revision-tracker.js';
 import { resolveTextTarget, paginate, validatePaginationInput } from '../helpers/adapter-utils.js';
 import { executeDomainCommand } from './plan-wrappers.js';
@@ -709,6 +709,35 @@ type CommentTargetResolution =
   | { ok: true; value: ResolvedCommentTarget }
   | { ok: false; failure: Extract<Receipt, { success: false }>['failure'] };
 
+function validateCommentTargetSegmentOrder(
+  editor: Editor,
+  segments: readonly TextSegment[],
+): { ok: true } | { ok: false; reason: 'document-order' | 'contiguous-blocks' } {
+  const orderedCandidates = [...getBlockIndex(editor).candidates].sort((left, right) => left.pos - right.pos);
+  const orderByBlockId = new Map<string, number>();
+
+  for (let i = 0; i < orderedCandidates.length; i += 1) {
+    const candidate = orderedCandidates[i];
+    if (!orderByBlockId.has(candidate.nodeId)) {
+      orderByBlockId.set(candidate.nodeId, i);
+    }
+  }
+
+  let lastOrder = -1;
+  for (const segment of segments) {
+    const currentOrder = orderByBlockId.get(segment.blockId);
+    if (currentOrder === undefined || currentOrder <= lastOrder) {
+      return { ok: false, reason: 'document-order' };
+    }
+    if (lastOrder >= 0 && currentOrder !== lastOrder + 1) {
+      return { ok: false, reason: 'contiguous-blocks' };
+    }
+    lastOrder = currentOrder;
+  }
+
+  return { ok: true };
+}
+
 function buildTrackedChangeEntityFields(snapshot: TrackedChangeSnapshot | null): Record<string, unknown> {
   if (!snapshot) {
     return {
@@ -965,7 +994,23 @@ function resolveCommentTarget(editor: Editor, target: CommentTarget): CommentTar
     });
   }
 
-  const docForGap = editor.state?.doc;
+  if (segments.length > 1) {
+    const segmentOrder = validateCommentTargetSegmentOrder(editor, segments);
+    if (segmentOrder.ok === false) {
+      return {
+        ok: false,
+        failure: {
+          code: 'INVALID_TARGET',
+          message:
+            segmentOrder.reason === 'document-order'
+              ? 'Comment target segments must be in document order.'
+              : 'Comment target segments must cover contiguous blocks in document order.',
+          details: { target },
+        },
+      };
+    }
+  }
+
   for (let i = 1; i < resolvedSegments.length; i += 1) {
     const prev = resolvedSegments[i - 1]!;
     const curr = resolvedSegments[i]!;
@@ -975,18 +1020,6 @@ function resolveCommentTarget(editor: Editor, target: CommentTarget): CommentTar
         failure: {
           code: 'INVALID_TARGET',
           message: 'Comment target segments must be in document order.',
-          details: { target },
-        },
-      };
-    }
-    const gap = docForGap ? docForGap.textBetween(prev.to, curr.from, '', () => '\u0001') : '';
-    if (gap.length > 0) {
-      return {
-        ok: false,
-        failure: {
-          code: 'INVALID_TARGET',
-          message:
-            'Comment target segments must be contiguous — non-selected text or atoms between segments is not supported.',
           details: { target },
         },
       };
@@ -1022,10 +1055,11 @@ function addCommentHandler(
   options?: RevisionGuardOptions,
 ): CommentsCreateReceipt {
   // The target can be either a single-block TextAddress or a multi-segment
-  // TextTarget. For a TextTarget, resolve each segment and require they
-  // cover a contiguous PM range in document order — out-of-order or
-  // disjoint segments would otherwise silently anchor the comment over
-  // intervening text the caller never selected.
+  // TextTarget. For a TextTarget, resolve each segment and require the
+  // segments to walk contiguous blocks in document order. The resulting
+  // comment span intentionally covers the full PM range between the first
+  // and last segment, matching SelectionTarget / Word-style multi-block
+  // anchors even when the boundary blocks contribute unselected text.
   const target = input.target;
   if (!target) {
     return {

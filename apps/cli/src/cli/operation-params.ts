@@ -56,6 +56,13 @@ const FORCE_PARAM: CliOperationParamSpec = {
   type: 'boolean',
   description: 'Bypass confirmation checks.',
 };
+const SAVE_MODE_PARAM: CliOperationParamSpec = {
+  name: 'mode',
+  kind: 'flag',
+  type: 'string',
+  schema: { type: 'string', enum: ['review-preserving', 'final'] } as CliTypeSpec,
+  description: 'Save mode: review-preserving keeps revision markup; final exports accepted content.',
+};
 const DRY_RUN_PARAM: CliOperationParamSpec = {
   name: 'dryRun',
   kind: 'flag',
@@ -1088,6 +1095,7 @@ const CLI_ONLY_METADATA: Record<CliOnlyOperationId, CliOperationMetadata> = {
     docRequirement: 'none',
     params: [
       SESSION_PARAM,
+      SAVE_MODE_PARAM,
       OUT_PARAM,
       FORCE_PARAM,
       { name: 'inPlace', kind: 'flag', flag: 'in-place', type: 'boolean' },

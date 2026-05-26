@@ -240,6 +240,51 @@ describe('document-api contract catalog', () => {
     expect(listVariants.some((variant) => variant.type === 'null')).toBe(true);
   });
 
+  it('publishes replacement in comment tracked-change enums for get/list and link defs', () => {
+    const schemas = buildInternalContractSchemas();
+    const commentInfoSchema = schemas.operations['comments.get'].output as {
+      properties?: {
+        trackedChangeType?: {
+          enum?: string[];
+        };
+      };
+    };
+    const commentsListSchema = schemas.operations['comments.list'].output as {
+      properties?: {
+        items?: {
+          items?: {
+            properties?: {
+              trackedChangeType?: {
+                enum?: string[];
+              };
+            };
+          };
+        };
+      };
+    };
+    const defs = schemas.$defs as Record<
+      string,
+      {
+        properties?: Record<
+          string,
+          {
+            enum?: string[];
+          }
+        >;
+      }
+    >;
+
+    expect(commentInfoSchema.properties?.trackedChangeType?.enum).toEqual(
+      expect.arrayContaining(['insert', 'delete', 'replacement', 'format']),
+    );
+    expect(commentsListSchema.properties?.items?.items?.properties?.trackedChangeType?.enum).toEqual(
+      expect.arrayContaining(['insert', 'delete', 'replacement', 'format']),
+    );
+    expect(defs.CommentTrackedChangeLink?.properties?.trackedChangeType?.enum).toEqual(
+      expect.arrayContaining(['insert', 'delete', 'replacement', 'format']),
+    );
+  });
+
   it('requires id on comments.create success receipts', () => {
     const schemas = buildInternalContractSchemas();
     const createOutputSchema = schemas.operations['comments.create'].output as {
