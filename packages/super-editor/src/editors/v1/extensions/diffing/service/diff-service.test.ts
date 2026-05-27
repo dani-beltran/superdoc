@@ -575,3 +575,79 @@ describe('diff-service tracked apply', () => {
     }
   });
 });
+
+// SD-3279: cross-editor diff handoff. A diff produced by one editor instance
+// must be applicable to a second editor instance that holds the same document
+// content. Previously the fingerprint included session-local block IDs, so
+// the apply would throw PRECONDITION_FAILED even for identical content.
+describe('diff-service cross-editor handoff (SD-3279)', () => {
+  it('applies a diff produced by one editor to a second editor with the same content', async () => {
+    const editorMain = await openBlankDocxWithText('Base document.');
+    const editorPreview = await openBlankDocxWithText('Base document.');
+    const targetEditor = await openBlankDocxWithText('Base document. Renewal requires written approval.');
+
+    try {
+      const snapshot = captureSnapshot(targetEditor);
+      const diff = compareToSnapshot(editorMain, snapshot);
+
+      const { tr } = applyDiffPayload(editorPreview, diff, { changeMode: 'tracked' });
+      editorPreview.dispatch(tr);
+
+      expect(editorPreview.state.doc.textContent).toBe(targetEditor.state.doc.textContent);
+      expect(getTrackChanges(editorPreview.state).length).toBeGreaterThan(0);
+    } finally {
+      editorMain.destroy?.();
+      editorPreview.destroy?.();
+      targetEditor.destroy?.();
+    }
+  });
+
+  it('keeps the same-editor capture/compare/apply path working (regression guard)', async () => {
+    const editor = await openBlankDocxWithText('Base document.');
+    const targetEditor = await openBlankDocxWithText('Base document. Renewal.');
+
+    try {
+      const snapshot = captureSnapshot(targetEditor);
+      const diff = compareToSnapshot(editor, snapshot);
+      const { tr } = applyDiffPayload(editor, diff, { changeMode: 'tracked' });
+      editor.dispatch(tr);
+
+      expect(editor.state.doc.textContent).toBe(targetEditor.state.doc.textContent);
+      expect(getTrackChanges(editor.state).length).toBeGreaterThan(0);
+    } finally {
+      editor.destroy?.();
+      targetEditor.destroy?.();
+    }
+  });
+
+  // Customer flow: main editor mutates → exports current state → preview loads
+  // the exported DOCX → applies the diff. This exercises the full converter
+  // round-trip. Stripping sdBlockId / sdBlockRev from the fingerprint (this
+  // fix) is necessary but not sufficient: a second canonical-state divergence
+  // is introduced during export → re-import that still trips the fingerprint
+  // check. Tracked as a follow-up; the cross-editor same-blob path above is
+  // fixed by this change.
+  it('exposes the known export → reimport fingerprint divergence (regression marker)', async () => {
+    const editorMain = await openBlankDocxWithText('Base document.');
+    const targetEditor = await openBlankDocxWithText('Base document. Renewal requires written approval.');
+
+    let editorPreview: Editor | undefined;
+    try {
+      const snapshot = captureSnapshot(targetEditor);
+      const diff = compareToSnapshot(editorMain, snapshot);
+
+      const exported = await editorMain.exportDocument();
+      editorPreview = await reopenExportedDocument(exported);
+
+      // Expected to throw today; flip this assertion to a success expectation
+      // once the export/reimport canonical-state divergence is resolved.
+      expect(() => applyDiffPayload(editorPreview!, diff, { changeMode: 'tracked' })).toThrowError(
+        /fingerprint mismatch/i,
+      );
+    } finally {
+      editorPreview?.destroy?.();
+      editorMain.destroy?.();
+      targetEditor.destroy?.();
+    }
+  });
+});
