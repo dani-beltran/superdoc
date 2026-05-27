@@ -146,14 +146,16 @@ what an actual consumer would see — not the workspace source.
 | `package-shape-gate.mjs` | External package-shape linters (publint + attw) against the packed tarball. | Catches condition ordering, masquerading exports, missing field declarations. |
 | `check-root-classification-closure.mjs` | Asserts no `supported-root` or `legacy-root` export references an `internal-candidate` symbol in its public declared type. | Closure rule from SD-3212. |
 | `check-public-method-coverage.mjs` | Strict-zero obligation gate over public `SuperDoc` methods + getters. For each member the AST computes which obligations are meaningful (`parameters`, `returns`, or `call`); the gate fails on any unmet obligation. No grandfathered debt snapshot, no `--write`. Catches the `search(text: string)` regression class — call sites do NOT satisfy `parameters`/`returns` on their own. | Allowlist at `public-method-coverage-allowlist.cjs` is the only escape hatch (intentionally non-consumer-callable members; each entry validated: key must match a real member, value must be a non-empty reason). |
+| `apps/docs/__tests__/doctest-types.ts` | Docs snippet type-check (SD-673). Extracts "Full Example" code blocks from `apps/docs/editor/superdoc/**` (JS + TS fences) and runs `tsc --noEmit --strict` (with `allowJs + checkJs` for JS) against `packages/superdoc/dist`. Catches drift between docs examples and the typed public surface — the bug class where `onReady: (superdoc) =>` ships in docs even though the typed callback param is `{ superdoc }`. Companion to the runtime doctest (`apps/docs/__tests__/doctest.test.ts`), which extracts the `onReady` body and runs it against a mocked host — so it would never catch the destructure bug. | Runs as the last wrapper stage of `check:public:superdoc`. Reuses the existing `extractExamples()` from `apps/docs/__tests__/lib/extract.ts`. Placeholder identifiers (`yourFile`, `cleanup`, etc.) are stubbed via a shared ambient `.d.ts` written into the temp project. |
 
-Six of these run as wrapper stages of `check:public:superdoc`.
+Seven of these run as wrapper stages of `check:public:superdoc`.
 `public-method-coverage` runs alongside the cheap policy gates
 (`contract-tiers-test`, `contract-tiers`, `jsdoc-ratchet`,
 `jsdoc-hygiene-ts-test`, `jsdoc-hygiene-ts`) before `build`. The other
-five run after `build`:
+six run after `build`:
 `consumer-typecheck-matrix`, `deep-type-audit-supported-root`,
-`package-shape`, `export-snapshots`, `root-classification-closure`.
+`package-shape`, `export-snapshots`, `root-classification-closure`,
+`docs-snippet-typecheck`.
 `consumer-typecheck-matrix` packs `superdoc.tgz` and installs it into
 the consumer fixture. The rest reuse what matrix produced:
 `deep-type-audit-supported-root`, `export-snapshots`, and
