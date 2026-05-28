@@ -693,6 +693,11 @@ const SDT_CONTAINER_STYLES = `
   z-index: 10;
 }
 
+.superdoc-structured-content-inline[data-contains-inline-image='true']:not([data-appearance='hidden']) {
+  display: inline-block;
+  vertical-align: top;
+}
+
 /* Hover effect for inline structured content */
 .superdoc-structured-content-inline:not(.ProseMirror-selectednode):hover {
   background-color: var(--sd-content-controls-inline-hover-bg, #f2f2f2);

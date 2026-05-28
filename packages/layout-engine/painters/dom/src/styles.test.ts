@@ -88,6 +88,22 @@ describe('ensureSdtContainerStyles', () => {
     expect(emptyRule).not.toContain('vertical-align');
   });
 
+  it('promotes only image-bearing inline SDT wrappers to inline-block geometry', () => {
+    ensureSdtContainerStyles(document);
+
+    const styleEl = document.querySelector('[data-superdoc-sdt-container-styles="true"]');
+    const cssText = styleEl?.textContent ?? '';
+    const baseInlineRule = cssText.match(/\.superdoc-structured-content-inline\s*\{([^}]*)\}/)?.[1] ?? '';
+    const imageInlineRule =
+      cssText.match(
+        /\.superdoc-structured-content-inline\[data-contains-inline-image='true'\]:not\(\[data-appearance='hidden'\]\)\s*\{([^}]*)\}/,
+      )?.[1] ?? '';
+
+    expect(baseInlineRule).toContain('display: inline;');
+    expect(imageInlineRule).toContain('display: inline-block;');
+    expect(imageInlineRule).toContain('vertical-align: top;');
+  });
+
   it('uses the same label box model for block and inline SDTs', () => {
     ensureSdtContainerStyles(document);
 
