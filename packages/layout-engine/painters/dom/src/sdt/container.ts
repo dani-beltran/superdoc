@@ -137,6 +137,7 @@ export function applySdtContainerChrome(
 
   if (boundaryOptions?.paddingBottomOverride != null && boundaryOptions.paddingBottomOverride > 0) {
     container.style.paddingBottom = `${boundaryOptions.paddingBottomOverride}px`;
+    container.style.setProperty('--sd-sdt-chrome-bottom-extension', `${boundaryOptions.paddingBottomOverride}px`);
   }
 
   const shouldShowLabel = boundaryOptions?.showLabel ?? isStart;

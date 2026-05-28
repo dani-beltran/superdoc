@@ -201,10 +201,13 @@ export const renderParagraphContent = (params: RenderParagraphContentParams): Re
     applyBlockSdtChromeBounds(
       frameEl,
       block,
+      measure,
       getRenderedContentLines(params),
       width,
       lineIndexOffset + localStartLine,
+      continuesFromPrev,
       continuesOnNext,
+      sdtBoundary,
       resolvedContent,
     );
   }
@@ -251,14 +254,22 @@ const getRenderedContentLines = (params: RenderParagraphContentParams): Line[] =
 const applyBlockSdtChromeBounds = (
   element: HTMLElement,
   block: ParagraphBlock,
+  measure: ParagraphMeasure,
   lines: Line[],
   fragmentWidth: number,
   lineIndexBase: number,
+  fragmentContinuesFromPrev: boolean | undefined,
   fragmentContinuesOnNext: boolean | undefined,
+  sdtBoundary: SdtBoundaryOptions | undefined,
   content?: ResolvedParagraphContent,
 ): void => {
   const sdt = getSdtContainerMetadata(block.attrs?.sdt, block.attrs?.containerSdt);
   if (!isStructuredContentMetadata(sdt) || sdt.scope !== 'block') return;
+  if (fragmentContinuesFromPrev || fragmentContinuesOnNext) return;
+  if (sdtBoundary && ((sdtBoundary.isStart ?? true) === false || (sdtBoundary.isEnd ?? true) === false)) return;
+
+  const sourceLineCount = Math.max(measure.lines?.length ?? 0, content?.lines.length ?? 0, lines.length);
+  if (sourceLineCount > 1) return;
 
   const expandedBlock = { ...block, runs: expandRunsForInlineNewlines(block.runs) };
   let contentLeft = Number.POSITIVE_INFINITY;
@@ -514,9 +525,7 @@ const renderMeasuredLines = (
   } = resolveMarkerIndent(paraIndent, isRtl);
   const wordLayoutIndentLeft = (wordLayout as { indentLeftPx?: number } | undefined)?.indentLeftPx;
   const tableMarkerIndentLeft =
-    measure.marker?.indentLeft ??
-    wordLayoutIndentLeft ??
-    (typeof paraIndent?.left === 'number' ? paraIndent.left : 0);
+    measure.marker?.indentLeft ?? wordLayoutIndentLeft ?? (typeof paraIndent?.left === 'number' ? paraIndent.left : 0);
   const suppressFirstLineIndent = block.attrs?.suppressFirstLineIndent === true;
   const firstLineOffset = suppressFirstLineIndent ? 0 : (paraIndent?.firstLine ?? 0) - (paraIndent?.hanging ?? 0);
   const expandedRunsForBlock = containerKind === 'body-fragment' ? expandRunsForInlineNewlines(block.runs) : undefined;

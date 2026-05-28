@@ -13231,6 +13231,79 @@ describe('applyRunDataAttributes', () => {
         expect(fragment.style.getPropertyValue('--sd-sdt-chrome-width')).toBe('96px');
       });
 
+      it('keeps multiline block SDT chrome at full fragment width', () => {
+        const multilineSdtBlock: FlowBlock = {
+          kind: 'paragraph',
+          id: 'block-sdt-multiline',
+          runs: [{ text: 'First line second line', fontFamily: 'Arial', fontSize: 16, pmStart: 0, pmEnd: 22 }],
+          attrs: {
+            sdt: {
+              type: 'structuredContent',
+              scope: 'block',
+              id: 'scb-multiline',
+              alias: 'Multiline Control',
+            },
+          },
+        };
+
+        const multilineSdtMeasure: Measure = {
+          kind: 'paragraph',
+          lines: [
+            {
+              fromRun: 0,
+              fromChar: 0,
+              toRun: 0,
+              toChar: 10,
+              width: 80,
+              ascent: 12,
+              descent: 4,
+              lineHeight: 20,
+            },
+            {
+              fromRun: 0,
+              fromChar: 11,
+              toRun: 0,
+              toChar: 22,
+              width: 96,
+              ascent: 12,
+              descent: 4,
+              lineHeight: 20,
+            },
+          ],
+          totalHeight: 40,
+        };
+
+        const multilineSdtLayout: Layout = {
+          pageSize: { w: 400, h: 500 },
+          pages: [
+            {
+              number: 1,
+              fragments: [
+                {
+                  kind: 'para',
+                  blockId: 'block-sdt-multiline',
+                  fromLine: 0,
+                  toLine: 2,
+                  x: 20,
+                  y: 30,
+                  width: 320,
+                  pmStart: 0,
+                  pmEnd: 22,
+                },
+              ],
+            },
+          ],
+        };
+
+        const painter = createTestPainter({ blocks: [multilineSdtBlock], measures: [multilineSdtMeasure] });
+        painter.paint(multilineSdtLayout, mount);
+
+        const fragment = mount.querySelector('.superdoc-fragment') as HTMLElement;
+        expect(fragment.style.width).toBe('320px');
+        expect(fragment.style.getPropertyValue('--sd-sdt-chrome-left')).toBe('');
+        expect(fragment.style.getPropertyValue('--sd-sdt-chrome-width')).toBe('');
+      });
+
       it('expands block SDT chrome to justified line width', () => {
         const justifiedSdtBlock: FlowBlock = {
           kind: 'paragraph',
@@ -13370,7 +13443,7 @@ describe('applyRunDataAttributes', () => {
         expect(fragment.style.getPropertyValue('--sd-sdt-chrome-width')).toBe('96px');
       });
 
-      it('uses paragraph-global line index for block SDT chrome on continuation fragments', () => {
+      it('keeps continuation fragment block SDT chrome at full fragment width', () => {
         const continuedSdtBlock: FlowBlock = {
           kind: 'paragraph',
           id: 'block-sdt-continued',
@@ -13470,8 +13543,8 @@ describe('applyRunDataAttributes', () => {
 
         const paintedFragment = mount.querySelector('.superdoc-fragment') as HTMLElement;
         expect(paintedFragment.style.width).toBe('320px');
-        expect(paintedFragment.style.getPropertyValue('--sd-sdt-chrome-left')).toBe('40px');
-        expect(paintedFragment.style.getPropertyValue('--sd-sdt-chrome-width')).toBe('96px');
+        expect(paintedFragment.style.getPropertyValue('--sd-sdt-chrome-left')).toBe('');
+        expect(paintedFragment.style.getPropertyValue('--sd-sdt-chrome-width')).toBe('');
       });
 
       it('limits block SDT chrome to inline image content width', () => {
@@ -13801,10 +13874,21 @@ describe('applyRunDataAttributes', () => {
 
         painter.paint(initialLayout, mount);
 
+        const initialA = mount.querySelector('[data-block-id="sdt-para-a"]') as HTMLElement;
+        const initialB = mount.querySelector('[data-block-id="sdt-para-b"]') as HTMLElement;
         const initialC = mount.querySelector('[data-block-id="sdt-para-c"]') as HTMLElement;
+        expect(initialA).toBeTruthy();
+        expect(initialB).toBeTruthy();
         expect(initialC).toBeTruthy();
+        expect(initialA.dataset.sdtContainerStart).toBe('true');
+        expect(initialA.dataset.sdtContainerEnd).toBe('false');
+        expect(initialB.dataset.sdtContainerStart).toBe('false');
+        expect(initialB.dataset.sdtContainerEnd).toBe('false');
         expect(initialC.dataset.sdtContainerStart).toBe('false');
         expect(initialC.dataset.sdtContainerEnd).toBe('true');
+        expect(initialA.style.getPropertyValue('--sd-sdt-chrome-width')).toBe('');
+        expect(initialB.style.getPropertyValue('--sd-sdt-chrome-width')).toBe('');
+        expect(initialC.style.getPropertyValue('--sd-sdt-chrome-width')).toBe('');
 
         const paraD = buildParagraph('sdt-para-d', 'Delta', 17);
         const updatedLayout: Layout = {
@@ -13836,6 +13920,8 @@ describe('applyRunDataAttributes', () => {
         expect(updatedC.dataset.sdtContainerEnd).toBe('false');
         expect(updatedD.dataset.sdtContainerStart).toBe('false');
         expect(updatedD.dataset.sdtContainerEnd).toBe('true');
+        expect(updatedC.style.getPropertyValue('--sd-sdt-chrome-width')).toBe('');
+        expect(updatedD.style.getPropertyValue('--sd-sdt-chrome-width')).toBe('');
       });
 
       it('keeps table fragments within block SDT boundaries', () => {

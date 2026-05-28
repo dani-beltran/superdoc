@@ -529,6 +529,7 @@ const SDT_CONTAINER_STYLES = `
   position: relative;
   --sd-sdt-chrome-left: 0px;
   --sd-sdt-chrome-width: 100%;
+  --sd-sdt-chrome-bottom-extension: 0px;
 }
 
 .superdoc-structured-content-block::before {
@@ -536,7 +537,7 @@ const SDT_CONTAINER_STYLES = `
   position: absolute;
   left: var(--sd-sdt-chrome-left, 0px);
   top: 0;
-  bottom: 0;
+  bottom: calc(0px - var(--sd-sdt-chrome-bottom-extension, 0px));
   width: var(--sd-sdt-chrome-width, 100%);
   border-radius: inherit;
   box-sizing: border-box;
@@ -548,7 +549,7 @@ const SDT_CONTAINER_STYLES = `
   position: absolute;
   left: var(--sd-sdt-chrome-left, 0px);
   top: 0;
-  bottom: 0;
+  bottom: calc(0px - var(--sd-sdt-chrome-bottom-extension, 0px));
   width: var(--sd-sdt-chrome-width, 100%);
   border: 1px solid transparent;
   border-radius: inherit;
@@ -672,16 +673,6 @@ const SDT_CONTAINER_STYLES = `
 .superdoc-structured-content-block:not([data-sdt-container-start="true"]):not([data-sdt-container-end="true"])::after {
   border-top: none;
   border-bottom: none;
-}
-
-/* Collapse double borders between adjacent SDT blocks */
-.superdoc-structured-content-block + .superdoc-structured-content-block {
-  border-top-left-radius: 0;
-  border-top-right-radius: 0;
-}
-
-.superdoc-structured-content-block + .superdoc-structured-content-block::after {
-  border-top: none;
 }
 
 /* Structured Content Inline - Inline wrapper with blue border */

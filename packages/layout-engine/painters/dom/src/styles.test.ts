@@ -42,12 +42,30 @@ describe('ensureSdtContainerStyles', () => {
     expect(blockRule).not.toContain('border:');
     expect(blockRule).toContain('--sd-sdt-chrome-left: 0px;');
     expect(blockRule).toContain('--sd-sdt-chrome-width: 100%;');
+    expect(blockRule).toContain('--sd-sdt-chrome-bottom-extension: 0px;');
     expect(backgroundRule).toContain('width: var(--sd-sdt-chrome-width, 100%);');
+    expect(backgroundRule).toContain('bottom: calc(0px - var(--sd-sdt-chrome-bottom-extension, 0px));');
     expect(hoverRule).toContain('background-color: var(--sd-content-controls-block-hover-bg, #f2f2f2);');
     expect(chromeRule).toContain('position: absolute;');
     expect(chromeRule).toContain('width: var(--sd-sdt-chrome-width, 100%);');
+    expect(chromeRule).toContain('bottom: calc(0px - var(--sd-sdt-chrome-bottom-extension, 0px));');
     expect(chromeRule).toContain('border: 1px solid transparent;');
     expect(chromeRule).toContain('pointer-events: none;');
+  });
+
+  it('keeps top chrome on adjacent complete block SDTs', () => {
+    ensureSdtContainerStyles(document);
+
+    const styleEl = document.querySelector('[data-superdoc-sdt-container-styles="true"]');
+    const cssText = styleEl?.textContent ?? '';
+
+    expect(cssText).not.toContain('.superdoc-structured-content-block + .superdoc-structured-content-block');
+    expect(cssText).toContain(
+      '.superdoc-structured-content-block[data-sdt-container-end="true"]:not([data-sdt-container-start="true"])::after',
+    );
+    expect(cssText).toContain(
+      '.superdoc-structured-content-block:not([data-sdt-container-start="true"]):not([data-sdt-container-end="true"])::after',
+    );
   });
 
   it('gives empty inline SDTs a default visible affordance', () => {
