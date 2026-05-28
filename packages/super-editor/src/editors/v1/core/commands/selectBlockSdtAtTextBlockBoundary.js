@@ -62,6 +62,7 @@ function selectAdjacentBlockSdtContent(direction) {
     const contentStart = findFirstContentCursorPosInNode(node, nodePos);
     const contentEnd = findLastContentCursorPosInNode(node, nodePos);
     if (contentStart == null || contentEnd == null) return false;
+    if (contentStart >= contentEnd) return false;
 
     if (dispatch) {
       dispatch(state.tr.setSelection(TextSelection.create(state.doc, contentStart, contentEnd)).scrollIntoView());

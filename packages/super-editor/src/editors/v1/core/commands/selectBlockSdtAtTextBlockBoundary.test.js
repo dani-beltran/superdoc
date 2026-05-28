@@ -21,6 +21,7 @@ const makeSchema = () =>
           lockMode: { default: 'unlocked' },
         },
       },
+      mathBlock: { group: 'block', atom: true },
       image: { inline: true, group: 'inline', atom: true },
       text: { group: 'inline' },
     },
@@ -84,6 +85,20 @@ const makeNestedDoc = (schema, lockMode = 'contentLocked') => {
   return schema.node('doc', null, [paragraph(schema, 'Before'), outerSdt, paragraph(schema, 'After')]);
 };
 
+const makeEmptyBlockSdtDoc = (schema) => {
+  const sdt = schema.nodes.structuredContentBlock.create({ lockMode: 'contentLocked' }, [
+    schema.nodes.paragraph.create(),
+  ]);
+  return schema.node('doc', null, [paragraph(schema, 'Before'), sdt, paragraph(schema, 'After')]);
+};
+
+const makeAtomBlockSdtDoc = (schema) => {
+  const sdt = schema.nodes.structuredContentBlock.create({ lockMode: 'contentLocked' }, [
+    schema.nodes.mathBlock.create(),
+  ]);
+  return schema.node('doc', null, [paragraph(schema, 'Before'), sdt, paragraph(schema, 'After')]);
+};
+
 describe('selectBlockSdtBeforeTextBlockStart', () => {
   it.each(['unlocked', 'sdtLocked', 'contentLocked', 'sdtContentLocked'])(
     'selects the previous %s block SDT content from the following textblock start',
@@ -113,6 +128,22 @@ describe('selectBlockSdtBeforeTextBlockStart', () => {
       doc,
       selection: TextSelection.create(doc, findTextPos(doc, 'After', 1)),
     });
+    const dispatch = vi.fn();
+
+    const ok = selectBlockSdtBeforeTextBlockStart()({ state, dispatch });
+
+    expect(ok).toBe(false);
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['empty paragraph', makeEmptyBlockSdtDoc],
+    ['block atom', makeAtomBlockSdtDoc],
+  ])('returns false for previous block SDT with %s content', (_, makeAdjacentDoc) => {
+    const schema = makeSchema();
+    const doc = makeAdjacentDoc(schema);
+    const afterStart = findTextPos(doc, 'After');
+    const state = EditorState.create({ schema, doc, selection: TextSelection.create(doc, afterStart) });
     const dispatch = vi.fn();
 
     const ok = selectBlockSdtBeforeTextBlockStart()({ state, dispatch });
@@ -157,6 +188,22 @@ describe('selectBlockSdtAfterTextBlockEnd', () => {
       expect(dispatched.selection.to).toBe(findLastContentCursorPosInNode(sdt.node, sdt.pos));
     },
   );
+
+  it.each([
+    ['empty paragraph', makeEmptyBlockSdtDoc],
+    ['block atom', makeAtomBlockSdtDoc],
+  ])('returns false for next block SDT with %s content', (_, makeAdjacentDoc) => {
+    const schema = makeSchema();
+    const doc = makeAdjacentDoc(schema);
+    const beforeEnd = findTextPos(doc, 'Before', 'Before'.length);
+    const state = EditorState.create({ schema, doc, selection: TextSelection.create(doc, beforeEnd) });
+    const dispatch = vi.fn();
+
+    const ok = selectBlockSdtAfterTextBlockEnd()({ state, dispatch });
+
+    expect(ok).toBe(false);
+    expect(dispatch).not.toHaveBeenCalled();
+  });
 
   it('selects nested next block SDT content from the preceding nested textblock end', () => {
     const schema = makeSchema();
