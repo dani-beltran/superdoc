@@ -89,11 +89,10 @@ test('inline and block structured content field chrome use Template Builder fiel
       el.classList.remove('sdt-group-hover');
     });
 
-    const inlineBackground = await inline.evaluate((el) => getComputedStyle(el).backgroundColor);
-    const blockBackground = await block.evaluate((el) => getComputedStyle(el).backgroundColor);
+    await expect(block).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+    const blockBackground = await block.evaluate((el) => getComputedStyle(el, '::before').backgroundColor);
 
-    expect(inlineBackground).toBe(blockBackground);
-    expect(inlineBackground).not.toBe('rgba(0, 0, 0, 0)');
+    expect(blockBackground).not.toBe('rgba(0, 0, 0, 0)');
   };
 
   const expectSelectedStateBackgrounds = async (fieldType: 'owner' | 'signer') => {
@@ -107,7 +106,8 @@ test('inline and block structured content field chrome use Template Builder fiel
     });
 
     await expect(inline).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-    const blockSelectedBackground = await block.evaluate((el) => getComputedStyle(el).backgroundColor);
+    await expect(block).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+    const blockSelectedBackground = await block.evaluate((el) => getComputedStyle(el, '::before').backgroundColor);
     expect(blockSelectedBackground).not.toBe('rgba(0, 0, 0, 0)');
   };
 
@@ -139,7 +139,7 @@ test('inline and block structured content field chrome use Template Builder fiel
       el.classList.add('sdt-group-hover');
     });
     await expect
-      .poll(async () => block.evaluate((el) => getComputedStyle(el).backgroundColor))
+      .poll(async () => block.evaluate((el) => getComputedStyle(el, '::before').backgroundColor))
       .toBe(inlineHoverBackground);
 
     await inline.evaluate((el) => el.classList.add('ProseMirror-selectednode'));

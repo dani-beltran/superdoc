@@ -525,7 +525,7 @@ const SDT_CONTAINER_STYLES = `
 .superdoc-structured-content-block {
   box-sizing: border-box;
   border-radius: 4px;
-  background-color: var(--sd-content-controls-block-bg, transparent);
+  background-color: transparent;
   position: relative;
   --sd-sdt-chrome-left: 0px;
   --sd-sdt-chrome-width: 100%;
@@ -540,6 +540,7 @@ const SDT_CONTAINER_STYLES = `
   bottom: calc(0px - var(--sd-sdt-chrome-bottom-extension, 0px));
   width: var(--sd-sdt-chrome-width, 100%);
   border-radius: inherit;
+  background-color: var(--sd-content-controls-block-bg, transparent);
   box-sizing: border-box;
   pointer-events: none;
 }

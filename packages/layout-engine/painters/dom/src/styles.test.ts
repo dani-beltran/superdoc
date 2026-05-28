@@ -40,11 +40,13 @@ describe('ensureSdtContainerStyles', () => {
 
     expect(blockRule).not.toContain('padding:');
     expect(blockRule).not.toContain('border:');
+    expect(blockRule).toContain('background-color: transparent;');
     expect(blockRule).toContain('--sd-sdt-chrome-left: 0px;');
     expect(blockRule).toContain('--sd-sdt-chrome-width: 100%;');
     expect(blockRule).toContain('--sd-sdt-chrome-bottom-extension: 0px;');
     expect(backgroundRule).toContain('width: var(--sd-sdt-chrome-width, 100%);');
     expect(backgroundRule).toContain('bottom: calc(0px - var(--sd-sdt-chrome-bottom-extension, 0px));');
+    expect(backgroundRule).toContain('background-color: var(--sd-content-controls-block-bg, transparent);');
     expect(hoverRule).toContain('background-color: var(--sd-content-controls-block-hover-bg, #f2f2f2);');
     expect(chromeRule).toContain('position: absolute;');
     expect(chromeRule).toContain('width: var(--sd-sdt-chrome-width, 100%);');
