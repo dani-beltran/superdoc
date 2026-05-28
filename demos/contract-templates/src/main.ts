@@ -216,7 +216,11 @@ const superdoc = new SuperDoc({
   selector: '#editor',
   documentMode: 'editing',
   document: '/nda-template.docx',
-  modules: { comments: false },
+  // Disable SuperDoc's built-in SDT chrome (border, label, hover/selection
+  // highlight). The wrappers and data-sdt-* datasets are preserved, so the
+  // contextual field chip (field-chip.ts) and the document API still work;
+  // this demo paints its own SDT visuals in style.css instead.
+  modules: { comments: false, contentControls: { chrome: 'none' } },
   telemetry: { enabled: false },
   onReady: ({ superdoc: sd }) => void initialize(sd as DemoSuperDoc),
 });

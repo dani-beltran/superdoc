@@ -238,42 +238,37 @@ input:focus {
 }
 
 /* -----------------------------------------------------------------------
-   In-editor SDT chrome (visible DomPainter classes only)
-   The painter renders block SDTs with `position: absolute` and explicit
-   coordinates, so the rules below color the existing 1px border slot and
-   add background only. They never change padding, margin, or box size.
+   Host-owned SDT styling.
+   This demo turns off SuperDoc's built-in content-control chrome
+   (`modules.contentControls.chrome: 'none'` in main.ts) and paints its
+   own. The painter adds `.superdoc-cc-chrome-none` to the mount and resets
+   border/padding/radius/background on the SDT wrappers; scoping under that
+   class keeps these rules above the reset in specificity and cascade, and
+   restores the box properties the reset strips. No painter label element
+   exists under chrome-none, so there is nothing to style for it.
    ----------------------------------------------------------------------- */
 
 /* Inline smart fields: blue pill */
-.superdoc-structured-content-inline[data-sdt-tag*='smartField'] {
-  border-color: var(--demo-accent);
+.superdoc-cc-chrome-none .superdoc-structured-content-inline[data-sdt-tag*='smartField'] {
+  padding: 1px 4px;
+  border: 1px solid var(--demo-accent);
+  border-radius: 4px;
   background-color: var(--demo-accent-soft);
 }
 
-/* Block clauses: visible bordered card with soft background */
-.superdoc-structured-content-block[data-sdt-tag*='reusableSection'] {
-  border-color: var(--demo-border);
+/* Block clauses: bordered card with soft background */
+.superdoc-cc-chrome-none .superdoc-structured-content-block[data-sdt-tag*='reusableSection'] {
+  border: 1px solid var(--demo-border);
+  border-radius: 4px;
   background-color: var(--demo-bg);
-}
-.superdoc-structured-content-block[data-sdt-tag*='reusableSection'][data-lock-mode='unlocked'] {
-  background-color: var(--demo-bg);
-}
-
-/* Existing painter-provided label gets a typographic tune */
-.superdoc-structured-content-block__label {
-  font-size: var(--sd-font-size-200, 11px);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--demo-text-muted);
-  font-weight: 600;
 }
 
 /*
  * Contextual smart-field chip (SD-3157). Floats over the active smart-
  * field SDT showing field label + live value. Wired in field-chip.ts
- * against `ui.contentControls.observe` + `getRect`. Renders alongside
- * SuperDoc's built-in SDT chrome by design — the chip demonstrates
- * additive contextual UI, not a chrome replacement (that's SD-3159).
+ * against `ui.contentControls.observe` + `getRect`. With built-in chrome
+ * off (SD-3159), the chip is the smart field's active-state affordance:
+ * custom UI anchored to the SDT via the public geometry API.
  */
 .sd-field-chip {
   display: inline-flex;

@@ -14,11 +14,11 @@
  * the Clauses tab. Linked-occurrence highlights, field-details popovers,
  * and clause badges are deliberate follow-ups (SD-3155 umbrella).
  *
- * The chip renders ALONGSIDE SuperDoc's built-in SDT chrome (blue
- * label, border, hover background) by design: this demo demonstrates
- * the API's ability to add contextual UI on top of the document, not
- * to replace the editor's default visuals. Suppressing the built-in
- * chrome is filed as SD-3159 (`modules.contentControls.chrome: 'default' | 'none'`).
+ * This demo runs with SuperDoc's built-in SDT chrome turned off
+ * (`modules.contentControls.chrome: 'none'`, SD-3159), so the chip is the
+ * smart field's active-state UI rather than an addition on top of the
+ * built-in blue label/border. The wrappers and data-sdt-* datasets are
+ * still emitted, which is what `observe`/`getRect`/`get` rely on.
  */
 import type { SuperDocUI } from 'superdoc/ui';
 
