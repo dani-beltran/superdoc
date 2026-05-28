@@ -31,7 +31,20 @@ export function convertSdtContentToRuns(elements) {
     }
 
     if (RUN_LEVEL_WRAPPERS.has(element.name)) {
-      const wrapperElements = convertSdtContentToRuns(element.elements || []);
+      const children = element.elements || [];
+      // w:smartTagPr is property metadata for w:smartTag, not run content.
+      // Preserve it directly on the wrapper instead of feeding it into the
+      // recursive flatten, which would mangle it into a fake w:r (SD-2647).
+      const preserved = [];
+      const rest = [];
+      for (const child of children) {
+        if (element.name === 'w:smartTag' && child?.name === 'w:smartTagPr') {
+          preserved.push(child);
+        } else {
+          rest.push(child);
+        }
+      }
+      const wrapperElements = [...preserved, ...convertSdtContentToRuns(rest)];
       if (wrapperElements.length) {
         runs.push({
           ...element,
