@@ -97,7 +97,10 @@ button { cursor: pointer; }
 
 .row { display: block; margin-bottom: 10px; }
 .row-label {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   font-size: var(--sd-font-size-200, 12px);
   color: var(--demo-text-muted);
   margin-bottom: 4px;
@@ -132,6 +135,28 @@ input:focus {
   border-color: var(--demo-accent-hover);
 }
 .btn:disabled { color: var(--demo-text-muted); cursor: not-allowed; opacity: 0.55; }
+
+/* "Locate" — scroll a control into view (ui.contentControls.scrollIntoView);
+   "Focus" — scroll AND place the caret inside it (ui.contentControls.focus). */
+.clause-actions { display: flex; align-items: center; gap: 8px; }
+.row-actions { display: flex; align-items: center; gap: 6px; }
+.locate,
+.focus {
+  font: inherit;
+  font-size: var(--sd-font-size-100, 11px);
+  line-height: 1;
+  padding: 3px 8px;
+  border: 1px solid var(--demo-border);
+  border-radius: var(--sd-radius-50, 4px);
+  background: transparent;
+  color: var(--demo-text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.locate:hover,
+.focus:hover { color: var(--demo-text); border-color: var(--demo-accent); }
+.locate:focus-visible,
+.focus:focus-visible { outline: 1px solid var(--demo-accent); outline-offset: 1px; }
 
 #fields-panel .btn { width: 100%; margin-top: 12px; }
 
@@ -238,42 +263,38 @@ input:focus {
 }
 
 /* -----------------------------------------------------------------------
-   In-editor SDT chrome (visible DomPainter classes only)
-   The painter renders block SDTs with `position: absolute` and explicit
-   coordinates, so the rules below color the existing 1px border slot and
-   add background only. They never change padding, margin, or box size.
+   Host-owned SDT styling.
+   This demo turns off SuperDoc's built-in content-control chrome
+   (`modules.contentControls.chrome: 'none'` in main.ts) and paints its
+   own. The painter adds `.superdoc-cc-chrome-none` to the mount and resets
+   border/padding/radius/background on the SDT wrappers; scoping under that
+   class keeps these rules above the reset in specificity and cascade, and
+   restores the box properties the reset strips. No painter label element
+   exists under chrome-none, so there is nothing to style for it.
    ----------------------------------------------------------------------- */
 
 /* Inline smart fields: blue pill */
-.superdoc-structured-content-inline[data-sdt-tag*='smartField'] {
-  border-color: var(--demo-accent);
+.superdoc-cc-chrome-none .superdoc-structured-content-inline[data-sdt-tag*='smartField'] {
+  padding: 1px 4px;
+  border: 1px solid var(--demo-accent);
+  border-radius: 4px;
   background-color: var(--demo-accent-soft);
 }
 
-/* Block clauses: visible bordered card with soft background */
-.superdoc-structured-content-block[data-sdt-tag*='reusableSection'] {
-  border-color: var(--demo-border);
+/* Block clauses: bordered card with soft background */
+.superdoc-cc-chrome-none .superdoc-structured-content-block[data-sdt-tag*='reusableSection'] {
+  border: 1px solid var(--demo-border);
+  border-radius: 4px;
   background-color: var(--demo-bg);
-}
-.superdoc-structured-content-block[data-sdt-tag*='reusableSection'][data-lock-mode='unlocked'] {
-  background-color: var(--demo-bg);
-}
-
-/* Existing painter-provided label gets a typographic tune */
-.superdoc-structured-content-block__label {
-  font-size: var(--sd-font-size-200, 11px);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--demo-text-muted);
-  font-weight: 600;
 }
 
 /*
- * Contextual smart-field chip (SD-3157). Floats over the active smart-
- * field SDT showing field label + live value. Wired in field-chip.ts
- * against `ui.contentControls.observe` + `getRect`. Renders alongside
- * SuperDoc's built-in SDT chrome by design — the chip demonstrates
- * additive contextual UI, not a chrome replacement (that's SD-3159).
+ * Contextual smart-field chip (SD-3157 / SD-3232). Floats over the active
+ * smart-field SDT showing field label + live value. Wired in field-chip.ts
+ * against the public `content-control:active-change` event (what's active)
+ * + `ui.contentControls.getRect` (where to draw). With built-in chrome off
+ * (SD-3159), the chip is the smart field's active-state affordance: custom
+ * UI anchored to the SDT via public events and the geometry API.
  */
 .sd-field-chip {
   display: inline-flex;

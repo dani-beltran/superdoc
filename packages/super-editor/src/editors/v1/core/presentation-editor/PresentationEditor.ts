@@ -266,7 +266,10 @@ import {
   findAllBookmarksInDocument,
   resolveBookmarkTarget,
 } from '../../document-api-adapters/helpers/bookmark-resolver.js';
-import { resolveTrackedChange } from '../../document-api-adapters/helpers/tracked-change-resolver.js';
+import {
+  resolveTrackedChange,
+  resolveTrackedChangeInStory,
+} from '../../document-api-adapters/helpers/tracked-change-resolver.js';
 import { makeTrackedChangeAnchorKey } from '../../document-api-adapters/helpers/tracked-change-runtime-ref.js';
 import { getTrackedChangeIndex } from '../../document-api-adapters/tracked-changes/tracked-change-index.js';
 import { normalizeVariant } from './header-footer/header-footer-variant.js';
@@ -478,6 +481,16 @@ export class PresentationEditor extends EventEmitter {
    * this unset so they don't fight the user's scroll position.
    */
   #shouldScrollSelectionIntoView = false;
+  /**
+   * SD-3315: while a search-owned scrollToPosition({ suppressSelectionSyncScroll: true }) is in
+   * flight (set before its sync scroll, cleared in its RAF re-assert), selection-sync must NOT
+   * scroll the viewport. Find navigation owns the scroll for that window; the spurious
+   * selectionUpdate fired by the find-input focus restore (which reverts the editor selection to
+   * its pre-search caret) would otherwise yank the viewport to that stale caret, producing a
+   * jump/flash on every navigation. The selection overlay still renders during the window; only
+   * #scrollActiveEndIntoView is skipped.
+   */
+  #suppressSelectionScrollUntilRaf = false;
   /** PM position for transient drag/drop insertion preview, rendered even while editor focus is elsewhere. */
   #dragDropIndicatorPos: number | null = null;
   #epochMapper = new EpochPositionMapper();
@@ -645,6 +658,7 @@ export class PresentationEditor extends EventEmitter {
       presence: validatedPresence,
       showBookmarks: options.layoutEngineOptions?.showBookmarks ?? false,
       showFormattingMarks: options.layoutEngineOptions?.showFormattingMarks ?? false,
+      contentControlsChrome: options.layoutEngineOptions?.contentControlsChrome,
     };
     this.#trackedChangesOverrides = options.layoutEngineOptions?.trackedChanges;
 
@@ -3498,6 +3512,26 @@ export class PresentationEditor extends EventEmitter {
   }
 
   /**
+   * Whether an element is fully within the vertical bounds of the active scroll container.
+   * Used by scrollToPosition's `ifNeeded` mode (SD-3315) to avoid moving the viewport for a
+   * target that is already visible. Measures with getBoundingClientRect because inline match
+   * spans report clientHeight 0. Vertical-only: search navigation is a block-axis concern.
+   */
+  #isElementFullyVisibleInScrollContainer(el: Element): boolean {
+    const rect = el.getBoundingClientRect();
+    const viewport =
+      this.#scrollContainer instanceof Window
+        ? { top: 0, bottom: this.#scrollContainer.innerHeight }
+        : this.#scrollContainer instanceof Element
+          ? this.#scrollContainer.getBoundingClientRect()
+          : this.#visibleHost?.ownerDocument?.defaultView
+            ? { top: 0, bottom: this.#visibleHost.ownerDocument.defaultView.innerHeight }
+            : null;
+    if (!viewport) return false;
+    return rect.top >= viewport.top && rect.bottom <= viewport.bottom;
+  }
+
+  /**
    * Scroll the visible host so a given document position is brought into view.
    *
    * This is primarily used by commands like search navigation when running in
@@ -3508,11 +3542,22 @@ export class PresentationEditor extends EventEmitter {
    * @param options - Scrolling options
    * @param options.block - Alignment within the viewport ('start' | 'center' | 'end' | 'nearest')
    * @param options.behavior - Scroll behavior ('auto' | 'smooth')
+   * @param options.ifNeeded - When true, skip movement if the target is already fully visible
+   *   (downgrades to 'nearest'); off-screen targets still use `block`. Used by search navigation.
+   * @param options.suppressSelectionSyncScroll - When true, selection-sync auto-scroll is
+   *   suppressed until this scroll's RAF re-assert runs, so it cannot fight this intentional
+   *   scroll. Used by search navigation, whose find-input focus restore otherwise scrolls the
+   *   viewport to a reverted/stale caret.
    * @returns True if the position could be mapped and scrolling was applied
    */
   scrollToPosition(
     pos: number,
-    options: { block?: 'start' | 'center' | 'end' | 'nearest'; behavior?: ScrollBehavior } = {},
+    options: {
+      block?: 'start' | 'center' | 'end' | 'nearest';
+      behavior?: ScrollBehavior;
+      ifNeeded?: boolean;
+      suppressSelectionSyncScroll?: boolean;
+    } = {},
   ): boolean {
     // Cancel any pending focus-scroll RAF so this intentional scroll is not undone
     // by the wrapOffscreenEditorFocus safety net (e.g. search navigation after focus).
@@ -3530,7 +3575,9 @@ export class PresentationEditor extends EventEmitter {
     const clampedPos = Math.max(0, Math.min(pos, doc.content.size));
 
     const behavior = options.behavior ?? 'auto';
-    const block = options.block ?? 'center';
+    // SD-3315: the caller's requested landing. In ifNeeded mode an already-visible match
+    // downgrades this to 'nearest' (computed per-target below) so it does not re-center.
+    const requestedBlock = options.block ?? 'center';
 
     // Use a DOM marker + scrollIntoView so the browser finds the correct scroll container
     // (window, parent overflow container, etc.) without us guessing.
@@ -3557,6 +3604,21 @@ export class PresentationEditor extends EventEmitter {
           // Find the specific element containing this position for precise centering
           const targetEl = this.#findElementAtPosition(pageEl, clampedPos);
           const elToScroll = targetEl ?? pageEl;
+
+          // SD-3315: "scroll only if needed" mode for search navigation. When the caller
+          // opts in and we resolved the precise target element (the match span, not the
+          // page-div fallback), and that element is already fully inside the scroll
+          // container, downgrade the scroll to 'nearest' — a no-op for a fully-visible
+          // element — so next/previous does not re-center an already-visible match (the
+          // ~50px jump). We deliberately do NOT early-return: the scrollIntoView + RAF
+          // re-assert below also override the hidden editor's selection-sync scroll
+          // (dispatched .scrollIntoView()), which otherwise jumps the viewport to the
+          // hidden editor's geometry. A null targetEl (page fallback) or an off-screen /
+          // partially-clipped match keeps the requested block (center).
+          const block =
+            options.ifNeeded && targetEl && this.#isElementFullyVisibleInScrollContainer(targetEl)
+              ? 'nearest'
+              : requestedBlock;
           elToScroll.scrollIntoView({ block, inline: 'nearest', behavior });
           // AIDEV-NOTE: SD-3045. Search nav (and any other caller of
           // scrollToPosition) places the viewport intentionally — usually
@@ -3582,9 +3644,16 @@ export class PresentationEditor extends EventEmitter {
           // and is cheap.
           const win = this.#visibleHost.ownerDocument?.defaultView;
           if (win) {
+            // SD-3315: own the scroll until the RAF re-assert. The find-input focus restore fires
+            // a selectionUpdate that reverts the editor selection and would selection-sync-scroll
+            // the viewport to that stale caret before this RAF runs. Suppress that here and
+            // release after re-asserting, so normal selection scroll resumes next frame. Paired
+            // with the RAF below (set inside `if (win)` so it is always cleared).
+            if (options.suppressSelectionSyncScroll) this.#suppressSelectionScrollUntilRaf = true;
             win.requestAnimationFrame(() => {
               elToScroll.scrollIntoView({ block, inline: 'nearest', behavior });
               this.#shouldScrollSelectionIntoView = false;
+              this.#suppressSelectionScrollUntilRaf = false;
             });
           }
           return true;
@@ -3760,11 +3829,19 @@ export class PresentationEditor extends EventEmitter {
    * @param options - Scrolling options
    * @param options.block - Alignment within the viewport ('start' | 'center' | 'end' | 'nearest')
    * @param options.behavior - Scroll behavior ('auto' | 'smooth')
+   * @param options.ifNeeded - When true, skip movement if the target is already fully visible
+   *   (downgrades to 'nearest'); off-screen targets still use `block`. Used by search navigation.
+   * @param options.suppressSelectionSyncScroll - Forwarded to scrollToPosition; see there.
    * @returns Promise resolving to true if scrolling succeeded, false otherwise
    */
   async scrollToPositionAsync(
     pos: number,
-    options: { block?: 'start' | 'center' | 'end' | 'nearest'; behavior?: ScrollBehavior } = {},
+    options: {
+      block?: 'start' | 'center' | 'end' | 'nearest';
+      behavior?: ScrollBehavior;
+      ifNeeded?: boolean;
+      suppressSelectionSyncScroll?: boolean;
+    } = {},
   ): Promise<boolean> {
     // Fast path: try sync scroll first (works if page already mounted)
     if (this.scrollToPosition(pos, options)) {
@@ -3807,8 +3884,149 @@ export class PresentationEditor extends EventEmitter {
       return false;
     }
 
-    // Retry now that page is mounted
-    return this.scrollToPosition(pos, options);
+    // Retry now that page is mounted. Reaching this path means the target was on an unmounted
+    // (off-screen) page at call time, and #scrollPageIntoView above only scrolled the page into
+    // view — not the specific match, which can now sit at a viewport edge. Force ifNeeded:false so
+    // the match centers, instead of letting the now-edge-visible match downgrade to 'nearest' and
+    // skip centering (SD-3315 review). suppressSelectionSyncScroll is preserved via the spread.
+    return this.scrollToPosition(pos, { ...options, ifNeeded: false });
+  }
+
+  /**
+   * Scroll a content control (SDT field/clause) into view by its id.
+   *
+   * Model-aware: the control's position is resolved from the document
+   * model, not the painted DOM, so this works even when the control sits
+   * on a not-yet-rendered (virtualized) page — `scrollToPositionAsync`
+   * mounts the page first, then scrolls. This is why it cannot reuse the
+   * paint-only `getEntityRects` rect path.
+   *
+   * Scroll-only: it does NOT move the selection or place the caret inside
+   * the control. Focusing/activating a control is a separate concern.
+   *
+   * v1 is body-only: it searches the body editor, and `scrollToPositionAsync`
+   * only scrolls in body mode, so a control inside a header/footer/note
+   * story does not resolve and returns `false`.
+   *
+   * @returns `true` once scrolled; `false` when the id is empty/unknown,
+   *   the control is in a non-body story, or no editor is available.
+   */
+  async scrollContentControlIntoView(
+    entityId: string,
+    options: { block?: 'start' | 'center' | 'end' | 'nearest'; behavior?: ScrollBehavior } = {},
+  ): Promise<boolean> {
+    const pos = this.#resolveContentControlCaretPos(entityId);
+    if (pos == null) return false;
+    return this.scrollToPositionAsync(pos, {
+      behavior: options.behavior ?? 'smooth',
+      block: options.block ?? 'center',
+    });
+  }
+
+  /**
+   * Resolve a caret position inside the content control with `entityId`, or
+   * `null` when no such control exists in the body document.
+   *
+   * Prefers the first *text* position inside the control: only text positions
+   * reliably map to a layout fragment; wrapper boundaries (block, paragraph,
+   * run) sit between fragments. A deep `descendants` walk handles inline
+   * (`run > text`) and block (`paragraph > run > text`) nesting uniformly
+   * (`descendants` yields each child's position relative to the node's
+   * content, so the absolute position is `found.pos + 1 + rel`). An empty
+   * control with no text falls back to the first inside position.
+   *
+   * The id is normalized to a string before comparing: the id a consumer
+   * passes comes from the list / painted `data-sdt-id` (always a string), but
+   * the PM attr can be numeric, so a strict `===` would miss it.
+   */
+  #resolveContentControlCaretPos(entityId: string): number | null {
+    const editor = this.#editor;
+    if (!editor || typeof entityId !== 'string' || entityId.length === 0) return null;
+
+    let found: { pos: number; node: ReturnType<typeof editor.state.doc.nodeAt> } | null = null;
+    editor.state.doc.descendants((node, pos) => {
+      if (found) return false;
+      const name = node.type?.name;
+      if ((name === 'structuredContent' || name === 'structuredContentBlock') && String(node.attrs?.id) === entityId) {
+        found = { pos, node };
+        return false;
+      }
+      return true;
+    });
+    if (!found) return null;
+
+    let contentPos = found.pos + 1;
+    let textFound = false;
+    found.node?.descendants((child, rel) => {
+      if (textFound) return false;
+      if (child.isText) {
+        contentPos = found.pos + 1 + rel;
+        textFound = true;
+        return false;
+      }
+      return true;
+    });
+    return contentPos;
+  }
+
+  /**
+   * Focus a content control (SDT field/clause) by its id: place the caret
+   * inside it and scroll it into view — the "take me there and let me edit"
+   * counterpart to the scroll-only {@link scrollContentControlIntoView}.
+   *
+   * Selection, not mutation: locks (`sdtLocked` / `contentLocked` / …) and
+   * `viewing` mode do NOT block placing the caret — they still block the edits
+   * the user then attempts, via the normal editing rules. So a custom UI can
+   * focus a locked clause to let the user inspect it.
+   *
+   * Caret-inside (not a wrapper NodeSelection): both SDT node types are
+   * `atom: false`, so a `TextSelection` inside is the meaningful selection.
+   *
+   * v1 is body-only: searches the body editor, so a control in a
+   * header/footer/note story resolves to `not-found`.
+   *
+   * @returns `{ success: true }` once focused, or `{ success: false, reason }`
+   *   for a real navigation problem: `not-ready` (no editor), `invalid-id`
+   *   (empty id), `not-found` (unknown id / non-body), `not-reachable`
+   *   (found but the page could not be scrolled into view).
+   */
+  async focusContentControl(
+    entityId: string,
+    options: { block?: 'start' | 'center' | 'end' | 'nearest'; behavior?: ScrollBehavior } = {},
+  ): Promise<
+    { success: true } | { success: false; reason: 'not-ready' | 'invalid-id' | 'not-found' | 'not-reachable' }
+  > {
+    const editor = this.#editor;
+    if (!editor) return { success: false, reason: 'not-ready' };
+    if (typeof entityId !== 'string' || entityId.length === 0) return { success: false, reason: 'invalid-id' };
+
+    const pos = this.#resolveContentControlCaretPos(entityId);
+    if (pos == null) return { success: false, reason: 'not-found' };
+
+    // Without setTextSelection the editor can't place the caret, so focus
+    // can't honor its "caret placed" contract — fail before scrolling.
+    if (typeof editor.commands?.setTextSelection !== 'function') {
+      return { success: false, reason: 'not-ready' };
+    }
+
+    // Scroll first and honor the result. A focus that can't bring the control
+    // into view must not report success (it would leave a caret on a page that
+    // never mounted) — matches #scrollToBlockCandidate. Model-aware: mounts a
+    // virtualized page first.
+    const scrolled = await this.scrollToPositionAsync(pos, {
+      behavior: options.behavior ?? 'smooth',
+      block: options.block ?? 'center',
+    });
+    if (!scrolled) return { success: false, reason: 'not-reachable' };
+
+    // Place the caret inside the control and honor the result — report success
+    // only if the selection was actually placed. setTextSelection clamps and
+    // focuses the (hidden) editor view with preventScroll, so keyboard input
+    // goes to the control without re-jumping the viewport.
+    if (!editor.commands.setTextSelection({ from: pos, to: pos })) {
+      return { success: false, reason: 'not-reachable' };
+    }
+    return { success: true };
   }
 
   /**
@@ -4937,11 +5155,9 @@ export class PresentationEditor extends EventEmitter {
    * This method encapsulates the common focus and blur logic used when
    * selecting both inline and block images.
    * @private
-   * @returns {void}
    */
   #focusEditorAfterImageSelection(): void {
     this.#shouldScrollSelectionIntoView = true;
-    this.#scheduleSelectionUpdate();
     if (document.activeElement instanceof HTMLElement) {
       document.activeElement.blur();
     }
@@ -4950,6 +5166,7 @@ export class PresentationEditor extends EventEmitter {
       editorDom.focus();
       this.#editor.view?.focus();
     }
+    this.#scheduleSelectionUpdate({ immediate: true });
   }
 
   #resolveFieldAnnotationSelectionFromElement(
@@ -6465,6 +6682,7 @@ export class PresentationEditor extends EventEmitter {
       ruler: this.#layoutOptions.ruler,
       pageGap: this.#layoutState.layout?.pageGap ?? effectiveGap,
       showFormattingMarks: this.#layoutOptions.showFormattingMarks ?? false,
+      contentControlsChrome: this.#layoutOptions.contentControlsChrome ?? 'default',
     });
 
     // Pass the current zoom so virtualization accounts for the CSS transform scale
@@ -6641,14 +6859,23 @@ export class PresentationEditor extends EventEmitter {
     let node: ProseMirrorNode | null = null;
     let pos: number | null = null;
     let id: string | null = null;
+    let fallbackPos: number | null = null;
 
     if (selection instanceof NodeSelection) {
-      if (selection.node?.type?.name !== 'structuredContentBlock') {
-        this.#clearSelectedStructuredContentBlockClass();
-        return;
+      if (selection.node?.type?.name === 'structuredContentBlock') {
+        node = selection.node;
+        pos = selection.from;
+      } else {
+        fallbackPos = selection.from;
+        const editorDoc = this.#editor?.view?.state?.doc;
+        const resolved = editorDoc ? findStructuredContentBlockAtPos(editorDoc, selection.from) : null;
+        if (!resolved) {
+          this.#clearSelectedStructuredContentBlockClass();
+          return;
+        }
+        node = resolved.node;
+        pos = resolved.pos;
       }
-      node = selection.node;
-      pos = selection.from;
     } else {
       const editorDoc = this.#editor?.view?.state?.doc;
       if (!editorDoc) {
@@ -6687,6 +6914,14 @@ export class PresentationEditor extends EventEmitter {
     if (elements.length === 0) {
       const elementAtPos = this.getElementAtPos(pos, { fallbackToCoords: true });
       const container = elementAtPos?.closest?.(`.${DOM_CLASS_NAMES.BLOCK_SDT}`) as HTMLElement | null;
+      if (container) {
+        elements = [container];
+      }
+    }
+
+    if (elements.length === 0 && fallbackPos != null && fallbackPos !== pos) {
+      const elementAtFallbackPos = this.getElementAtPos(fallbackPos, { fallbackToCoords: true });
+      const container = elementAtFallbackPos?.closest?.(`.${DOM_CLASS_NAMES.BLOCK_SDT}`) as HTMLElement | null;
       if (container) {
         elements = [container];
       }
@@ -6915,7 +7150,6 @@ export class PresentationEditor extends EventEmitter {
    * This method is called after layout completes to ensure cursor positioning
    * is based on stable layout data.
    *
-   * @returns {void}
    *
    * @remarks
    * Edge cases handled:
@@ -7176,6 +7410,12 @@ export class PresentationEditor extends EventEmitter {
    * page into view to trigger mount; the next selection update handles precise scroll.
    */
   #scrollActiveEndIntoView(pageIndex: number): void {
+    // SD-3315: a search-owned scroll is in flight (find next/previous). Do not let selection-sync
+    // scroll the viewport to the (reverted/stale) caret — the search scroll and its RAF re-assert
+    // own positioning for this window. The selection overlay still renders in #updateSelection;
+    // only this scroll is skipped. Cleared on the search scroll's RAF, so normal keyboard/pointer
+    // selection scroll resumes the next frame.
+    if (this.#suppressSelectionScrollUntilRaf) return;
     // Check if the target page is mounted before trusting rendered element positions.
     const pageIsMounted = !!this.#painterHost.querySelector(`[data-page-index="${pageIndex}"]`);
     if (!pageIsMounted) {
@@ -8563,33 +8803,54 @@ export class PresentationEditor extends EventEmitter {
 
     const behavior = options.behavior ?? 'auto';
     const block = options.block ?? 'center';
+    const navigationIds = this.#resolveTrackedChangeNavigationIds(entityId, storyKey);
 
     if (storyKey && storyKey !== BODY_STORY_KEY) {
-      if (this.#navigateToActiveStoryTrackedChange(entityId, storyKey)) {
-        return true;
-      }
-
-      if (await this.#activateTrackedChangeStorySurface(entityId, storyKey, preferredPageIndex)) {
-        if (this.#navigateToActiveStoryTrackedChange(entityId, storyKey)) {
+      for (const id of navigationIds) {
+        if (this.#navigateToActiveStoryTrackedChange(id, storyKey)) {
           return true;
         }
       }
 
-      return this.#scrollToRenderedTrackedChange(entityId, storyKey, preferredPageIndex, { behavior, block });
+      for (const id of navigationIds) {
+        if (await this.#activateTrackedChangeStorySurface(id, storyKey, preferredPageIndex)) {
+          for (const activeId of navigationIds) {
+            if (this.#navigateToActiveStoryTrackedChange(activeId, storyKey)) {
+              return true;
+            }
+          }
+        }
+      }
+
+      for (const id of navigationIds) {
+        if (await this.#scrollToRenderedTrackedChange(id, storyKey, preferredPageIndex, { behavior, block })) {
+          return true;
+        }
+      }
+      return false;
     }
 
     const setCursorById = editor.commands?.setCursorById;
 
     // Try direct cursor placement, then scroll to the new selection.
-    if (typeof setCursorById === 'function' && setCursorById(entityId, { preferredActiveThreadId: entityId })) {
-      await this.scrollToPositionAsync(editor.state.selection.from, { behavior, block });
-      return true;
+    if (typeof setCursorById === 'function') {
+      for (const id of navigationIds) {
+        if (setCursorById(id, { preferredActiveThreadId: id })) {
+          await this.scrollToPositionAsync(editor.state.selection.from, { behavior, block });
+          return true;
+        }
+      }
     }
 
     // Fall back to resolving the tracked change position and scrolling.
-    const resolved = resolveTrackedChange(editor, entityId);
+    const resolved = navigationIds.map((id) => resolveTrackedChange(editor, id)).find(Boolean);
     if (!resolved) {
-      return this.#scrollToRenderedTrackedChange(entityId, undefined, preferredPageIndex, { behavior, block });
+      for (const id of navigationIds) {
+        if (await this.#scrollToRenderedTrackedChange(id, undefined, preferredPageIndex, { behavior, block })) {
+          return true;
+        }
+      }
+      return false;
     }
 
     // Try with the raw ID (tracked changes may use a different internal ID).
@@ -8610,6 +8871,45 @@ export class PresentationEditor extends EventEmitter {
     editor.commands?.setTextSelection?.({ from: resolved.from, to: resolved.from });
     editor.view?.focus?.();
     return true;
+  }
+
+  #resolveTrackedChangeNavigationIds(entityId: string, storyKey?: string): string[] {
+    const ids: string[] = [];
+    const seen = new Set<string>();
+    const add = (value: unknown) => {
+      if (value === undefined || value === null) return;
+      const id = String(value).trim();
+      if (!id || seen.has(id)) return;
+      seen.add(id);
+      ids.push(id);
+    };
+
+    add(entityId);
+
+    let story: StoryLocator | undefined;
+    if (storyKey && storyKey !== BODY_STORY_KEY) {
+      try {
+        story = parseStoryKey(storyKey);
+      } catch {
+        story = undefined;
+      }
+    }
+
+    try {
+      const resolved = resolveTrackedChangeInStory(this.#editor, {
+        kind: 'entity',
+        entityType: 'trackedChange',
+        entityId,
+        ...(story ? { story } : {}),
+      });
+      add(resolved?.change?.commandRawId);
+      add(resolved?.change?.rawId);
+      add(resolved?.change?.id);
+    } catch {
+      // Navigation still has direct-id and rendered-DOM fallbacks.
+    }
+
+    return ids;
   }
 
   async #activateTrackedChangeStorySurface(

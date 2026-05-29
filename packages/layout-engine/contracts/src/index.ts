@@ -101,6 +101,13 @@ export type {
 import type { LayoutSourceIdentity } from './layout-identity.js';
 export { cloneColumnLayout, normalizeColumnLayout, widthsEqual } from './column-layout.js';
 export type { NormalizedColumnLayout } from './column-layout.js';
+export {
+  getSdtContainerKey,
+  getSdtContainerKeyForBlock,
+  getSdtContainerMetadata,
+  hasExplicitSdtContainerKey,
+  isSdtContainerMetadata,
+} from './sdt-container.js';
 /** Inline field annotation metadata extracted from w:sdt nodes. */
 export type FieldAnnotationMetadata = {
   type: 'fieldAnnotation';
@@ -257,6 +264,8 @@ export type RunMark = {
 export type TrackedChangeMeta = {
   kind: TrackedChangeKind;
   id: string;
+  overlapParentId?: string;
+  relationship?: 'parent' | 'child' | 'standalone';
   /**
    * Internal story key identifying which content story owns this tracked
    * change (`'body'`, `'hf:part:…'`, `'fn:…'`, `'en:…'`).
@@ -289,6 +298,10 @@ export type FlowRunLink = {
   name?: string;
   history?: boolean;
 };
+
+export const EMPTY_SDT_PLACEHOLDER_TEXT = 'Click or tap here to enter text';
+
+export type SdtVisualPlaceholder = 'emptyInlineSdt' | 'emptyBlockSdt';
 
 /**
  * Common formatting marks that can be applied to any run type.
@@ -342,6 +355,8 @@ export type TextRun = RunMarks & {
    */
   dataAttrs?: Record<string, string>;
   sdt?: SdtMetadata;
+  /** Layout-only placeholder for visual affordances that do not represent document text. */
+  visualPlaceholder?: SdtVisualPlaceholder;
   link?: FlowRunLink;
   /** Token annotations for dynamic content (page numbers, etc.). */
   token?: 'pageNumber' | 'totalPageCount' | 'pageReference';
@@ -356,6 +371,8 @@ export type TextRun = RunMarks & {
   };
   /** Tracked-change metadata from ProseMirror marks. */
   trackedChange?: TrackedChangeMeta;
+  /** All tracked-change layers on this run, preserving overlap order. */
+  trackedChanges?: TrackedChangeMeta[];
   /**
    * Run-level bidi signals preserved from the source DOCX (run rtl flag,
    * embedding/override directions). Direction-only - script formatting lives
@@ -456,10 +473,10 @@ export type ImageRun = {
 
   /**
    * Vertical alignment of image relative to text baseline.
-   * Currently only 'bottom' is supported (image sits on baseline).
-   * Future: 'top', 'middle', 'baseline', 'text-top', 'text-bottom'.
+   * 'top' keeps the image box inside the measured line height; 'bottom'
+   * preserves legacy baseline alignment for existing callers.
    */
-  verticalAlign?: 'bottom';
+  verticalAlign?: 'top' | 'bottom';
 
   /** Absolute ProseMirror position (inclusive) of this image run. */
   pmStart?: number;
@@ -497,6 +514,7 @@ export type BreakRun = {
   pmEnd?: number;
   sdt?: SdtMetadata;
   trackedChange?: TrackedChangeMeta;
+  trackedChanges?: TrackedChangeMeta[];
 };
 
 /**
@@ -2212,6 +2230,11 @@ export { isResolvedTableItem, isResolvedImageItem, isResolvedDrawingItem } from 
 
 // Pure transformations on inline-run shapes (used by pm-adapter, layout-bridge,
 // and painter-dom). Located in contracts to avoid reverse stage dependencies.
-export { expandRunsForInlineNewlines, sliceRunsForLine } from './run-helpers.js';
+export {
+  expandRunsForInlineNewlines,
+  isEmptyInlineSdtPlaceholderRun,
+  isEmptySdtPlaceholderRun,
+  sliceRunsForLine,
+} from './run-helpers.js';
 
 export * as Engines from './engines/index.js';

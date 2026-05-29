@@ -390,6 +390,7 @@ const onCommentsLoaded = ({ editor, comments, replacedFile }) => {
         editor,
         comments,
         documentId: editor.options.documentId,
+        replacedFile,
       });
     });
   }
@@ -399,11 +400,26 @@ const onEditorBeforeCreate = ({ editor }) => {
   proxy.$superdoc?.broadcastEditorBeforeCreate(editor);
 };
 
+const onEditorContentControlFocus = (payload) => {
+  proxy.$superdoc.emit('content-control:active-change', payload);
+};
+
+const onEditorContentControlBlur = (payload) => {
+  proxy.$superdoc.emit('content-control:active-change', payload);
+};
+
+const onEditorContentControlClick = (payload) => {
+  proxy.$superdoc.emit('content-control:click', payload);
+};
+
 const onEditorCreate = ({ editor }) => {
   const { documentId } = editor.options;
   const doc = getDocument(documentId);
   doc.setEditor(editor);
   proxy.$superdoc.setActiveEditor(editor);
+  editor.on?.('contentControlFocus', onEditorContentControlFocus);
+  editor.on?.('contentControlBlur', onEditorContentControlBlur);
+  editor.on?.('contentControlClick', onEditorContentControlClick);
   proxy.$superdoc.broadcastEditorCreate(editor);
   // Initialize the ai layer
   initAiLayer(true);
@@ -833,6 +849,7 @@ const editorOptions = (doc) => {
           zoom: (activeZoom.value ?? 100) / 100,
           emitCommentPositionsInViewing: isViewingMode() && shouldRenderCommentsInViewing.value,
           enableCommentsInViewing: isViewingCommentsVisible.value,
+          contentControlsChrome: proxy.$superdoc.config.modules?.contentControls?.chrome,
         }
       : undefined,
     permissionResolver: (payload = {}) =>
@@ -901,8 +918,13 @@ const REPLAY_MUTABLE_COMMENT_FIELDS = new Set([
   'trackedChangeType',
   'trackedChangeText',
   'trackedChangeDisplayType',
+  'trackedChangeStory',
+  'trackedChangeStoryKind',
+  'trackedChangeStoryLabel',
+  'trackedChangeAnchorKey',
   'deletedText',
   'resolvedTime',
+  'resolvedById',
   'resolvedByEmail',
   'resolvedByName',
   'importedAuthor',
@@ -911,18 +933,27 @@ const REPLAY_MUTABLE_COMMENT_FIELDS = new Set([
 
 const applyReplayIsDoneResolutionFallback = (target, payload = {}) => {
   if (!target || payload.isDone === undefined) return;
-  if (payload.resolvedTime != null || payload.resolvedByEmail != null || payload.resolvedByName != null) return;
+  if (
+    payload.resolvedTime != null ||
+    payload.resolvedById != null ||
+    payload.resolvedByEmail != null ||
+    payload.resolvedByName != null
+  ) {
+    return;
+  }
 
   // Imported replay payloads often use `isDone` while resolved fields remain null.
   // When resolved fields are not explicitly populated, derive sidebar/export state from `isDone`.
   if (payload.isDone) {
     target.resolvedTime = target.resolvedTime || Date.now();
+    target.resolvedById = target.resolvedById || payload.creatorId || null;
     target.resolvedByEmail = target.resolvedByEmail || payload.creatorEmail || null;
     target.resolvedByName = target.resolvedByName || payload.creatorName || null;
     return;
   }
 
   target.resolvedTime = null;
+  target.resolvedById = null;
   target.resolvedByEmail = null;
   target.resolvedByName = null;
 };
@@ -1042,6 +1073,7 @@ const onEditorCommentsUpdate = (params = {}) => {
 
     const currentUser = proxy.$superdoc?.user;
     if (currentUser) {
+      if (!commentPayload.creatorId) commentPayload.creatorId = currentUser.id;
       if (!commentPayload.creatorName) commentPayload.creatorName = currentUser.name;
       if (!commentPayload.creatorEmail) commentPayload.creatorEmail = currentUser.email;
     }

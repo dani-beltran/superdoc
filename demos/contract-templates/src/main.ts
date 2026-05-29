@@ -216,7 +216,11 @@ const superdoc = new SuperDoc({
   selector: '#editor',
   documentMode: 'editing',
   document: '/nda-template.docx',
-  modules: { comments: false },
+  // Disable SuperDoc's built-in SDT chrome (border, label, hover/selection
+  // highlight). The wrappers and data-sdt-* datasets are preserved, so the
+  // contextual field chip (field-chip.ts) and the document API still work;
+  // this demo paints its own SDT visuals in style.css instead.
+  modules: { comments: false, contentControls: { chrome: 'none' } },
   telemetry: { enabled: false },
   onReady: ({ superdoc: sd }) => void initialize(sd as DemoSuperDoc),
 });
@@ -275,7 +279,9 @@ async function initialize(instance: DemoSuperDoc): Promise<void> {
   // leave the previous controller's scroll/resize listeners attached
   // to `window` and the previous chip element in the DOM.
   state.ui = createSuperDocUI({ superdoc: instance });
-  state.fieldChipTeardown = attachFieldChip(state.ui, {
+  // Active control comes from the SuperDoc event (SD-3232); placement from
+  // the UI controller's getRect (SD-3157).
+  state.fieldChipTeardown = attachFieldChip(instance, state.ui, {
     labelFor: (key) => FIELDS.find((f) => f.key === (key as FieldKey))?.label ?? key,
     valueFor: (key) => state.values[key as FieldKey],
   });
@@ -352,6 +358,39 @@ async function exportDocument(mode: 'raw' | 'clean'): Promise<void> {
 // Rendering
 // ---------------------------------------------------------------------------
 
+/**
+ * Scroll the first control carrying `tag` into view. Dogfoods the shipped
+ * public API: resolve the control id by tag (`selectByTag`), then
+ * `ui.contentControls.scrollIntoView`. Scroll-only - it does not move the
+ * cursor into the control (focus/activate is a separate concern).
+ */
+function locateByTag(tag: string): void {
+  const ui = state.ui;
+  const editor = state.editor;
+  if (!ui || !editor?.doc) return;
+  const { items } = editor.doc.contentControls.selectByTag({ tag });
+  const first = items[0];
+  if (!first) return;
+  // `target.nodeId` is the SDT node id (= the painted `data-sdt-id`), which is
+  // what scrollIntoView matches on.
+  void ui.contentControls.scrollIntoView({ id: first.target.nodeId, block: 'center' });
+}
+
+/**
+ * Focus the first control carrying `tag`: scroll to it AND put the caret
+ * inside (ui.contentControls.focus), so the user can start editing. The
+ * counterpart to locateByTag (scroll only).
+ */
+function focusByTag(tag: string): void {
+  const ui = state.ui;
+  const editor = state.editor;
+  if (!ui || !editor?.doc) return;
+  const { items } = editor.doc.contentControls.selectByTag({ tag });
+  const first = items[0];
+  if (!first) return;
+  void ui.contentControls.focus({ id: first.target.nodeId, block: 'center' });
+}
+
 function renderPanels(): void {
   renderFieldsPanel();
   renderClausesPanel();
@@ -360,13 +399,29 @@ function renderPanels(): void {
 function renderFieldsPanel(): void {
   fieldsPanelEl.innerHTML = '';
   for (const field of FIELDS) {
-    const row = document.createElement('label');
+    // A <div> wrapper (not <label>): a <label> may not contain interactive
+    // content, so the Locate <button> must be a sibling of the input, with a
+    // real <label for> tying the field name to the input.
+    const row = document.createElement('div');
     row.className = 'row';
+    const inputId = `field-${field.key}`;
     row.innerHTML = `
-      <span class="row-label">${escapeHtml(field.label)}</span>
-      <input data-field="${field.key}" value="${escapeAttr(state.values[field.key] ?? '')}" />
+      <div class="row-label">
+        <label class="row-label-text" for="${inputId}">${escapeHtml(field.label)}</label>
+        <span class="row-actions">
+          <button class="locate" type="button" data-locate-field="${escapeAttr(field.key)}" aria-label="Locate ${escapeAttr(field.label)} in the document" title="Scroll to this field">Locate</button>
+          <button class="focus" type="button" data-focus-field="${escapeAttr(field.key)}" aria-label="Focus ${escapeAttr(field.label)} in the document" title="Scroll to this field and place the cursor in it">Focus</button>
+        </span>
+      </div>
+      <input id="${inputId}" data-field="${field.key}" value="${escapeAttr(state.values[field.key] ?? '')}" />
     `;
     fieldsPanelEl.appendChild(row);
+    row.querySelector<HTMLButtonElement>('.locate')?.addEventListener('click', () => {
+      locateByTag(fieldTag(field.key));
+    });
+    row.querySelector<HTMLButtonElement>('.focus')?.addEventListener('click', () => {
+      focusByTag(fieldTag(field.key));
+    });
     const input = row.querySelector<HTMLInputElement>('input');
     if (!input) continue;
     // Reactive: each keystroke debounces ~250ms and fans the value to every
@@ -398,7 +453,11 @@ function renderClausesPanel(): void {
       card.innerHTML = `
         <header class="clause-header">
           <h3 class="clause-label">${escapeHtml(clause.label)}</h3>
-          <span class="clause-status">Update available</span>
+          <div class="clause-actions">
+            <span class="clause-status">Update available</span>
+            <button class="locate" type="button" data-locate-clause="${escapeAttr(clause.id)}" aria-label="Locate ${escapeAttr(clause.label)} in the document" title="Scroll to this clause">Locate</button>
+            <button class="focus" type="button" data-focus-clause="${escapeAttr(clause.id)}" aria-label="Focus ${escapeAttr(clause.label)} in the document" title="Scroll to this clause and place the cursor in it">Focus</button>
+          </div>
         </header>
         <p class="clause-summary">${escapeHtml(upgrade.summary)}</p>
         <p class="clause-meta">Document ${escapeHtml(inDoc)} \u00b7 Library ${escapeHtml(upgrade.version)}</p>
@@ -429,12 +488,22 @@ function renderClausesPanel(): void {
       card.innerHTML = `
         <header class="clause-header">
           <h3 class="clause-label">${escapeHtml(clause.label)}</h3>
-          <span class="clause-status muted">Current</span>
+          <div class="clause-actions">
+            <span class="clause-status muted">Current</span>
+            <button class="locate" type="button" data-locate-clause="${escapeAttr(clause.id)}" aria-label="Locate ${escapeAttr(clause.label)} in the document" title="Scroll to this clause">Locate</button>
+            <button class="focus" type="button" data-focus-clause="${escapeAttr(clause.id)}" aria-label="Focus ${escapeAttr(clause.label)} in the document" title="Scroll to this clause and place the cursor in it">Focus</button>
+          </div>
         </header>
         <p class="clause-meta">Document ${escapeHtml(inDoc)}</p>
       `;
     }
 
+    card.querySelector<HTMLButtonElement>('.locate')?.addEventListener('click', () => {
+      locateByTag(clauseTag(clause.id, inDoc));
+    });
+    card.querySelector<HTMLButtonElement>('.focus')?.addEventListener('click', () => {
+      focusByTag(clauseTag(clause.id, inDoc));
+    });
     clausesPanelEl.appendChild(card);
   }
 }

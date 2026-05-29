@@ -547,6 +547,28 @@ describe('SuperDoc.vue', () => {
     await nextTick();
     expect(superdocStoreStub.isReady.value).toBe(true);
 
+    // SD-673: pin the list-definitions-change bridge using the actual
+    // production payload shape. Both producers in super-editor's
+    // numbering-part-descriptor emit `{ editor, numbering }` (see
+    // packages/super-editor/src/editors/v1/core/parts/adapters/
+    // numbering-part-descriptor.ts:222,242). ListDefinitionsPayload
+    // itself marks all three fields optional, so this test pins the
+    // current production numbering variant + the SuperDoc.vue
+    // pass-through, not every possible ListDefinitionsPayload shape.
+    //
+    // Reference equality (.toBe) pins verbatim pass-through; the
+    // separate Object.keys snapshot pins the key set in case the
+    // bridge ever mutates the payload in place before forwarding (a
+    // deep-equal assertion against the same reference would pass
+    // trivially).
+    const listDefsPayload = { editor: editorMock, numbering: { nums: [] } };
+    options.onListDefinitionsChange(listDefsPayload);
+    const listDefsCall = superdocStub.emit.mock.calls.find(([name]) => name === 'list-definitions-change');
+    expect(listDefsCall).toBeDefined();
+    const [, emittedListDefsPayload] = listDefsCall;
+    expect(emittedListDefsPayload).toBe(listDefsPayload);
+    expect(Object.keys(emittedListDefsPayload).sort()).toEqual(['editor', 'numbering']);
+
     options.onDocumentLocked({ editor: editorMock, isLocked: true, lockedBy: { name: 'A' } });
     expect(superdocStub.lockSuperdoc).toHaveBeenCalledWith(true, { name: 'A' });
 
@@ -557,6 +579,72 @@ describe('SuperDoc.vue', () => {
       code: 'DOCX_ENCRYPTION_UNSUPPORTED',
       documentId: 'doc-1',
     });
+  });
+
+  it('bridges content-control editor events to superdoc public events', async () => {
+    const superdocStub = createSuperdocStub();
+    const wrapper = await mountComponent(superdocStub);
+    await nextTick();
+
+    const options = wrapper.findComponent(SuperEditorStub).props('options');
+    const listeners = {};
+    const editorMock = {
+      options: { documentId: 'doc-1' },
+      on: vi.fn((event, handler) => {
+        listeners[event] = handler;
+      }),
+    };
+
+    options.onCreate({ editor: editorMock });
+
+    const activePayload = {
+      active: { id: 'cc-2', controlType: 'text', scope: 'inline', tag: 'tag-2', alias: 'Alias 2' },
+      previous: { id: 'cc-1', controlType: 'text', scope: 'inline', tag: 'tag-1', alias: 'Alias 1' },
+      source: 'pointer',
+    };
+    const blurPayload = {
+      active: null,
+      previous: { id: 'cc-2', controlType: 'text', scope: 'inline', tag: 'tag-2', alias: 'Alias 2' },
+      source: 'keyboard',
+    };
+    const clickPayload = {
+      target: { id: 'cc-2', controlType: 'text', scope: 'inline', tag: 'tag-2', alias: 'Alias 2' },
+      source: 'pointer',
+    };
+
+    listeners.contentControlFocus?.(activePayload);
+    listeners.contentControlBlur?.(blurPayload);
+    listeners.contentControlClick?.(clickPayload);
+
+    expect(superdocStub.emit).toHaveBeenCalledWith('content-control:active-change', activePayload);
+    expect(superdocStub.emit).toHaveBeenCalledWith('content-control:active-change', blurPayload);
+    expect(superdocStub.emit).toHaveBeenCalledWith('content-control:click', clickPayload);
+  });
+
+  it('bridges content-control blur payload (active=null) as active-change event', async () => {
+    const superdocStub = createSuperdocStub();
+    const wrapper = await mountComponent(superdocStub);
+    await nextTick();
+
+    const options = wrapper.findComponent(SuperEditorStub).props('options');
+    const listeners = {};
+    const editorMock = {
+      options: { documentId: 'doc-1' },
+      on: vi.fn((event, handler) => {
+        listeners[event] = handler;
+      }),
+    };
+
+    options.onCreate({ editor: editorMock });
+
+    const blurPayload = {
+      active: null,
+      previous: { id: 'cc-prev', controlType: 'text', scope: 'inline', tag: 'tag-prev', alias: 'Prev' },
+      source: 'keyboard',
+    };
+    listeners.contentControlBlur?.(blurPayload);
+
+    expect(superdocStub.emit).toHaveBeenCalledWith('content-control:active-change', blurPayload);
   });
 
   it('does not emit public exception events for recoverable password prompt errors by default', async () => {
@@ -804,6 +892,27 @@ describe('SuperDoc.vue', () => {
     const options = wrapper.findComponent(SuperEditorStub).props('options');
     expect(options.layoutEngineOptions.proofing).toBe(topLevelProofing);
     expect(options.layoutEngineOptions.flowMode).toBe('paginated');
+  });
+
+  it('forwards modules.contentControls.chrome into layoutEngineOptions for PresentationEditor', async () => {
+    const superdocStub = createSuperdocStub();
+    superdocStub.config.modules.contentControls = { chrome: 'none' };
+
+    const wrapper = await mountComponent(superdocStub);
+    await nextTick();
+
+    const options = wrapper.findComponent(SuperEditorStub).props('options');
+    expect(options.layoutEngineOptions.contentControlsChrome).toBe('none');
+  });
+
+  it('leaves contentControlsChrome undefined when modules.contentControls is not configured', async () => {
+    const superdocStub = createSuperdocStub();
+
+    const wrapper = await mountComponent(superdocStub);
+    await nextTick();
+
+    const options = wrapper.findComponent(SuperEditorStub).props('options');
+    expect(options.layoutEngineOptions.contentControlsChrome).toBeUndefined();
   });
 
   it('handles replay comment update/delete events and triggers tracked-change resync', async () => {
@@ -1525,6 +1634,35 @@ describe('SuperDoc.vue', () => {
     commentsStoreStub.syncTrackedChangeComments.mockClear();
     listeners['editor:tracked-changes-changed']?.({ editor: sourceEditor, source: 'body-edit' });
     expect(commentsStoreStub.syncTrackedChangeComments).not.toHaveBeenCalled();
+  });
+
+  it('forwards replacedFile comment loads to the comments store', async () => {
+    const superdocStub = createSuperdocStub();
+    const wrapper = await mountComponent(superdocStub);
+    await nextTick();
+
+    const options = wrapper.findComponent(SuperEditorStub).props('options');
+    const editor = {
+      options: {
+        documentId: 'doc-1',
+        shouldLoadComments: false,
+      },
+    };
+
+    options.onCommentsLoaded({
+      editor,
+      comments: [{ commentId: 'c-1' }],
+      replacedFile: true,
+    });
+    await nextTick();
+
+    expect(commentsStoreStub.processLoadedDocxComments).toHaveBeenCalledWith({
+      superdoc: superdocStub,
+      editor,
+      comments: [{ commentId: 'c-1' }],
+      documentId: 'doc-1',
+      replacedFile: true,
+    });
   });
 
   it('clears tracked-change positions for non-body tracked-change updates when viewing-mode comments are hidden', async () => {

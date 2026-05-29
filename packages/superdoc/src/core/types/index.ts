@@ -93,8 +93,8 @@ export interface AwarenessUser extends User {
  * The runtime helper `awarenessStatesToArray` spreads each remote user
  * onto the top of the entry (`{ clientId, ...value.user, color }`), so
  * `User` fields like `name`, `email`, `image` appear at the top level
- * (not nested under a `user` property). Consumers should read
- * `state.name` / `state.email`, not `state.user.name`.
+ * (not nested under a `user` property). Consumers should read `state.id`,
+ * `state.name`, and `state.email`, not `state.user.name`.
  *
  * Application-specific fields attached to the awareness state by the
  * provider surface through the `[key: string]: unknown` index
@@ -1087,6 +1087,11 @@ export interface CanPerformPermissionParams {
 
 /** Modules registered with the SuperDoc instance. */
 export interface Modules {
+  /** Content controls module configuration. */
+  contentControls?: {
+    /** Built-in SDT chrome rendering mode. */
+    chrome?: 'default' | 'none';
+  };
   /**
    * Comments module configuration (false to disable). The named fields below
    * are typed for IDE help; the runtime spreads the entire object through the
@@ -1430,6 +1435,32 @@ export interface EditorTransactionEvent {
   sectionType?: string | null;
 }
 
+export interface SdtRef {
+  id: string;
+  tag?: string;
+  alias?: string;
+  controlType: string;
+  scope: 'inline' | 'block';
+}
+
+export interface ContentControlActiveChangePayload {
+  active: SdtRef | null;
+  previous: SdtRef | null;
+  /**
+   * Active content-control stack for the new selection, innermost first
+   * (matches `ui.contentControls` activeIds). `active` is `activePath[0]`.
+   * Empty when the selection is not inside any control. Lets nested-aware
+   * custom UI read the surrounding controls without combining with observe().
+   */
+  activePath: SdtRef[];
+  source: 'keyboard' | 'pointer';
+}
+
+export interface ContentControlClickPayload {
+  target: SdtRef;
+  source: 'pointer';
+}
+
 export interface SuperDocLayoutEngineOptions {
   /**
    * Layout engine flow mode.
@@ -1644,6 +1675,10 @@ export interface Config {
   onReady?: (params: SuperDocReadyPayload) => void;
   /** Callback when comments are updated. */
   onCommentsUpdate?: (params: SuperDocCommentsUpdatePayload) => void;
+  /** Callback when active content control changes. */
+  onContentControlActiveChange?: (params: ContentControlActiveChangePayload) => void;
+  /** Callback when user clicks inside a content control. */
+  onContentControlClick?: (params: ContentControlClickPayload) => void;
   /** Callback when awareness is updated. */
   onAwarenessUpdate?: (params: SuperDocAwarenessUpdatePayload) => void;
   /** Callback when the SuperDoc is locked or unlocked. */
@@ -1765,8 +1800,8 @@ export interface Config {
  * call sites cast `this.config` to this type so they can access these
  * invariants without per-site null guards.
  *
- * Use this from internal SuperDoc callsites that need the augmented shape
- * (e.g. `/** @type {InternalConfig} *\/ (this.config).socket = ...`).
+ * Use this from internal SuperDoc callsites that need the augmented
+ * shape, e.g. `(this.config as InternalConfig).socket = ...`.
  */
 export interface InternalConfig extends Config {
   /**
