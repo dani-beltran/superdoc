@@ -2160,6 +2160,22 @@ export class PresentationEditor extends EventEmitter {
   }
 
   /**
+   * Like {@link getRangeRects} but pins the body surface, ignoring any
+   * active header/footer/note session. Used by `ui.viewport.getRect`'s
+   * text-target path (SD-3329): a body-anchored target must return body
+   * geometry even while the user is editing a header/footer, where
+   * `getRangeRects` would otherwise route to the active non-body surface.
+   *
+   * @param from - Start position in the body ProseMirror document
+   * @param to - End position in the body ProseMirror document
+   * @param relativeTo - Optional element for coordinate reference (see {@link getRangeRects})
+   * @returns Array of body-surface rects (pageIndex + position data)
+   */
+  getBodyRangeRects(from: number, to: number, relativeTo?: HTMLElement): RangeRect[] {
+    return this.#computeRangeRects(from, to, relativeTo, { forceBodySurface: true });
+  }
+
+  /**
    * Get selection bounds for a document range with aggregated bounding box.
    * Returns null if layout is unavailable or the range is invalid.
    *
