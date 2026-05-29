@@ -1,25 +1,30 @@
 /**
- * Contextual smart-field chip — SD-3157 demo.
+ * Contextual smart-field chip — SD-3157 / SD-3232 demo.
  *
  * Shows a small chip anchored above the active smart-field content
- * control with the field's label and current value. Wired against the
- * public `superdoc/ui` controller (no framework — this demo is plain
- * TypeScript), using:
+ * control with the field's label and current value. Plain TypeScript
+ * (no framework), wired against two public SuperDoc APIs:
  *
- *   - `ui.contentControls.observe(...)` to react to the active control
- *   - `ui.contentControls.getRect({ id })` to anchor the chip
+ *   - `superdoc.on('content-control:active-change', ...)` to know *which*
+ *     control is active (SD-3232 events). The payload's `SdtRef` carries
+ *     the tag/alias/scope directly, so no extra lookup is needed.
+ *   - `ui.contentControls.getRect({ id })` to know *where* to draw the chip.
+ *
+ * That pairing is the intended model: events tell you what is active;
+ * `getRect()` tells you where to place your own UI.
  *
  * Narrow on purpose: only renders for `kind: 'smartField'` controls so
- * the chip doesn't collide with the existing block-clause review UI in
- * the Clauses tab. Linked-occurrence highlights, field-details popovers,
- * and clause badges are deliberate follow-ups (SD-3155 umbrella).
+ * the chip doesn't collide with the block-clause review UI in the Clauses
+ * tab. Linked-occurrence highlights, field-details popovers, and clause
+ * badges are deliberate follow-ups (SD-3155 umbrella).
  *
- * This demo runs with SuperDoc's built-in SDT chrome turned off
+ * The demo runs with SuperDoc's built-in SDT chrome turned off
  * (`modules.contentControls.chrome: 'none'`, SD-3159), so the chip is the
  * smart field's active-state UI rather than an addition on top of the
  * built-in blue label/border. The wrappers and data-sdt-* datasets are
- * still emitted, which is what `observe`/`getRect`/`get` rely on.
+ * still emitted, which is what `getRect` relies on.
  */
+import type { SuperDoc, ContentControlActiveChangePayload } from 'superdoc';
 import type { SuperDocUI } from 'superdoc/ui';
 
 export type SmartFieldLookup = {
@@ -33,11 +38,12 @@ const CHIP_CLASS = 'sd-field-chip';
 const CHIP_OFFSET_PX = 6;
 
 /**
- * Wire the chip to the controller. Returns a teardown function that
+ * Wire the chip. `superdoc` supplies the active-change events; `ui`
+ * supplies `getRect` for positioning. Returns a teardown function that
  * detaches listeners and removes the chip element. Safe to call after
  * `initialize()` has populated the field-value cache.
  */
-export function attachFieldChip(ui: SuperDocUI, lookup: SmartFieldLookup): () => void {
+export function attachFieldChip(superdoc: SuperDoc, ui: SuperDocUI, lookup: SmartFieldLookup): () => void {
   const chipEl = document.createElement('div');
   chipEl.className = CHIP_CLASS;
   chipEl.style.position = 'fixed';
@@ -50,12 +56,11 @@ export function attachFieldChip(ui: SuperDocUI, lookup: SmartFieldLookup): () =>
   let currentKey: string | null = null;
 
   /**
-   * Clear the active control entirely. Use ONLY when the controller
-   * tells us "no active SDT" — i.e. the observe callback fires with
-   * `activeId: null` or the active control isn't a smart field. Do
-   * NOT call this from the positioning loop on a transient rect miss
-   * (a reflow can drop the rect for one tick; clearing here would
-   * leave the chip hidden until the user clicks away and back).
+   * Clear the active control entirely. Use ONLY when active-change tells
+   * us "no active smart field" (active is null, or not a smart field). Do
+   * NOT call this from the positioning loop on a transient rect miss (a
+   * reflow can drop the rect for one tick; clearing here would leave the
+   * chip hidden until the user clicks away and back).
    */
   const clearActive = () => {
     chipEl.style.visibility = 'hidden';
@@ -72,9 +77,8 @@ export function attachFieldChip(ui: SuperDocUI, lookup: SmartFieldLookup): () =>
     if (!currentId) return;
     const rect = ui.contentControls.getRect({ id: currentId });
     if (!rect.success) {
-      // Transient miss — keep the active state so the next scroll /
-      // resize / observe tick can re-anchor without requiring the
-      // user to click away.
+      // Transient miss — keep the active state so the next scroll / resize
+      // tick can re-anchor without requiring the user to click away.
       hideVisually();
       return;
     }
@@ -113,17 +117,18 @@ export function attachFieldChip(ui: SuperDocUI, lookup: SmartFieldLookup): () =>
 
   const onScrollOrResize = () => positionChip();
 
-  const unsubscribe = ui.contentControls.observe((snapshot) => {
-    // Narrow to smart-field SDTs only. Block-level reusable clauses
-    // have their own review surface in the Clauses tab; rendering a
-    // chip on them would compete with that flow.
-    const activeId = snapshot.activeId;
-    if (!activeId) {
+  // SD-3232: the active control comes from the public SuperDoc event. The
+  // payload includes the SdtRef (id + tag), so we can narrow to smart
+  // fields and anchor by id without a separate lookup.
+  const onActiveChange = ({ active }: ContentControlActiveChangePayload) => {
+    if (!active) {
       clearActive();
       return;
     }
-    const info = ui.contentControls.get({ id: activeId });
-    const tagStr = info?.properties?.tag;
+    // Narrow to smart-field SDTs only. Block-level reusable clauses have
+    // their own review surface in the Clauses tab; a chip on them would
+    // compete with that flow.
+    const tagStr = active.tag;
     if (!tagStr) {
       clearActive();
       return;
@@ -139,16 +144,17 @@ export function attachFieldChip(ui: SuperDocUI, lookup: SmartFieldLookup): () =>
       clearActive();
       return;
     }
-    currentId = activeId;
+    currentId = active.id;
     currentKey = parsed.key;
     update();
-  });
+  };
 
+  superdoc.on('content-control:active-change', onActiveChange);
   window.addEventListener('scroll', onScrollOrResize, true);
   window.addEventListener('resize', onScrollOrResize);
 
   return () => {
-    unsubscribe();
+    superdoc.off('content-control:active-change', onActiveChange);
     window.removeEventListener('scroll', onScrollOrResize, true);
     window.removeEventListener('resize', onScrollOrResize);
     chipEl.remove();

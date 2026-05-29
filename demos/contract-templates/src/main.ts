@@ -279,7 +279,9 @@ async function initialize(instance: DemoSuperDoc): Promise<void> {
   // leave the previous controller's scroll/resize listeners attached
   // to `window` and the previous chip element in the DOM.
   state.ui = createSuperDocUI({ superdoc: instance });
-  state.fieldChipTeardown = attachFieldChip(state.ui, {
+  // Active control comes from the SuperDoc event (SD-3232); placement from
+  // the UI controller's getRect (SD-3157).
+  state.fieldChipTeardown = attachFieldChip(instance, state.ui, {
     labelFor: (key) => FIELDS.find((f) => f.key === (key as FieldKey))?.label ?? key,
     valueFor: (key) => state.values[key as FieldKey],
   });

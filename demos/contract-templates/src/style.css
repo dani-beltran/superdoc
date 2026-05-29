@@ -264,11 +264,12 @@ input:focus {
 }
 
 /*
- * Contextual smart-field chip (SD-3157). Floats over the active smart-
- * field SDT showing field label + live value. Wired in field-chip.ts
- * against `ui.contentControls.observe` + `getRect`. With built-in chrome
- * off (SD-3159), the chip is the smart field's active-state affordance:
- * custom UI anchored to the SDT via the public geometry API.
+ * Contextual smart-field chip (SD-3157 / SD-3232). Floats over the active
+ * smart-field SDT showing field label + live value. Wired in field-chip.ts
+ * against the public `content-control:active-change` event (what's active)
+ * + `ui.contentControls.getRect` (where to draw). With built-in chrome off
+ * (SD-3159), the chip is the smart field's active-state affordance: custom
+ * UI anchored to the SDT via public events and the geometry API.
  */
 .sd-field-chip {
   display: inline-flex;
