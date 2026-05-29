@@ -519,7 +519,37 @@ export interface ContentControlsHandle {
     block?: 'start' | 'center' | 'end' | 'nearest';
     behavior?: 'auto' | 'smooth';
   }): Promise<import('@superdoc/document-api').ScrollIntoViewOutput>;
+  /**
+   * Focus the content control identified by `id`: place the caret inside it
+   * and scroll it into view — the "take me there and let me edit" counterpart
+   * to {@link scrollIntoView} (which is scroll-only). `block` defaults to
+   * `'center'`, `behavior` to `'smooth'`.
+   *
+   * Selection, not mutation: it does NOT bypass lock or document-mode rules.
+   * If the control is locked or the document is read-only, the user can
+   * inspect it, but edits are still blocked by the normal editing rules.
+   *
+   * Resolves to `{ success: false, reason }` only for real navigation
+   * problems — `'invalid-id'` (empty id), `'not-ready'` (no presentation
+   * layer), `'not-found'` (no such control in the body document; v1 is
+   * body-only), or `'not-reachable'` (found, but its page couldn't be
+   * scrolled into view). Lock mode and viewing mode never make it fail.
+   */
+  focus(input: {
+    id: string;
+    block?: 'start' | 'center' | 'end' | 'nearest';
+    behavior?: 'auto' | 'smooth';
+  }): Promise<ContentControlFocusResult>;
 }
+
+/**
+ * Result of {@link ContentControlsHandle.focus}. Fails only for real
+ * navigation problems, never for lock mode or viewing mode (focus is
+ * selection, not mutation).
+ */
+export type ContentControlFocusResult =
+  | { success: true }
+  | { success: false; reason: 'invalid-id' | 'not-ready' | 'not-found' | 'not-reachable' };
 
 /**
  * Anchored-metadata domain handle exposed on `ui.metadata`. Sugar over
