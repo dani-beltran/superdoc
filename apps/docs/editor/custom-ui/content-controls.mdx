@@ -40,6 +40,7 @@ The event tells you *what* is active; `getRect` tells you *where* to draw. `acti
 | Read one control | `ui.contentControls.get({ id })` |
 | Position your UI | `ui.contentControls.getRect({ id })` |
 | Scroll a control into view | `ui.contentControls.scrollIntoView({ id })` |
+| Re-anchor your UI when the page moves | `ui.viewport.observe(() => ...)` |
 | Hover and right-click hit-testing | `ui.viewport.entityAt()` / `contextAt()` |
 | Change content, tags, or locks | `editor.doc.contentControls.*` |
 
@@ -47,9 +48,10 @@ The event tells you *what* is active; `getRect` tells you *where* to draw. `acti
 
 `scrollIntoView` resolves the control's position from the document, so it works even when the control is on a page that hasn't rendered yet (the page mounts, then scrolls). It scrolls only - it does not move the cursor into the control.
 
+`ui.viewport.observe` is the single signal for "your `getRect()` coordinates may be stale, re-query": it fires (coalesced, once per frame) on scroll, resize, zoom, and layout reflow, so an overlay anchored with `getRect` stays glued without hand-wiring those events yourself.
+
 ## Current limits
 
-- No geometry-change subscription. Re-read `getRect()` on scroll, resize, and the `pagination-update` / `zoomChange` events.
 - No focus-by-id helper. Clicking a control in the document still drives selection.
 
 ## See also

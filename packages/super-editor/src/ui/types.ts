@@ -714,11 +714,10 @@ export interface SuperDocUI {
   selection: SelectionHandle;
 
   /**
-   * Viewport domain — imperative geometry queries for sticky-card /
-   * floating-toolbar placement against painted entities and ranges.
-   * No subscription substrate — viewport rects are read on-demand by
-   * the consumer (e.g. on hover, on scroll, on layout-change events
-   * the consumer already listens to). Browser-only by definition.
+   * Viewport domain — geometry queries for sticky-card / floating-toolbar
+   * placement against painted entities and ranges, plus
+   * {@link ViewportHandle.observe} to learn when those rects may have moved.
+   * Browser-only by definition.
    */
   viewport: ViewportHandle;
 
@@ -1831,17 +1830,38 @@ export type ViewportRectResult =
     };
 
 /**
- * Imperative viewport-geometry surface. No subscription primitive —
- * rects are read on demand. Consumers who need to reflow on layout
- * change typically already listen to a `transaction` / `paint` /
- * `scroll` event upstream and call `getRect` from there.
+ * Reason a {@link ViewportHandle.observe} notification fired. `'mixed'`
+ * when more than one change coalesced into the same animation frame.
  */
+export type ViewportGeometryReason = 'layout' | 'zoom' | 'scroll' | 'resize' | 'mixed';
+
+/**
+ * Payload for {@link ViewportHandle.observe}. Intentionally minimal: the
+ * signal means "your cached `getRect()` coordinates may be stale, re-query" -
+ * it carries no geometry.
+ */
+export interface ViewportGeometryEvent {
+  reason: ViewportGeometryReason;
+}
+
 export interface ViewportHandle {
   /**
    * Look up the painted rectangle(s) of an entity or text range in
    * viewport coordinates. Synchronous — no DOM mutation required.
    */
   getRect(input: ViewportGetRectInput): ViewportRectResult;
+  /**
+   * Subscribe to viewport geometry invalidation. The listener fires (once
+   * per animation frame, coalesced) after anything that can move painted
+   * rectangles: layout / pagination repaints, zoom, and DOM scroll / resize.
+   * It carries no coordinates — re-query {@link getRect} for the entities you
+   * care about. Returns an unsubscribe.
+   *
+   * This is the single signal overlays should listen to instead of
+   * hand-wiring scroll + resize + layout + zoom (and still missing cases like
+   * reflow and zoom, which fire no scroll event).
+   */
+  observe(listener: (event: ViewportGeometryEvent) => void): () => void;
   /**
    * Scroll the viewport so the target is visible. Browser-only by
    * definition: drives `presentation.navigateTo()` for entity targets
