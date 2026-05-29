@@ -34,7 +34,30 @@ button { cursor: pointer; }
 
 .app { display: grid; grid-template-columns: 1fr 360px; height: 100vh; }
 .editor-area { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-.editor-area #editor { flex: 1; overflow: auto; padding: 12px; }
+/* SuperDoc's formatting toolbar, rendered into #superdoc-toolbar. Clip to the
+   editor column so overflowing items can't paint over the sidebar (they collapse
+   into the responsive overflow menu instead; popovers append to <body>). */
+#superdoc-toolbar {
+  border-bottom: 1px solid var(--demo-border);
+  background: var(--demo-bg);
+  overflow: hidden;
+  min-width: 0;
+}
+/* Center the page horizontally; align to top so multi-page docs scroll. */
+.editor-area #editor {
+  flex: 1;
+  overflow: auto;
+  padding: 12px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+/* Drop zone: highlight the editor while a field chip is dragged over it. */
+.editor-area #editor.drop-target {
+  outline: 2px dashed var(--demo-accent);
+  outline-offset: -4px;
+  background: var(--demo-accent-soft);
+}
 
 .toolbar {
   display: flex;
@@ -136,9 +159,9 @@ input:focus {
 }
 .btn:disabled { color: var(--demo-text-muted); cursor: not-allowed; opacity: 0.55; }
 
-/* "Locate" — scroll a control into view (ui.contentControls.scrollIntoView);
-   "Focus" — scroll AND place the caret inside it (ui.contentControls.focus). */
-.clause-actions { display: flex; align-items: center; gap: 8px; }
+/* Field rows (Values tab): "Locate" scrolls a control into view
+   (ui.contentControls.scrollIntoView); "Focus" scrolls AND places the caret
+   inside it (ui.contentControls.focus). */
 .row-actions { display: flex; align-items: center; gap: 6px; }
 .locate,
 .focus {
@@ -161,96 +184,41 @@ input:focus {
 #fields-panel .btn { width: 100%; margin-top: 12px; }
 
 /* -----------------------------------------------------------------------
-   Clauses panel
+   Clause library (Template tab)
+
+   A catalog of governed clauses. Each card echoes the in-document block clause
+   (amber left rail, soft border, faint amber fill) and shows its metadata and
+   how many times it's placed. Drag a card in, or click to insert at the cursor.
+   The clauses themselves are locked blocks.
    ----------------------------------------------------------------------- */
 
+.clauses-section { margin-top: 16px; }
+
 .clause {
-  border: 1px solid var(--demo-border);
-  border-radius: var(--sd-radius-100, 6px);
-  padding: 10px 12px;
-  margin-bottom: 8px;
-  background: var(--demo-bg);
+  border: 1px solid var(--tag-block-border);
+  border-left: 4px solid var(--tag-color);
+  border-radius: var(--tag-radius);
+  background-color: var(--tag-block-bg);
+  padding: 7px 10px;
+  margin-bottom: 6px;
+  cursor: grab;
 }
-.clause.current {
-  background: transparent;
-  border-color: var(--demo-border);
-}
-.clause.stale {
-  background: var(--demo-stale-soft);
-  border-color: var(--demo-accent);
-}
-.clause-header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 4px;
-}
+.clause:hover { background-color: var(--tag-block-bg-hover); }
+.clause:active { cursor: grabbing; }
+.clause.is-active { box-shadow: 0 0 0 2px var(--tag-color); }
 .clause-label {
   margin: 0;
   font-size: var(--sd-font-size-300, 13px);
   font-weight: 600;
   color: var(--demo-text);
-}
-.clause-status {
-  font-size: var(--sd-font-size-200, 11px);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--demo-accent);
-}
-.clause-status.muted { color: var(--demo-text-muted); }
-.clause-summary {
-  margin: 0 0 6px;
-  font-size: var(--sd-font-size-300, 13px);
-  color: var(--demo-text);
-  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .clause-meta {
-  margin: 0 0 8px;
-  font-size: var(--sd-font-size-200, 12px);
+  margin: 2px 0 0;
+  font-size: var(--sd-font-size-100, 11px);
   color: var(--demo-text-muted);
-}
-.clause .btn { width: 100%; }
-.clause-review-panel {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid var(--demo-accent);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.review-label {
-  font-size: var(--sd-font-size-200, 11px);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--demo-text-muted);
-}
-.clause-preview {
-  margin: 0;
-  padding: 10px 12px;
-  background: var(--demo-bg);
-  border: 1px solid var(--demo-border);
-  border-radius: var(--sd-radius-50, 4px);
-  font-size: var(--sd-font-size-300, 13px);
-  line-height: 1.5;
-  color: var(--demo-text);
-}
-.clause-preview ins {
-  background: color-mix(in srgb, #15803d 18%, transparent);
-  color: var(--demo-text);
-  text-decoration: none;
-  padding: 0 2px;
-  border-radius: 2px;
-}
-.clause-preview del {
-  color: var(--demo-text-muted);
-  text-decoration: line-through;
-  text-decoration-color: #d92e2e;
-  background: color-mix(in srgb, #d92e2e 12%, transparent);
-  padding: 0 2px;
-  border-radius: 2px;
 }
 
 .status {
@@ -276,9 +244,12 @@ input:focus {
 /* Smart-tag token look, shared by the in-editor inline SDT and the Smart-tags
    palette chips so a sidebar tag and the field it inserts read as one object. */
 :root {
-  /* Smart tags get their own amber identity (distinct from the blue UI accent),
-     echoing a typical template-variable palette. One token set, applied to both
-     the palette chip and the painted in-editor field. */
+  /* Template fields wear a deliberate amber identity, distinct from the
+     SuperDoc-blue UI accent (--demo-accent), so a reader can see "this is a
+     template variable" at a glance. Amber isn't a built-in --sd-* token, so
+     this is an intentional demo-local accent (the theming the demo is showing
+     off, per demos/AGENTS.md). One token set, applied to both the palette chip
+     and the painted in-editor field. */
   --tag-color: var(--sd-color-amber-600, #d97706);
   --tag-border: var(--tag-color);
   --tag-bg: color-mix(in srgb, var(--tag-color) 12%, transparent);
@@ -352,7 +323,7 @@ input:focus {
   font-size: 14px;
   font-weight: 500;
   line-height: 1.2;
-  cursor: pointer;
+  cursor: grab;
   padding: 1px 6px;
   border: 1px solid var(--tag-border);
   border-radius: var(--tag-radius);
@@ -361,6 +332,7 @@ input:focus {
   white-space: nowrap;
 }
 .smart-tag:hover { background: var(--tag-bg-hover); }
+.smart-tag:active { cursor: grabbing; }
 .smart-tag.is-active { box-shadow: 0 0 0 2px var(--demo-accent); }
 .smart-tag:focus-visible { outline: 1px solid var(--demo-accent); outline-offset: 1px; }
 

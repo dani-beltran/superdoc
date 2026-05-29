@@ -2,10 +2,10 @@ import { test, expect } from '@playwright/test';
 
 /**
  * Smart-tags authoring: clicking a tag chip in the sidebar inserts a matching
- * inline SDT at the caret (dogfoods ui.selection.capture + create.contentControl
- * + ui.contentControls.focus). The inserted field carries the field's tag and
- * the token text, and paints with the same .superdoc-structured-content-inline
- * wrapper the chips are styled to match.
+ * inline SDT at the caret (dogfoods ui.selection.capture + create.contentControl).
+ * The inserted control is created EMPTY (shows the placeholder) and contentLocked
+ * (values are filled only via the Values form), carries the field's tag, and
+ * paints with the same .superdoc-structured-content-inline wrapper the chips match.
  *
  * Runs only for the contract-templates demo (the shared suite runs once per DEMO).
  */
@@ -33,27 +33,22 @@ test('clicking a Smart-tags chip inserts a matching inline SDT at the caret', as
   expect(key).toBeTruthy();
 
   // Count existing controls with this tag, then click the chip and expect one more.
+  // (The field is inserted empty/locked, so we count by tag, not by text.)
   const tag = JSON.stringify({ kind: 'smartField', key });
-  const token = key!.replace(/([A-Z])/g, '_$1').toUpperCase();
-
-  const textsForTag = () =>
+  const countForTag = () =>
     page.evaluate((t) => {
       const ed = (window as any).__demo.superdoc.activeEditor;
-      const out: string[] = [];
+      let n = 0;
       ed.state.doc.descendants((node: any) => {
-        if (node.type.name === 'structuredContent' && node.attrs?.tag === t) out.push(node.textContent);
+        if (node.type.name === 'structuredContent' && node.attrs?.tag === t) n += 1;
         return true;
       });
-      return out;
+      return n;
     }, tag);
 
-  const before = await textsForTag();
+  const before = await countForTag();
   await page.click(`[data-tag-key="${key}"]`);
-
-  // A new inline SDT carrying this tag + token text should appear.
-  await expect
-    .poll(async () => (await textsForTag()).filter((x) => x === token).length, { timeout: 6_000 })
-    .toBeGreaterThan(before.filter((x) => x === token).length);
+  await expect.poll(countForTag, { timeout: 6_000 }).toBe(before + 1);
 });
 
 test('clicking an in-editor smart-field token highlights its sidebar chip', async ({ page }) => {
@@ -175,4 +170,208 @@ test('a block clause keeps its amber left rail and box across hover/select (no j
     expect(Math.abs(state.w - rest.w)).toBeLessThanOrEqual(1);
     expect(Math.abs(state.h - rest.h)).toBeLessThanOrEqual(1);
   }
+});
+
+test('smart fields are contentLocked and fill only through the Values form', async ({ page }) => {
+  test.skip(process.env.DEMO !== 'contract-templates', 'contract-templates demo only');
+
+  await page.route('**/ingest.superdoc.dev/**', (r) =>
+    r.fulfill({ status: 204, contentType: 'application/json', body: '{}' }),
+  );
+  await page.goto('/');
+  await page.waitForFunction(
+    () => (window as any).__demo?.state?.ui?.contentControls?.getSnapshot()?.items?.length > 0,
+    null,
+    { timeout: 30_000 },
+  );
+
+  const smartFieldLockModes = () =>
+    page.evaluate(() => {
+      const doc = (window as any).__demo.doc();
+      return doc.contentControls
+        .list({})
+        .items.filter((c: any) => {
+          try {
+            return JSON.parse(c.properties?.tag ?? '{}').kind === 'smartField';
+          } catch {
+            return false;
+          }
+        })
+        .map((c: any) => c.lockMode);
+    });
+  const textForDisclosingParty = () =>
+    page.evaluate(() => {
+      const doc = (window as any).__demo.doc();
+      const tag = JSON.stringify({ kind: 'smartField', key: 'disclosingParty' });
+      return doc.contentControls.selectByTag({ tag }).items.map((c: any) => c.text);
+    });
+
+  // Every smart field starts contentLocked (the user can't type into them).
+  const before = await smartFieldLockModes();
+  expect(before.length).toBeGreaterThan(0);
+  expect(before.every((m) => m === 'contentLocked')).toBe(true);
+
+  // Editing through the Values form writes through the lock (unlock -> setValue
+  // -> relock): the field text updates even though the control is locked. Use a
+  // value distinct from the seeded default so the write is observable.
+  await page.click('.tab[data-tab="values"]');
+  await page.fill('input[data-field="disclosingParty"]', 'Globex Corporation');
+  await expect.poll(textForDisclosingParty, { timeout: 6_000 }).toContain('Globex Corporation');
+
+  // And the controls are relocked afterward, never left editable.
+  const after = await smartFieldLockModes();
+  expect(after.every((m) => m === 'contentLocked')).toBe(true);
+});
+
+test('block clauses are contentLocked too', async ({ page }) => {
+  test.skip(process.env.DEMO !== 'contract-templates', 'contract-templates demo only');
+
+  await page.route('**/ingest.superdoc.dev/**', (r) =>
+    r.fulfill({ status: 204, contentType: 'application/json', body: '{}' }),
+  );
+  await page.goto('/');
+  await page.waitForFunction(
+    () => (window as any).__demo?.state?.ui?.contentControls?.getSnapshot()?.items?.length > 0,
+    null,
+    { timeout: 30_000 },
+  );
+
+  // Clause blocks are locked like the inline fields, so their prose can't be
+  // edited by typing in the document.
+  const clauseLockModes = await page.evaluate(() => {
+    const doc = (window as any).__demo.doc();
+    return doc.contentControls
+      .list({})
+      .items.filter((c: any) => {
+        try {
+          return JSON.parse(c.properties?.tag ?? '{}').kind === 'reusableSection';
+        } catch {
+          return false;
+        }
+      })
+      .map((c: any) => c.lockMode);
+  });
+  expect(clauseLockModes.length).toBeGreaterThan(0);
+  expect(clauseLockModes.every((m) => m === 'contentLocked')).toBe(true);
+});
+
+test('a field value broadcasts to every occurrence, including one nested in a locked clause', async ({ page }) => {
+  test.skip(process.env.DEMO !== 'contract-templates', 'contract-templates demo only');
+
+  await page.route('**/ingest.superdoc.dev/**', (r) =>
+    r.fulfill({ status: 204, contentType: 'application/json', body: '{}' }),
+  );
+  await page.goto('/');
+  await page.waitForFunction(
+    () => (window as any).__demo?.state?.ui?.contentControls?.getSnapshot()?.items?.length > 0,
+    null,
+    { timeout: 30_000 },
+  );
+
+  // Receiving party appears twice: once in the header sentence and once nested
+  // inside the (locked) Permitted Use clause. The clause's content lock silently
+  // vetoes writes to the nested one unless the clause is unlocked around the
+  // write - this guards that the form value reaches BOTH occurrences.
+  const receivingPartyTexts = () =>
+    page.evaluate(() => {
+      const doc = (window as any).__demo.doc();
+      const tag = JSON.stringify({ kind: 'smartField', key: 'receivingParty' });
+      return doc.contentControls.selectByTag({ tag }).items.map((c: any) => c.text);
+    });
+
+  expect((await receivingPartyTexts()).length).toBe(2);
+
+  await page.click('.tab[data-tab="values"]');
+  await page.fill('input[data-field="receivingParty"]', 'Beacon Bio');
+
+  await expect
+    .poll(async () => (await receivingPartyTexts()).filter((t) => t === 'Beacon Bio').length, { timeout: 6_000 })
+    .toBe(2);
+});
+
+test('clicking a clause card inserts a locked block clause at the cursor', async ({ page }) => {
+  test.skip(process.env.DEMO !== 'contract-templates', 'contract-templates demo only');
+
+  await page.route('**/ingest.superdoc.dev/**', (r) =>
+    r.fulfill({ status: 204, contentType: 'application/json', body: '{}' }),
+  );
+  await page.goto('/');
+  await page.waitForFunction(
+    () => (window as any).__demo?.state?.ui?.contentControls?.getSnapshot()?.items?.length > 0,
+    null,
+    { timeout: 30_000 },
+  );
+  await page.waitForSelector('.clause[data-clause-id]');
+
+  // Caret in the (unlocked) title so the clause inserts at a clean block boundary.
+  await page.evaluate(() => {
+    (window as any).__demo.superdoc.activeEditor.commands?.setTextSelection?.({ from: 6, to: 6 });
+  });
+
+  const sectionId = await page.getAttribute('.clause[data-clause-id]', 'data-clause-id');
+  expect(sectionId).toBeTruthy();
+
+  // Count controls for this clause + confirm they're all locked.
+  const clauseInfo = () =>
+    page.evaluate((sid) => {
+      const doc = (window as any).__demo.doc();
+      const items = doc.contentControls.list({}).items.filter((c: any) => {
+        try {
+          return JSON.parse(c.properties?.tag ?? '{}').sectionId === sid;
+        } catch {
+          return false;
+        }
+      });
+      return { count: items.length, allLocked: items.every((c: any) => c.lockMode === 'contentLocked') };
+    }, sectionId);
+
+  const before = await clauseInfo();
+  await page.click(`.clause[data-clause-id="${sectionId}"]`);
+
+  // A new block clause for this section appears, and every occurrence is locked.
+  await expect.poll(async () => (await clauseInfo()).count, { timeout: 6_000 }).toBe(before.count + 1);
+  expect((await clauseInfo()).allLocked).toBe(true);
+});
+
+test('inserting Permitted Use nests real smart fields that fill from the form', async ({ page }) => {
+  test.skip(process.env.DEMO !== 'contract-templates', 'contract-templates demo only');
+
+  await page.route('**/ingest.superdoc.dev/**', (r) =>
+    r.fulfill({ status: 204, contentType: 'application/json', body: '{}' }),
+  );
+  await page.goto('/');
+  await page.waitForFunction(
+    () => (window as any).__demo?.state?.ui?.contentControls?.getSnapshot()?.items?.length > 0,
+    null,
+    { timeout: 30_000 },
+  );
+  await page.waitForSelector('.clause[data-clause-id="permittedUse"]');
+
+  // Caret in the (unlocked) title so the clause inserts at a clean block boundary.
+  await page.evaluate(() => {
+    (window as any).__demo.superdoc.activeEditor.commands?.setTextSelection?.({ from: 6, to: 6 });
+  });
+
+  // Count Receiving party smart fields in the document (an inline structuredContent
+  // whose tag carries that key) - the Permitted Use clause carries one as a slot.
+  const receivingPartyControls = () =>
+    page.evaluate(() => {
+      const doc = (window as any).__demo.doc();
+      const tag = JSON.stringify({ kind: 'smartField', key: 'receivingParty' });
+      return doc.contentControls.selectByTag({ tag }).items.map((c: any) => c.text);
+    });
+
+  const before = (await receivingPartyControls()).length; // 2 seeded
+  await page.click('.clause[data-clause-id="permittedUse"]');
+
+  // Inserting the clause adds a real nested Receiving party SDT (not plain text).
+  await expect.poll(async () => (await receivingPartyControls()).length, { timeout: 6_000 }).toBe(before + 1);
+
+  // Filling Receiving party in the Values form reaches every occurrence,
+  // including the one just nested inside the inserted clause.
+  await page.click('.tab[data-tab="values"]');
+  await page.fill('input[data-field="receivingParty"]', 'Beacon Bio');
+  await expect
+    .poll(async () => (await receivingPartyControls()).filter((t) => t === 'Beacon Bio').length, { timeout: 6_000 })
+    .toBe(before + 1);
 });

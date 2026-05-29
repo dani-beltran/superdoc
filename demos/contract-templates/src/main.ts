@@ -1,40 +1,44 @@
 /**
- * Contract templates: a runtime workflow on Word content controls.
+ * Contract templates: build a contract template on Word content controls (SDTs)
+ * with a fully custom UI. SuperDoc's built-in SDT chrome is off
+ * (`modules.contentControls.chrome: 'none'`), so the demo paints the field/clause
+ * look itself (style.css) and drives every interaction through the public
+ * surface: `editor.doc.*` and `superdoc/ui` (events, viewport.positionAt,
+ * contentControls.scrollIntoView / focus / setLockMode).
  *
- * The document is a Mutual NDA (`public/nda-template.docx`)
- * with content controls already in place:
- *   - Seven inline plain-text content controls across five field keys
- *     (disclosing party, receiving party, effective date, purpose, term
- *     length). Authored via Word's `ContentControls.Add(1, range)`, so their
- *     `w:sdtPr` carries `<w:text/>` and they resolve as `controlType: 'text'`.
- *     Receiving party and Purpose each appear twice: once in the header
- *     sentence and once nested inside the Permitted Use block clause.
- *   - Six block rich-text content controls (Preamble, Confidentiality,
- *     Permitted Use, Term and Termination, Governing Law, Limitation of
- *     Liability). Authored via `ContentControls.Add(0, range)`, which
- *     produces typeless sdtPr that resolves as `controlType: 'richText'`
- *     per ECMA-376 §17.5.2.26. Each block carries
- *     `{ kind: 'reusableSection', sectionId, version }` in its tag.
+ * The starting document is a Mutual NDA (`public/nda-template.docx`) with
+ * controls already in place:
+ *   - Inline plain-text fields across five keys (disclosing party, receiving
+ *     party, effective date, purpose, term). Receiving party and Purpose each
+ *     appear twice: in the header sentence and nested inside the Permitted Use
+ *     block clause.
+ *   - Six block rich-text clauses tagged `{ kind: 'reusableSection', sectionId }`.
  *
- * The app:
- *   1. Loads the fixture as its starting document.
- *   2. Reads each field's text and each clause's version from the parsed SDTs.
- *   3. Compares clause versions against the local library and surfaces a
- *      Review CTA on every stale clause with a one-line summary of the change.
- *   4. Field inputs are reactive: typing in a value debounces by ~250ms and
- *      fans the new text to every occurrence via `selectByTag` + per-occurrence
- *      `text.setValue` (the typed API path for plain-text controls).
- *   5. Review expands a card showing the in-document clause alongside the
- *      library version. Replace with library clause swaps body via
- *      `replaceContent` and bumps the tag version via `patch`.
- *   6. Export has two paths: raw DOCX keeps content controls for future
- *      template/library updates; clean DOCX flattens controls to final values.
+ * The model:
+ *   - Every control is `contentLocked`, so it can't be edited by typing in the
+ *     document. This is a locked template surface; the custom UI drives changes.
+ *   - Template tab = the building-block library. Two catalogs: smart-field chips
+ *     and clause cards (each with category / jurisdiction / version and a "used
+ *     N times" count). Drag or click a chip to insert an inline field, or a card
+ *     to insert a block clause. An unfilled field shows its field-name token
+ *     (e.g. DISCLOSING_PARTY) as a stand-in placeholder - literal text content,
+ *     not a native SDT placeholder.
+ *   - A clause is assembled from structured `parts`: prose plus `{ field }`
+ *     slots. Inserting it creates the block and wraps each slot as a nested,
+ *     locked inline smart field - so an inserted "Permitted Use" carries real
+ *     Receiving party / Purpose fields, like the seeded one.
+ *   - Values tab = fill the fields. Editing a value debounces ~250ms and fans it
+ *     to every occurrence, including ones nested in clauses (the write briefly
+ *     unlocks clauses, since a clause's content lock otherwise vetoes nested
+ *     writes), via `selectByTag` + `text.setValue`.
+ *   - Export: raw DOCX keeps the controls/tags; clean DOCX flattens to values.
  *
- * Every mutation goes through `editor.doc.*`. The same operation set runs
- * headless via the Node SDK and CLI.
+ * Out of scope (deliberately): clause version review / replace. That's a clause
+ * lifecycle demo; this one proves template assembly.
  *
- * For a packaged React authoring component (`{{` trigger, linked field
- * groups, owner/signer types, DOCX export), see `@superdoc-dev/template-builder`.
+ * Every mutation goes through `editor.doc.*`, so the same operations run headless
+ * via the Node SDK and CLI. For a packaged React authoring component, see
+ * `@superdoc-dev/template-builder`.
  */
 
 import { SuperDoc } from 'superdoc';
@@ -70,12 +74,14 @@ type DocumentApi = {
       content?: string;
       tag?: string;
       alias?: string;
+      lockMode?: LockMode;
     }): MutationResult;
   };
   contentControls: {
     list(input?: Record<string, unknown>): { items: ContentControlInfo[]; total: number };
     selectByTag(input: { tag: string }): { items: ContentControlInfo[]; total: number };
     patch(input: { target: ContentControlTarget; tag?: string; alias?: string }): MutationResult;
+    setLockMode(input: { target: ContentControlTarget; lockMode: LockMode }): MutationResult;
     replaceContent(input: { target: ContentControlTarget; content: string; format?: 'text' }): MutationResult;
     text: {
       setValue(input: { target: ContentControlTarget; value: string }): MutationResult;
@@ -106,76 +112,104 @@ type ClauseId =
   | 'permittedUse'
   | 'termination'
   | 'governingLaw'
-  | 'limitationOfLiability';
+  | 'limitationOfLiability'
+  | 'indemnification';
 
-type PreviewSegment = { kind: 'same' | 'insert' | 'delete'; text: string };
+type ClauseCategory = 'Core' | 'Confidentiality' | 'Termination' | 'Risk Allocation';
 
+/**
+ * A clause-body part: literal prose, or a `{ field }` slot that becomes a nested
+ * inline smart-field SDT when the clause is inserted. The slot renders as the
+ * field's current display (value if filled, otherwise its name token).
+ */
+type ClausePart = string | { field: FieldKey };
+
+/**
+ * A governed clause in the library catalog: a label + metadata for the sidebar
+ * card, and the structured `parts` used to assemble the clause when it's
+ * inserted. The catalog includes clauses that aren't in the document yet.
+ */
 type LibraryClause = {
   id: ClauseId;
   label: string;
-  latestVersion: string;
-  /** Upgrade prose. Only defined when `latestVersion` differs from v1. */
-  upgrade?: {
-    version: string;
-    summary: string;
-    body: string;
-    /** Hand-authored proposed-change view shown in the review panel. */
-    preview: PreviewSegment[];
-  };
+  category: ClauseCategory;
+  jurisdiction: string;
+  version: string;
+  parts: ClausePart[];
 };
 
 const CLAUSE_LIBRARY: LibraryClause[] = [
-  { id: 'preamble', label: 'Preamble', latestVersion: 'v1' },
+  {
+    id: 'preamble',
+    label: 'Preamble',
+    category: 'Core',
+    jurisdiction: 'General',
+    version: 'v1',
+    parts: [
+      'The parties wish to share Confidential Information for the purposes described above and acknowledge the obligations set out in this Agreement.',
+    ],
+  },
   {
     id: 'confidentiality',
     label: 'Confidentiality Obligations',
-    latestVersion: 'v2',
-    upgrade: {
-      version: 'v2',
-      summary: 'Extends survival period from 2 years to 5 years.',
-      body: 'Each party will treat the other party\u2019s Confidential Information as confidential and will protect it with at least the same care it uses for its own confidential information. These obligations survive disclosure for five (5) years.',
-      preview: [
-        { kind: 'same', text: 'Each party will treat the other party\u2019s Confidential Information as confidential and will protect it with at least the same care it uses for its own confidential information. These obligations survive disclosure for ' },
-        { kind: 'delete', text: 'two (2) years' },
-        { kind: 'insert', text: 'five (5) years' },
-        { kind: 'same', text: '.' },
-      ],
-    },
+    category: 'Confidentiality',
+    jurisdiction: 'General',
+    version: 'v1',
+    parts: [
+      'Each party will treat the other party’s Confidential Information as confidential and will protect it with at least the same care it uses for its own confidential information. These obligations survive disclosure for two (2) years.',
+    ],
   },
-  { id: 'permittedUse', label: 'Permitted Use', latestVersion: 'v1' },
-  { id: 'termination', label: 'Term and Termination', latestVersion: 'v1' },
+  {
+    id: 'permittedUse',
+    label: 'Permitted Use',
+    category: 'Confidentiality',
+    jurisdiction: 'General',
+    version: 'v1',
+    // Carries nested smart fields: inserting this clause creates real inline
+    // SDTs for Receiving party and Purpose that fill from the Values form.
+    parts: [
+      'The ',
+      { field: 'receivingParty' },
+      ' may use Confidential Information solely for ',
+      { field: 'purpose' },
+      ', and for no other purpose, and will limit access to its employees and advisors with a need to know.',
+    ],
+  },
+  {
+    id: 'termination',
+    label: 'Term and Termination',
+    category: 'Termination',
+    jurisdiction: 'General',
+    version: 'v1',
+    parts: [
+      'Either party may terminate this Agreement upon thirty (30) days’ written notice. Confidentiality obligations survive termination for the period specified above.',
+    ],
+  },
   {
     id: 'governingLaw',
     label: 'Governing Law',
-    latestVersion: 'v2',
-    upgrade: {
-      version: 'v2',
-      summary: 'Changes governing law from California to New York.',
-      body: 'This Agreement is governed by the laws of the State of New York, without regard to its conflicts of law provisions.',
-      preview: [
-        { kind: 'same', text: 'This Agreement is governed by the laws of the State of ' },
-        { kind: 'delete', text: 'California' },
-        { kind: 'insert', text: 'New York' },
-        { kind: 'same', text: ', without regard to its conflicts of law provisions.' },
-      ],
-    },
+    category: 'Core',
+    jurisdiction: 'US-CA',
+    version: 'v1',
+    parts: ['This Agreement is governed by the laws of the State of California, without regard to its conflicts of law provisions.'],
   },
   {
     id: 'limitationOfLiability',
     label: 'Limitation of Liability',
-    latestVersion: 'v2',
-    upgrade: {
-      version: 'v2',
-      summary: 'Extends liability cap from 12 to 24 months and excludes confidentiality and indemnity obligations.',
-      body: 'Each party\u2019s aggregate liability under this Agreement is limited to fees paid in the twenty-four (24) months preceding the claim. Confidentiality breaches and indemnity obligations are excluded from this cap.',
-      preview: [
-        { kind: 'same', text: 'Each party\u2019s aggregate liability under this Agreement is limited to fees paid in the ' },
-        { kind: 'delete', text: 'twelve (12)' },
-        { kind: 'insert', text: 'twenty-four (24)' },
-        { kind: 'same', text: ' months preceding the claim.' },
-        { kind: 'insert', text: ' Confidentiality breaches and indemnity obligations are excluded from this cap.' },
-      ],
-    },
+    category: 'Risk Allocation',
+    jurisdiction: 'General',
+    version: 'v1',
+    parts: ['Each party’s aggregate liability under this Agreement is limited to fees paid in the twelve (12) months preceding the claim.'],
+  },
+  {
+    // A library-only clause: not in the seeded document, so it starts "Used 0".
+    // Insert it to add a new governed section to the contract.
+    id: 'indemnification',
+    label: 'Indemnification',
+    category: 'Risk Allocation',
+    jurisdiction: 'General',
+    version: 'v1',
+    parts: ['Each party will indemnify and hold the other harmless from third-party claims arising out of its breach of this Agreement.'],
   },
 ];
 
@@ -188,8 +222,10 @@ type ReusableSectionTag = { kind: 'reusableSection'; sectionId: ClauseId; versio
 type TagPayload = SmartFieldTag | ReusableSectionTag;
 
 const fieldTag = (key: FieldKey) => JSON.stringify({ kind: 'smartField', key } satisfies SmartFieldTag);
-const clauseTag = (sectionId: ClauseId, version: string) =>
-  JSON.stringify({ kind: 'reusableSection', sectionId, version } satisfies ReusableSectionTag);
+// version is vestigial now (the version lifecycle was removed); inserted clauses
+// carry v1 so the tag shape stays valid and parses as a reusableSection.
+const clauseTag = (sectionId: ClauseId) =>
+  JSON.stringify({ kind: 'reusableSection', sectionId, version: 'v1' } satisfies ReusableSectionTag);
 
 const parseTag = (tag: string | undefined): TagPayload | null => {
   if (!tag) return null;
@@ -209,20 +245,30 @@ const parseTag = (tag: string | undefined): TagPayload | null => {
 const state = {
   editor: null as DemoEditor | null,
   values: {} as Record<FieldKey, string>,
-  versions: {} as Record<ClauseId, string>,
-  expandedClause: null as ClauseId | null,
   /** Smart-tag chip mirrored as active when the caret is in a matching field. */
   activeTagKey: null as FieldKey | null,
+  /** Clause card mirrored as active when the caret is in a matching clause. */
+  activeClauseId: null as ClauseId | null,
   /** UI controller; created in `initialize`, disposed by `teardown`. */
   ui: null as ReturnType<typeof createSuperDocUI> | null,
   /** Detaches the document -> palette highlight listeners. */
   smartTagSyncTeardown: null as (() => void) | null,
+  /** Detaches the field drag-and-drop listeners on the editor host. */
+  dragDropTeardown: null as (() => void) | null,
 };
+
+/** dataTransfer MIME used when dragging a field chip from the palette. */
+const FIELD_MIME = 'application/x-superdoc-field';
+/** dataTransfer MIME used when dragging a clause card from the palette. */
+const CLAUSE_MIME = 'application/x-superdoc-clause';
 
 const statusEl = qs<HTMLElement>('#status');
 const summaryEl = qs<HTMLElement>('#summary');
 const fieldsPanelEl = qs<HTMLElement>('#fields-panel');
-const clausesPanelEl = qs<HTMLElement>('#clauses-panel');
+const valuesPanelEl = qs<HTMLElement>('#values-panel');
+// The clause cards live in a section inside the Template panel; this container
+// is created by renderClausesSection() and re-rendered by renderClausesPanel().
+let clausesListEl: HTMLElement | null = null;
 
 setBusy(true);
 
@@ -234,7 +280,13 @@ const superdoc = new SuperDoc({
   // highlight). The wrappers and data-sdt-* datasets are preserved, so the demo
   // paints its own field look in style.css and drives its own UI (Smart-tags
   // palette, Locate/Focus) through the public surface.
-  modules: { comments: false, contentControls: { chrome: 'none' } },
+  modules: {
+    comments: false,
+    contentControls: { chrome: 'none' },
+    // responsiveToContainer collapses toolbar items that overflow the editor
+    // column into an overflow menu, so the toolbar can't spill over the sidebar.
+    toolbar: { selector: '#superdoc-toolbar', responsiveToContainer: true },
+  },
   telemetry: { enabled: false },
   onReady: ({ superdoc: sd }) => void initialize(sd as DemoSuperDoc),
 });
@@ -277,7 +329,12 @@ async function initialize(instance: DemoSuperDoc): Promise<void> {
     return;
   }
   state.editor = instance.activeEditor;
-  readStateFromDocument();
+  // Show each field's name as a placeholder and lock it; values are filled only
+  // through the Values form, which starts empty (see showFieldNamesAndLock).
+  showFieldNamesAndLock();
+  // Lock the seeded clause blocks too, so their prose can't be edited by typing
+  // in the document. Fields nested in them still fill through the Values form.
+  lockClauses();
   renderPanels();
   refreshSummary();
 
@@ -292,12 +349,16 @@ async function initialize(instance: DemoSuperDoc): Promise<void> {
   const onTokenClick = ({ target }: { target: { tag?: string } }) => {
     const parsed = target?.tag ? parseTag(target.tag) : null;
     state.activeTagKey = parsed?.kind === 'smartField' ? (parsed.key as FieldKey) : null;
+    state.activeClauseId = parsed?.kind === 'reusableSection' ? (parsed.sectionId as ClauseId) : null;
     highlightActiveTag();
+    highlightActiveClause();
   };
   const onActiveChange = ({ active }: { active: { tag?: string } | null }) => {
     if (active) return;
     state.activeTagKey = null;
+    state.activeClauseId = null;
     highlightActiveTag();
+    highlightActiveClause();
   };
   instance.on('content-control:click', onTokenClick);
   instance.on('content-control:active-change', onActiveChange);
@@ -306,35 +367,96 @@ async function initialize(instance: DemoSuperDoc): Promise<void> {
     instance.off('content-control:active-change', onActiveChange);
   };
 
+  // Palette -> document: drag a field or clause onto the editor to insert it at
+  // the drop point (dogfoods ui.viewport.positionAt + create.contentControl).
+  state.dragDropTeardown = setupPaletteDragDrop();
+
   setStatus('Ready');
   setBusy(false);
 }
 
-/** Read field values and clause versions from the loaded fixture. */
-function readStateFromDocument(): void {
-  const doc = getDoc();
-  for (const ctrl of doc.contentControls.list({}).items) {
-    const tag = parseTag(ctrl.properties?.tag);
-    if (!tag) continue;
-    if (tag.kind === 'smartField') {
-      state.values[tag.key] = ctrl.text ?? '';
-    } else if (tag.kind === 'reusableSection') {
-      state.versions[tag.sectionId] = tag.version;
-    }
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Mutations: smart fields, clause updates, export
 // ---------------------------------------------------------------------------
 
-/** Push a single field's value to every occurrence in the document. */
+/**
+ * Push a field's value to every occurrence. The field controls are
+ * `contentLocked` so a user can't type into them in the document; the Values
+ * form is the only writer. `text.setValue` is itself blocked on a locked
+ * control, so briefly unlock, write, then relock. The relock is in `finally`
+ * so a failed write never strands a field unlocked (editable by the user).
+ */
 function applyField(key: FieldKey, value: string): void {
-  if (!state.editor?.doc) return;
+  const doc = state.editor?.doc;
+  if (!doc) return;
   state.values[key] = value;
-  const { items } = state.editor.doc.contentControls.selectByTag({ tag: fieldTag(key) });
-  for (const ctrl of items) {
-    state.editor.doc.contentControls.text.setValue({ target: ctrl.target, value });
+  // Filled -> the value; cleared -> back to the field-name placeholder.
+  const display = fieldDisplay(key);
+
+  // A field can sit inside a clause (Receiving party / Purpose appear inside the
+  // Permitted Use clause). A clause's content lock SILENTLY vetoes writes to
+  // anything nested in it - text.setValue even reports success - so the value
+  // wouldn't broadcast to the nested occurrence. Briefly unlock every clause
+  // around the write, then relock them in `finally` so they never stay unlocked.
+  const clauseControls = () =>
+    doc.contentControls.list({}).items.filter((c) => parseTag(c.properties?.tag)?.kind === 'reusableSection');
+  for (const c of clauseControls()) {
+    reportMutation(doc.contentControls.setLockMode({ target: c.target, lockMode: 'unlocked' }), 'Unlock clause');
+  }
+  try {
+    for (const ctrl of doc.contentControls.selectByTag({ tag: fieldTag(key) }).items) {
+      // Skip the write if unlock fails - the field stays locked (safe), just stale.
+      if (!reportMutation(doc.contentControls.setLockMode({ target: ctrl.target, lockMode: 'unlocked' }), `Unlock ${key}`)) {
+        continue;
+      }
+      try {
+        reportMutation(doc.contentControls.text.setValue({ target: ctrl.target, value: display }), `Update ${key}`);
+      } finally {
+        // A failed relock would leave the field editable, so make it loud.
+        reportMutation(doc.contentControls.setLockMode({ target: ctrl.target, lockMode: 'contentLocked' }), `Relock ${key}`);
+      }
+    }
+  } finally {
+    for (const c of clauseControls()) {
+      reportMutation(doc.contentControls.setLockMode({ target: c.target, lockMode: 'contentLocked' }), 'Relock clause');
+    }
+  }
+}
+
+/**
+ * Put the document into its starting template state. Each smart field's content
+ * is set to its field-name token (e.g. DISCLOSING_PARTY) as a stand-in
+ * placeholder - this is literal text content, NOT a native SDT placeholder
+ * (those are renderer-hardcoded and not settable via the API). Then each field
+ * is `contentLocked`, so values change only through the Values form, never by
+ * typing in the document. The form starts empty (every field unfilled). Content
+ * is written before locking, since a locked control rejects content writes.
+ */
+function showFieldNamesAndLock(): void {
+  const doc = state.editor?.doc;
+  if (!doc) return;
+  for (const field of FIELDS) {
+    state.values[field.key] = '';
+    for (const ctrl of doc.contentControls.selectByTag({ tag: fieldTag(field.key) }).items) {
+      reportMutation(doc.contentControls.text.setValue({ target: ctrl.target, value: fieldDisplay(field.key) }), `Reset ${field.key}`);
+      reportMutation(doc.contentControls.setLockMode({ target: ctrl.target, lockMode: 'contentLocked' }), `Lock ${field.key}`);
+    }
+  }
+}
+
+/**
+ * Lock every clause block as `contentLocked`, like the inline fields, so its
+ * prose can't be edited by typing in the document. The clauses are a fixed,
+ * read-only part of the loaded template.
+ */
+function lockClauses(): void {
+  const doc = state.editor?.doc;
+  if (!doc) return;
+  for (const ctrl of doc.contentControls.list({}).items) {
+    if (parseTag(ctrl.properties?.tag)?.kind === 'reusableSection') {
+      reportMutation(doc.contentControls.setLockMode({ target: ctrl.target, lockMode: 'contentLocked' }), 'Lock clause');
+    }
   }
 }
 
@@ -342,63 +464,205 @@ function applyField(key: FieldKey, value: string): void {
 const tokenFor = (key: FieldKey): string => key.replace(/([A-Z])/g, '_$1').toUpperCase();
 
 /**
- * Insert a smart-tag field at the caret (authoring). Dogfoods the verified
- * recipe: capture the caret as a TextTarget, bridge it to a collapsed
- * SelectionTarget, then `create.contentControl` with the token as initial
- * content. The new inline SDT paints with the same `.superdoc-structured-content-inline`
- * wrapper the palette chips are styled to match. Then focus it so the user can type.
+ * What a field control should display: the entered value if the field is filled,
+ * otherwise its field-name token (e.g. `DISCLOSING_PARTY`) as a visible
+ * placeholder. The Values form is the source of truth for filled/unfilled.
  */
-function insertTagAtCursor(key: FieldKey, label: string): void {
+const fieldDisplay = (key: FieldKey): string => {
+  const value = state.values[key] ?? '';
+  return value.trim() ? value : tokenFor(key);
+};
+
+/**
+ * Insert a smart-tag field as an inline SDT at `target` (a collapsed
+ * SelectionTarget). The control shows the field name as its placeholder
+ * (`fieldDisplay`, e.g. DISCLOSING_PARTY) and is `contentLocked`, so it behaves
+ * like the seeded fields: filled only through the Values form. It's tagged so it
+ * paints with the same `.superdoc-structured-content-inline` look as the palette
+ * chips. Shared by click-to-insert (caret) and drag-and-drop (drop point); only
+ * how `target` is resolved differs. Then scroll it into view so the user sees it.
+ */
+function insertField(key: FieldKey, label: string, target: SelectionTarget): void {
   const ui = state.ui;
   const editor = state.editor;
   if (!ui || !editor?.doc) return;
-  const seg = ui.selection.capture()?.target?.segments?.[0];
-  if (!seg) {
-    // No caret to insert at — tell the user instead of silently no-op'ing.
-    setStatus('Place the cursor in the document, then click a tag to insert it.');
-    return;
-  }
-  const point: SelectionPoint = { kind: 'text', blockId: seg.blockId, offset: seg.range.start };
   const result = editor.doc.create.contentControl({
     kind: 'inline',
     controlType: 'text',
-    at: { kind: 'selection', start: point, end: point },
-    content: tokenFor(key),
+    at: target,
+    content: fieldDisplay(key),
     tag: fieldTag(key),
     alias: label,
+    lockMode: 'contentLocked',
   });
   if (result.success) {
     state.values[key] = state.values[key] ?? '';
-    void ui.contentControls.focus({ id: result.contentControl.nodeId });
+    void ui.contentControls.scrollIntoView({ id: result.contentControl.nodeId, block: 'center' });
   }
 }
 
-async function applyClauseVersion(clauseId: ClauseId, toVersion: string, body: string): Promise<void> {
-  const doc = getDoc();
+/**
+ * Insert a field at the caret (click-to-insert). Captures the caret as a
+ * TextTarget and bridges it to a collapsed SelectionTarget (the verified recipe).
+ */
+function insertFieldAtCursor(key: FieldKey, label: string): void {
+  const ui = state.ui;
+  if (!ui || !state.editor?.doc) return;
+  const seg = ui.selection.capture()?.target?.segments?.[0];
+  if (!seg) {
+    // No caret to insert at — tell the user instead of silently no-op'ing.
+    setStatus('Place the cursor in the document (or drag the field in), then click a tag to insert it.');
+    return;
+  }
+  const point: SelectionPoint = { kind: 'text', blockId: seg.blockId, offset: seg.range.start };
+  insertField(key, label, { kind: 'selection', start: point, end: point });
+}
+
+/** The clause's plain text; each field slot renders as its current display. */
+function clauseText(clause: LibraryClause): string {
+  return clause.parts.map((part) => (typeof part === 'string' ? part : fieldDisplay(part.field))).join('');
+}
+
+/** Character ranges of each field slot within `clauseText`, for wrapping as SDTs. */
+function clauseFieldRanges(clause: LibraryClause): { field: FieldKey; start: number; end: number }[] {
+  const ranges: { field: FieldKey; start: number; end: number }[] = [];
+  let offset = 0;
+  for (const part of clause.parts) {
+    const text = typeof part === 'string' ? part : fieldDisplay(part.field);
+    if (typeof part !== 'string') ranges.push({ field: part.field, start: offset, end: offset + text.length });
+    offset += text.length;
+  }
+  return ranges;
+}
+
+/**
+ * Insert a governed clause as a locked block SDT at the START of `blockId`
+ * (offset 0, a clean block boundary - inserting at the raw drop caret would
+ * split a paragraph mid-text). The clause is assembled from its parts: the block
+ * holds the prose, and each `{ field }` slot is wrapped as a nested, locked
+ * inline smart-field SDT - so an inserted "Permitted Use" carries real Receiving
+ * party / Purpose fields that fill from the Values form, like the seeded one.
+ * Inserts unlocked, wraps the slots, then locks the clause.
+ */
+async function insertClause(clauseId: ClauseId, blockId: string): Promise<void> {
+  const ui = state.ui;
+  const editor = state.editor;
+  if (!ui || !editor?.doc) return;
+  const doc = editor.doc;
   const clause = CLAUSE_LIBRARY.find((c) => c.id === clauseId);
   if (!clause) return;
 
-  const ctrl = findClauseControl(clauseId);
-  if (!ctrl) throw new Error(`Clause ${clauseId} not in document`);
+  const point: SelectionPoint = { kind: 'text', blockId, offset: 0 };
+  const created = doc.create.contentControl({
+    kind: 'block',
+    controlType: 'richText',
+    at: { kind: 'selection', start: point, end: point },
+    content: clauseText(clause),
+    tag: clauseTag(clauseId),
+    alias: clause.label,
+    lockMode: 'unlocked', // unlocked so the field slots can be wrapped, then locked
+  });
+  if (!reportMutation(created, `Insert ${clause.label}`) || !created.success) return;
+  const clauseTarget = created.contentControl;
 
-  assertMutation(
-    doc.contentControls.replaceContent({ target: ctrl.target, content: body, format: 'text' }),
-    `Could not update ${clause.label}`,
-    true,
-  );
+  // Wrap each field slot as a nested inline smart-field SDT. Focus the new block
+  // to resolve its inner text blockId (no coordinates needed), then wrap by
+  // character range - last slot first, so wrapping one can't shift another's
+  // offsets.
+  await ui.contentControls.focus({ id: clauseTarget.nodeId });
+  const innerBlockId = ui.selection.capture()?.target?.segments?.[0]?.blockId;
+  if (innerBlockId) {
+    for (const range of [...clauseFieldRanges(clause)].reverse()) {
+      reportMutation(
+        doc.create.contentControl({
+          kind: 'inline',
+          controlType: 'text',
+          at: {
+            kind: 'selection',
+            start: { kind: 'text', blockId: innerBlockId, offset: range.start },
+            end: { kind: 'text', blockId: innerBlockId, offset: range.end },
+          },
+          tag: fieldTag(range.field),
+          alias: FIELDS.find((f) => f.key === range.field)?.label ?? range.field,
+          lockMode: 'contentLocked',
+        }),
+        `Nest ${range.field}`,
+      );
+    }
+  }
 
-  const refreshed = findClauseControl(clauseId) ?? ctrl;
-  assertMutation(
-    doc.contentControls.patch({
-      target: refreshed.target,
-      tag: clauseTag(clauseId, toVersion),
-      alias: `${clause.label} (${toVersion})`,
-    }),
-    `Could not patch clause tag for ${clause.label}`,
-    true,
-  );
+  // Lock the clause now that its slots are wrapped, then refresh the cards
+  // ("Used N") and scroll the new clause into view.
+  reportMutation(doc.contentControls.setLockMode({ target: clauseTarget, lockMode: 'contentLocked' }), 'Lock clause');
+  renderClausesPanel();
+  void ui.contentControls.scrollIntoView({ id: clauseTarget.nodeId, block: 'center' });
+}
 
-  state.versions[clauseId] = toVersion;
+/** Insert a clause at the caret's block boundary (click-to-insert). */
+function insertClauseAtCursor(clauseId: ClauseId): void {
+  const ui = state.ui;
+  if (!ui || !state.editor?.doc) return;
+  const seg = ui.selection.capture()?.target?.segments?.[0];
+  if (!seg) {
+    setStatus('Place the cursor in the document (or drag the clause in), then click a clause to insert it.');
+    return;
+  }
+  void insertClause(clauseId, seg.blockId);
+}
+
+/**
+ * Palette -> document drag-and-drop for both building blocks. Resolves the drop
+ * point with the public `ui.viewport.positionAt`, then: a field inserts inline
+ * at the exact caret; a clause inserts as a block at the drop block's boundary
+ * (see insertClause). Returns a teardown.
+ */
+function setupPaletteDragDrop(): () => void {
+  const host = qs<HTMLElement>('#editor');
+  const draggingPaletteItem = (event: DragEvent) =>
+    event.dataTransfer?.types.includes(FIELD_MIME) || event.dataTransfer?.types.includes(CLAUSE_MIME);
+
+  const onDragOver = (event: DragEvent): void => {
+    if (!draggingPaletteItem(event)) return;
+    // preventDefault on dragover is what makes an element a valid drop target.
+    event.preventDefault();
+    event.dataTransfer!.dropEffect = 'copy';
+    host.classList.add('drop-target');
+  };
+  const onDragLeave = (event: DragEvent): void => {
+    // Only clear when leaving the host itself, not when crossing child nodes.
+    if (event.target === host) host.classList.remove('drop-target');
+  };
+  const onDrop = (event: DragEvent): void => {
+    host.classList.remove('drop-target');
+    const fieldKey = event.dataTransfer?.getData(FIELD_MIME) as FieldKey | '';
+    const clauseId = event.dataTransfer?.getData(CLAUSE_MIME) as ClauseId | '';
+    if (!fieldKey && !clauseId) return;
+    event.preventDefault();
+    const hit = state.ui?.viewport.positionAt({ x: event.clientX, y: event.clientY });
+    // A text caret is the only droppable target (a node-edge hit has no offset).
+    if (!hit || hit.point.kind !== 'text') {
+      setStatus('Drop onto the document text.');
+      return;
+    }
+    if (fieldKey) {
+      const field = FIELDS.find((f) => f.key === fieldKey);
+      if (!field) return;
+      const point: SelectionPoint = { kind: 'text', blockId: hit.point.blockId, offset: hit.point.offset };
+      insertField(field.key, field.label, { kind: 'selection', start: point, end: point });
+    } else if (clauseId) {
+      const clause = CLAUSE_LIBRARY.find((c) => c.id === clauseId);
+      if (clause) void insertClause(clause.id, hit.point.blockId); // offset 0 (block boundary)
+    }
+  };
+
+  host.addEventListener('dragover', onDragOver);
+  host.addEventListener('dragleave', onDragLeave);
+  host.addEventListener('drop', onDrop);
+  return () => {
+    host.removeEventListener('dragover', onDragOver);
+    host.removeEventListener('dragleave', onDragLeave);
+    host.removeEventListener('drop', onDrop);
+  };
 }
 
 async function exportDocument(mode: 'raw' | 'clean'): Promise<void> {
@@ -448,7 +712,7 @@ function focusByTag(tag: string): void {
 
 function renderPanels(): void {
   renderFieldsPanel();
-  renderClausesPanel();
+  renderValuesPanel();
 }
 
 /**
@@ -461,22 +725,27 @@ function renderSmartTagsPalette(): void {
   const section = document.createElement('div');
   section.className = 'smart-tags';
   section.innerHTML = `
-    <p class="smart-tags-hint">Click a tag to insert it at the cursor.</p>
-    <input class="smart-tags-search" type="search" placeholder="Search tags…" aria-label="Search smart tags" />
-    <div class="smart-tags-group">Offer</div>
+    <p class="smart-tags-hint">Drag a field into the document, or click to insert it at the cursor.</p>
+    <input class="smart-tags-search" type="search" placeholder="Search fields…" aria-label="Search fields" />
+    <div class="smart-tags-group">Template fields</div>
     <div class="smart-tags-list">
       ${FIELDS.map(
         (f) =>
-          `<button class="smart-tag" type="button" data-tag-key="${escapeAttr(f.key)}" title="Insert ${escapeAttr(f.label)} at the cursor">${escapeHtml(tokenFor(f.key))}</button>`,
+          `<button class="smart-tag" type="button" draggable="true" data-tag-key="${escapeAttr(f.key)}" title="Drag into the document, or click to insert ${escapeAttr(f.label)} at the cursor">${escapeHtml(tokenFor(f.key))}</button>`,
       ).join('')}
     </div>
   `;
   fieldsPanelEl.appendChild(section);
 
   section.querySelectorAll<HTMLButtonElement>('.smart-tag').forEach((btn) => {
+    const field = FIELDS.find((f) => f.key === (btn.dataset.tagKey as FieldKey));
     btn.addEventListener('click', () => {
-      const field = FIELDS.find((f) => f.key === (btn.dataset.tagKey as FieldKey));
-      if (field) insertTagAtCursor(field.key, field.label);
+      if (field) insertFieldAtCursor(field.key, field.label);
+    });
+    btn.addEventListener('dragstart', (event) => {
+      if (!field || !event.dataTransfer) return;
+      event.dataTransfer.setData(FIELD_MIME, field.key);
+      event.dataTransfer.effectAllowed = 'copy';
     });
   });
 
@@ -503,9 +772,66 @@ function highlightActiveTag(): void {
   });
 }
 
+/**
+ * Mirror the active clause: the card whose id matches `state.activeClauseId`
+ * gets `.is-active`. Driven by `content-control:click` on a clause block (and
+ * cleared on blur) — the clauses' half of the document -> sidebar loop.
+ */
+function highlightActiveClause(): void {
+  clausesListEl?.querySelectorAll<HTMLElement>('.clause').forEach((card) => {
+    card.classList.toggle('is-active', card.dataset.clauseId === state.activeClauseId);
+  });
+}
+
+/**
+ * Template tab: the contract's building blocks. Two catalogs - inline Smart tags
+ * (variable chips) and block Clauses (cards with metadata + usage count). Both
+ * drag or click to insert; values are filled on the Values tab.
+ */
 function renderFieldsPanel(): void {
   fieldsPanelEl.innerHTML = '';
   renderSmartTagsPalette();
+  renderClausesSection();
+}
+
+/**
+ * Clauses section of the Template tab: a search + the clause cards. Mirrors the
+ * Smart-tags section's style (group header, search) but the clauses render as
+ * compact amber cards, not pills, since they're block controls. Creates the
+ * list container (clausesListEl) that renderClausesPanel re-renders into.
+ */
+function renderClausesSection(): void {
+  const section = document.createElement('div');
+  section.className = 'clauses-section';
+  section.innerHTML = `
+    <div class="smart-tags-group">Clauses</div>
+    <p class="smart-tags-hint">Drag a clause into the document, or click to insert it at the cursor.</p>
+    <input class="smart-tags-search clauses-search" type="search" placeholder="Search clauses…" aria-label="Search clauses" />
+    <div class="clauses-list"></div>
+  `;
+  fieldsPanelEl.appendChild(section);
+  clausesListEl = section.querySelector<HTMLElement>('.clauses-list');
+
+  const search = section.querySelector<HTMLInputElement>('.clauses-search');
+  search?.addEventListener('input', () => {
+    const q = search.value.trim().toLowerCase();
+    clausesListEl?.querySelectorAll<HTMLElement>('.clause').forEach((card) => {
+      const label = (card.querySelector('.clause-label')?.textContent ?? '').toLowerCase();
+      card.style.display = !q || label.includes(q) ? '' : 'none';
+    });
+  });
+
+  renderClausesPanel();
+}
+
+/**
+ * Values tab: fill the fields that are in the document. Editing a value
+ * debounces ~250ms and fans it to every occurrence of that field's tag
+ * (`selectByTag` + per-occurrence `text.setValue`). Locate/Focus jump to the
+ * first occurrence.
+ */
+function renderValuesPanel(): void {
+  valuesPanelEl.innerHTML = '';
   for (const field of FIELDS) {
     // A <div> wrapper (not <label>): a <label> may not contain interactive
     // content, so the Locate <button> must be a sibling of the input, with a
@@ -521,9 +847,9 @@ function renderFieldsPanel(): void {
           <button class="focus" type="button" data-focus-field="${escapeAttr(field.key)}" aria-label="Focus ${escapeAttr(field.label)} in the document" title="Scroll to this field and place the cursor in it">Focus</button>
         </span>
       </div>
-      <input id="${inputId}" data-field="${field.key}" value="${escapeAttr(state.values[field.key] ?? '')}" />
+      <input id="${inputId}" data-field="${field.key}" value="${escapeAttr(state.values[field.key] ?? '')}" placeholder="${escapeAttr(field.label)}" />
     `;
-    fieldsPanelEl.appendChild(row);
+    valuesPanelEl.appendChild(row);
     row.querySelector<HTMLButtonElement>('.locate')?.addEventListener('click', () => {
       locateByTag(fieldTag(field.key));
     });
@@ -545,96 +871,62 @@ function renderFieldsPanel(): void {
   }
 }
 
+/**
+ * Render the clause cards: one card per clause, styled like the in-document
+ * block clause (amber left rail). Like the smart-tag chips, a card is draggable
+ * into the document or click-to-insert at the cursor (insertClause snaps to a
+ * block boundary). A card highlights when its clause is clicked in the document.
+ */
+/** Every control in the document for a given clause (a clause can be placed more than once). */
+function clauseControls(clauseId: ClauseId): ContentControlInfo[] {
+  const doc = state.editor?.doc;
+  if (!doc) return [];
+  return doc.contentControls.list({}).items.filter((c) => {
+    const t = parseTag(c.properties?.tag);
+    return t?.kind === 'reusableSection' && t.sectionId === clauseId;
+  });
+}
+
+/**
+ * Render the clause library catalog: a card per available clause with its
+ * category / jurisdiction / version and how many times it's placed in the
+ * document. A card wears the in-document block clause's amber look. Drag a card
+ * in, or click to insert it at the cursor; the card highlights when its clause
+ * is clicked in the document.
+ */
 function renderClausesPanel(): void {
-  clausesPanelEl.innerHTML = '';
+  const list = clausesListEl;
+  if (!list) return;
+  list.innerHTML = '';
   for (const clause of CLAUSE_LIBRARY) {
-    const inDoc = state.versions[clause.id] ?? clause.latestVersion;
-    const stale = clause.upgrade != null && inDoc !== clause.latestVersion;
-    const expanded = stale && state.expandedClause === clause.id;
-
+    const used = clauseControls(clause.id).length;
+    const usedText = used === 0 ? 'Not used' : `Used ${used} time${used === 1 ? '' : 's'}`;
     const card = document.createElement('article');
-    card.className = 'clause' + (stale ? ' stale' : ' current') + (expanded ? ' expanded' : '');
-
-    if (stale && clause.upgrade) {
-      const upgrade = clause.upgrade;
-      const previewHtml = upgrade.preview.map(renderSegment).join('');
-      card.innerHTML = `
-        <header class="clause-header">
-          <h3 class="clause-label">${escapeHtml(clause.label)}</h3>
-          <div class="clause-actions">
-            <span class="clause-status">Update available</span>
-            <button class="locate" type="button" data-locate-clause="${escapeAttr(clause.id)}" aria-label="Locate ${escapeAttr(clause.label)} in the document" title="Scroll to this clause">Locate</button>
-            <button class="focus" type="button" data-focus-clause="${escapeAttr(clause.id)}" aria-label="Focus ${escapeAttr(clause.label)} in the document" title="Scroll to this clause and place the cursor in it">Focus</button>
-          </div>
-        </header>
-        <p class="clause-summary">${escapeHtml(upgrade.summary)}</p>
-        <p class="clause-meta">Document ${escapeHtml(inDoc)} \u00b7 Library ${escapeHtml(upgrade.version)}</p>
-        <button class="btn clause-review" type="button">${expanded ? 'Hide' : 'Review'}</button>
-        ${
-          expanded
-            ? `
-          <div class="clause-review-panel">
-            <div class="review-label">Proposed change</div>
-            <p class="clause-preview">${previewHtml}</p>
-            <button class="btn primary clause-replace" type="button">Replace with library clause</button>
-          </div>
-        `
-            : ''
-        }
-      `;
-      card.querySelector<HTMLButtonElement>('.clause-review')?.addEventListener('click', () => {
-        state.expandedClause = expanded ? null : clause.id;
-        renderClausesPanel();
-      });
-      card.querySelector<HTMLButtonElement>('.clause-replace')?.addEventListener('click', () => {
-        void run(`${clause.label}: replaced with library clause`, async () => {
-          await applyClauseVersion(clause.id, upgrade.version, upgrade.body);
-          state.expandedClause = null;
-        });
-      });
-    } else {
-      card.innerHTML = `
-        <header class="clause-header">
-          <h3 class="clause-label">${escapeHtml(clause.label)}</h3>
-          <div class="clause-actions">
-            <span class="clause-status muted">Current</span>
-            <button class="locate" type="button" data-locate-clause="${escapeAttr(clause.id)}" aria-label="Locate ${escapeAttr(clause.label)} in the document" title="Scroll to this clause">Locate</button>
-            <button class="focus" type="button" data-focus-clause="${escapeAttr(clause.id)}" aria-label="Focus ${escapeAttr(clause.label)} in the document" title="Scroll to this clause and place the cursor in it">Focus</button>
-          </div>
-        </header>
-        <p class="clause-meta">Document ${escapeHtml(inDoc)}</p>
-      `;
-    }
-
-    card.querySelector<HTMLButtonElement>('.locate')?.addEventListener('click', () => {
-      locateByTag(clauseTag(clause.id, inDoc));
+    card.className = 'clause' + (clause.id === state.activeClauseId ? ' is-active' : '');
+    card.dataset.clauseId = clause.id;
+    card.draggable = true;
+    card.title = `Drag into the document, or click to insert the ${clause.label} clause at the cursor`;
+    card.innerHTML = `
+      <h3 class="clause-label">${escapeHtml(clause.label)}</h3>
+      <p class="clause-meta">${escapeHtml(clause.category)} · ${escapeHtml(clause.jurisdiction)} · ${escapeHtml(clause.version)} · ${escapeHtml(usedText)}</p>
+    `;
+    card.addEventListener('click', () => insertClauseAtCursor(clause.id));
+    card.addEventListener('dragstart', (event) => {
+      if (!event.dataTransfer) return;
+      event.dataTransfer.setData(CLAUSE_MIME, clause.id);
+      event.dataTransfer.effectAllowed = 'copy';
     });
-    card.querySelector<HTMLButtonElement>('.focus')?.addEventListener('click', () => {
-      focusByTag(clauseTag(clause.id, inDoc));
-    });
-    clausesPanelEl.appendChild(card);
+    list.appendChild(card);
   }
 }
 
 function refreshSummary(): void {
-  const stale = CLAUSE_LIBRARY.filter(
-    (c) => c.upgrade != null && (state.versions[c.id] ?? c.latestVersion) !== c.latestVersion,
-  ).length;
-  const updateText = stale === 0 ? 'all clauses current' : `${stale} update${stale === 1 ? '' : 's'} available`;
-  summaryEl.textContent = `${FIELDS.length} fields \u00b7 ${CLAUSE_LIBRARY.length} clauses \u00b7 ${updateText}`;
+  summaryEl.textContent = `${FIELDS.length} fields \u00b7 ${CLAUSE_LIBRARY.length} clauses`;
 }
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function findClauseControl(clauseId: ClauseId): ContentControlInfo | undefined {
-  const doc = getDoc();
-  return doc.contentControls.list({}).items.find((ctrl) => {
-    const t = parseTag(ctrl.properties?.tag);
-    return t?.kind === 'reusableSection' && t.sectionId === clauseId;
-  });
-}
 
 async function run(status: string, action: () => Promise<void>): Promise<void> {
   setBusy(true);
@@ -656,10 +948,18 @@ function getDoc(): DocumentApi {
   return state.editor.doc;
 }
 
-function assertMutation(result: MutationResult, message: string, allowNoOp = false): void {
-  if (result.success) return;
-  if (allowNoOp && result.failure.code === 'NO_OP') return;
-  throw new Error(result.failure.message || message);
+/**
+ * Surface a failed mutation instead of swallowing it. Returns whether it
+ * succeeded so callers can branch (e.g. skip the write if the unlock failed).
+ * NO_OP (value already matches) is treated as success. Used on the form-only
+ * write path, where a silent failure would leave a field stale or - worse, on a
+ * failed relock - editable by the user.
+ */
+function reportMutation(result: MutationResult, context: string): boolean {
+  if (result.success || result.failure.code === 'NO_OP') return true;
+  console.error(`[contract-templates] ${context} failed:`, result.failure);
+  setStatus(`${context} failed: ${result.failure.message}`);
+  return false;
 }
 
 function setBusy(busy: boolean): void {
@@ -682,13 +982,6 @@ function escapeHtml(s: string): string {
   return s.replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[ch]!);
 }
 
-function renderSegment(seg: PreviewSegment): string {
-  const text = escapeHtml(seg.text);
-  if (seg.kind === 'insert') return `<ins>${text}</ins>`;
-  if (seg.kind === 'delete') return `<del>${text}</del>`;
-  return text;
-}
-
 function escapeAttr(s: string): string {
   return escapeHtml(s).replace(/'/g, '&#39;');
 }
@@ -709,6 +1002,12 @@ const teardown = () => {
     /* best-effort teardown */
   }
   state.smartTagSyncTeardown = null;
+  try {
+    state.dragDropTeardown?.();
+  } catch {
+    /* best-effort teardown */
+  }
+  state.dragDropTeardown = null;
   try {
     state.ui?.destroy();
   } catch {
