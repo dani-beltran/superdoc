@@ -96,3 +96,83 @@ test('clicking an in-editor smart-field token highlights its sidebar chip', asyn
     )
     .toBe(true);
 });
+
+test('a smart-field pill does not shift its box on hover or click (no jitter)', async ({ page }) => {
+  test.skip(process.env.DEMO !== 'contract-templates', 'contract-templates demo only');
+
+  await page.route('**/ingest.superdoc.dev/**', (r) =>
+    r.fulfill({ status: 204, contentType: 'application/json', body: '{}' }),
+  );
+  await page.goto('/');
+  await page.waitForFunction(
+    () => (window as any).__demo?.state?.ui?.contentControls?.getSnapshot()?.items?.length > 0,
+    null,
+    { timeout: 30_000 },
+  );
+  const sel = '.superdoc-structured-content-inline[data-sdt-tag*="smartField"]';
+  await page.waitForSelector(sel);
+
+  // Under chrome:'none' SuperDoc resets the field's border/fill on hover and on
+  // selectednode; the demo re-asserts them to keep the box. Guard that the box
+  // and border stay constant across rest -> hover -> click, so it never moves.
+  const box = () =>
+    page.evaluate((s) => {
+      const el = document.querySelector(s) as HTMLElement;
+      const r = el.getBoundingClientRect();
+      return { w: Math.round(r.width), h: Math.round(r.height), border: getComputedStyle(el).borderTopWidth };
+    }, sel);
+
+  const rest = await box();
+  await page.locator(sel).first().hover();
+  await page.waitForTimeout(250);
+  const hovered = await box();
+  await page.locator(sel).first().click();
+  await page.waitForTimeout(250);
+  const clicked = await box();
+
+  for (const state of [hovered, clicked]) {
+    expect(state.border).toBe('1px');
+    expect(Math.abs(state.w - rest.w)).toBeLessThanOrEqual(1);
+    expect(Math.abs(state.h - rest.h)).toBeLessThanOrEqual(1);
+  }
+});
+
+test('a block clause keeps its amber left rail and box across hover/select (no jitter)', async ({ page }) => {
+  test.skip(process.env.DEMO !== 'contract-templates', 'contract-templates demo only');
+
+  await page.route('**/ingest.superdoc.dev/**', (r) =>
+    r.fulfill({ status: 204, contentType: 'application/json', body: '{}' }),
+  );
+  await page.goto('/');
+  await page.waitForFunction(
+    () => (window as any).__demo?.state?.ui?.contentControls?.getSnapshot()?.items?.length > 0,
+    null,
+    { timeout: 30_000 },
+  );
+  const sel = '.superdoc-structured-content-block[data-sdt-tag*="reusableSection"]';
+  await page.waitForSelector(sel);
+
+  // Block SDTs strip border + fill on .sdt-group-hover / .ProseMirror-selectednode;
+  // the demo overrides them. Guard the 4px amber left rail and box stay constant.
+  const box = () =>
+    page.evaluate((s) => {
+      const el = document.querySelector(s) as HTMLElement;
+      const r = el.getBoundingClientRect();
+      return { rail: getComputedStyle(el).borderLeftWidth, w: Math.round(r.width), h: Math.round(r.height) };
+    }, sel);
+
+  const rest = await box();
+  expect(rest.rail).toBe('4px');
+  await page.locator(sel).first().hover();
+  await page.waitForTimeout(250);
+  const hovered = await box();
+  await page.locator(sel).first().click();
+  await page.waitForTimeout(250);
+  const clicked = await box();
+
+  for (const state of [hovered, clicked]) {
+    expect(state.rail).toBe('4px');
+    expect(Math.abs(state.w - rest.w)).toBeLessThanOrEqual(1);
+    expect(Math.abs(state.h - rest.h)).toBeLessThanOrEqual(1);
+  }
+});

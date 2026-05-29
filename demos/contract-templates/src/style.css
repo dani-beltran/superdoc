@@ -283,15 +283,43 @@ input:focus {
   --tag-border: var(--tag-color);
   --tag-bg: color-mix(in srgb, var(--tag-color) 12%, transparent);
   --tag-fg: var(--sd-color-amber-700, #b45309);
+  --tag-bg-hover: color-mix(in srgb, var(--tag-color) 22%, transparent);
+  /* Block clauses are large regions, so they wear the amber language quietly:
+     a left rail + a faint fill + a soft border, lighter than the inline pill. */
+  --tag-block-border: color-mix(in srgb, var(--tag-color) 30%, var(--demo-border));
+  --tag-block-bg: color-mix(in srgb, var(--tag-color) 4%, var(--demo-bg));
+  --tag-block-bg-hover: color-mix(in srgb, var(--tag-color) 8%, var(--demo-bg));
   --tag-radius: 6px;
 }
-/* Inline smart fields: token pill (painted SDT wrapper under chrome:'none'). */
+/* Inline smart fields: token pill (painted SDT wrapper under chrome:'none').
+   The box (border width + padding) is identical in every state so clicking /
+   hovering a field never shifts layout. Hover changes only the fill. */
 .superdoc-cc-chrome-none .superdoc-structured-content-inline[data-sdt-tag*='smartField'] {
   padding: 1px 6px;
   border: 1px solid var(--tag-border);
   border-radius: var(--tag-radius);
   background-color: var(--tag-bg);
   color: var(--tag-fg);
+}
+.superdoc-cc-chrome-none .superdoc-structured-content-inline[data-sdt-tag*='smartField']:hover {
+  /* Under chrome:'none' SuperDoc resets the field's border + fill (including on
+     hover) so the consumer owns the look. We re-assert the amber box so hover
+     never moves or recolors the field. The !important wins over that reset
+     without coupling to SuperDoc's selector specificity — a custom-UI styling
+     rough edge today (no first-class per-control styling hook yet). */
+  border: 1px solid var(--tag-border) !important;
+  background-color: var(--tag-bg-hover) !important;
+}
+/* Selecting a field is a ProseMirror NodeSelection (.ProseMirror-selectednode).
+   Under chrome:'none' SuperDoc resets the border + fill to transparent in that
+   state too; without re-asserting, the field loses its amber and the box can
+   shift (~2px) on click. Keep the same box and a controlled amber "selected"
+   fill so hover/click/selected stay on-brand and never move the field. */
+.superdoc-cc-chrome-none .superdoc-structured-content-inline[data-sdt-tag*='smartField'].ProseMirror-selectednode {
+  /* !important to win over the chrome-none reset; same rough edge as hover. */
+  border: 1px solid var(--tag-border) !important;
+  background-color: var(--tag-bg-hover) !important;
+  color: var(--tag-fg) !important;
 }
 
 /* Smart-tags palette (sidebar). Chips reuse the --tag-* token look above, so a
@@ -319,59 +347,40 @@ input:focus {
 .smart-tags-list { display: flex; flex-wrap: wrap; gap: 6px; }
 .smart-tag {
   font: inherit;
-  font-size: 11px;
+  /* Match the in-editor field pill (which inherits the ~11pt document font) so
+     a chip and the token it inserts read as the same size, not just color. */
+  font-size: 14px;
   font-weight: 500;
-  line-height: 1;
+  line-height: 1.2;
   cursor: pointer;
-  padding: 4px 8px;
+  padding: 1px 6px;
   border: 1px solid var(--tag-border);
   border-radius: var(--tag-radius);
   background: var(--tag-bg);
   color: var(--tag-fg);
   white-space: nowrap;
 }
-.smart-tag:hover { filter: brightness(0.97); }
+.smart-tag:hover { background: var(--tag-bg-hover); }
 .smart-tag.is-active { box-shadow: 0 0 0 2px var(--demo-accent); }
 .smart-tag:focus-visible { outline: 1px solid var(--demo-accent); outline-offset: 1px; }
 
-/* Block clauses: bordered card with soft background */
+/* Block clauses: a quiet card with an amber left rail — same field language as
+   the inline pills, but a region not a token: soft border, faint fill, a 4px
+   amber spine. */
 .superdoc-cc-chrome-none .superdoc-structured-content-block[data-sdt-tag*='reusableSection'] {
-  border: 1px solid var(--demo-border);
-  border-radius: 4px;
-  background-color: var(--demo-bg);
+  border: 1px solid var(--tag-block-border);
+  border-left: 4px solid var(--tag-color);
+  border-radius: var(--tag-radius);
+  background-color: var(--tag-block-bg);
 }
-
-/*
- * Contextual smart-field chip (SD-3157 / SD-3232). Floats over the active
- * smart-field SDT showing field label + live value. Wired in field-chip.ts
- * against the public `content-control:active-change` event (what's active)
- * + `ui.contentControls.getRect` (where to draw). With built-in chrome off
- * (SD-3159), the chip is the smart field's active-state affordance: custom
- * UI anchored to the SDT via public events and the geometry API.
- */
-.sd-field-chip {
-  display: inline-flex;
-  align-items: center;
-  padding: 3px 8px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 500;
-  background: var(--demo-bg, #ffffff);
-  border: 1px solid var(--demo-accent, #2563eb);
-  color: var(--demo-accent, #2563eb);
-  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  white-space: nowrap;
-  max-width: 320px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.sd-field-chip__label {
-  font-weight: 600;
-}
-
-.sd-field-chip__value {
-  color: var(--demo-text, #18181b);
-  font-weight: 400;
+/* Under chrome:'none' SuperDoc resets the block's border + fill on hover
+   (.sdt-group-hover) and select (.ProseMirror-selectednode) — via ::before/
+   ::after pseudo-elements, different mechanics than inline. Re-assert the exact
+   box (no jitter) and lift the fill slightly to show activity. !important wins
+   over the reset; same custom-UI rough edge as the inline rules above. */
+.superdoc-cc-chrome-none .superdoc-structured-content-block[data-sdt-tag*='reusableSection'].sdt-group-hover,
+.superdoc-cc-chrome-none .superdoc-structured-content-block[data-sdt-tag*='reusableSection'].ProseMirror-selectednode {
+  border: 1px solid var(--tag-block-border) !important;
+  border-left: 4px solid var(--tag-color) !important;
+  background-color: var(--tag-block-bg-hover) !important;
 }
