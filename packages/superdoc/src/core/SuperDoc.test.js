@@ -999,6 +999,36 @@ describe('SuperDoc core', () => {
       editorB.emit('fonts-changed', reportB);
       expect(received).toEqual([reportB]); // only B, via the subscription
     });
+
+    it('fonts.getReport / getMissingFonts / getDocumentFonts read the active editor report', async () => {
+      const instance = await makeInstance();
+      const report = [
+        { logicalFamily: 'Calibri', physicalFamily: 'Carlito', status: 'loaded' },
+        { logicalFamily: 'Aptos', physicalFamily: 'Aptos', status: 'fallback' },
+      ];
+      const editor = makeEmitterEditor({
+        presentationEditor: {
+          getFontReport: () => report,
+          getMissingFonts: () => ['Aptos'],
+          getLastFontsChangedPayload: () => null,
+        },
+      });
+      instance.activeEditor = editor;
+
+      expect(instance.fonts.getReport()).toBe(report);
+      expect(instance.fonts.getMissingFonts()).toEqual(['Aptos']);
+      // getDocumentFonts maps the report to logical family names.
+      expect(instance.fonts.getDocumentFonts()).toEqual(['Calibri', 'Aptos']);
+    });
+
+    it('fonts.* return empty arrays when no editor is active', async () => {
+      const instance = await makeInstance();
+      instance.activeEditor = null;
+
+      expect(instance.fonts.getReport()).toEqual([]);
+      expect(instance.fonts.getMissingFonts()).toEqual([]);
+      expect(instance.fonts.getDocumentFonts()).toEqual([]);
+    });
   });
 
   it('uses visible search model in SuperDoc.search()', async () => {
