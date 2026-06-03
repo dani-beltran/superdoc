@@ -175,6 +175,8 @@ Source: packed and installed `tests/consumer-typecheck/node_modules/superdoc`
 - `SuperDocExceptionPayload`
 - `SuperDocExceptionRestorePayload`
 - `SuperDocExceptionStorePayload`
+- `SuperDocFontFace`
+- `SuperDocFontFamily`
 - `SuperDocFontsApi`
 - `SuperDocLayoutEngineOptions`
 - `SuperDocLockedPayload`
@@ -380,6 +382,8 @@ Source: packed and installed `tests/consumer-typecheck/node_modules/superdoc`
 | `SuperDocExceptionPayload` | ✓ | ✓ |   |   | 2 |   | 0 | 0 | 0 |   |
 | `SuperDocExceptionRestorePayload` | ✓ | ✓ |   |   | 1 |   | 0 | 0 | 0 |   |
 | `SuperDocExceptionStorePayload` | ✓ | ✓ |   |   | 2 |   | 0 | 0 | 0 |   |
+| `SuperDocFontFace` | ✓ | ✓ |   |   | 1 |   | 0 | 0 | 0 |   |
+| `SuperDocFontFamily` | ✓ | ✓ |   |   | 1 |   | 0 | 0 | 0 |   |
 | `SuperDocFontsApi` | ✓ | ✓ |   |   | 1 |   | 0 | 0 | 0 |   |
 | `SuperDocLayoutEngineOptions` | ✓ | ✓ |   |   | 2 | ✓ | 0 | 0 | 0 |   |
 | `SuperDocLockedPayload` | ✓ | ✓ |   |   | 2 |   | 0 | 0 | 0 |   |
