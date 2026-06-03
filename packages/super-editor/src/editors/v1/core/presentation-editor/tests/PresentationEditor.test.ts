@@ -2951,11 +2951,20 @@ describe('PresentationEditor', () => {
 
       await vi.waitFor(() => expect(mockIncrementalLayout).toHaveBeenCalled());
 
+      // Wait for the async rendering to apply the layout before the shortcut, so the
+      // header/footer session can see there is no matching region (matches the sibling
+      // tests' settle step). The load-before-measure font gate adds an await ahead of
+      // incrementalLayout, so dispatching on "incrementalLayout called" alone races the
+      // layout-applied state.
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
       container.dispatchEvent(
         new KeyboardEvent('keydown', { ctrlKey: true, altKey: true, code: 'KeyH', bubbles: true }),
       );
 
-      expect(blockedSpy).toHaveBeenCalledWith(expect.objectContaining({ reason: 'missingRegion' }));
+      await vi.waitFor(() =>
+        expect(blockedSpy).toHaveBeenCalledWith(expect.objectContaining({ reason: 'missingRegion' })),
+      );
     });
 
     it('returns false without emitting an error when an unqualified bookmark is not found', async () => {
