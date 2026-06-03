@@ -5036,10 +5036,11 @@ export class PresentationEditor extends EventEmitter {
     // header/footer descriptors against the new converter and rerender so the
     // importer tab matches the collaborator tab without waiting for an edit.
     const handleDocumentReplaced = () => {
-      // A new document reuses this gate, so drop the old document's pending late-load reflow
-      // and required-face state - otherwise a flush armed under the old document fires a
-      // spurious full reflow against the new one.
+      // A new document reuses this gate AND this resolver, so drop the old document's pending
+      // late-load reflow + required-face state and its runtime font mappings - otherwise a
+      // flush armed under the old document reflows the new one, or a prior `fonts.map` leaks in.
       this.#fontGate?.resetForDocumentChange();
+      this.#fontResolver.reset();
       this.#refreshHeaderFooterStructureThenRerender({ purgeCachedEditors: true });
     };
     this.#editor.on('documentReplaced', handleDocumentReplaced);

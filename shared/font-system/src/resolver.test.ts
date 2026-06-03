@@ -138,6 +138,23 @@ describe('FontResolver (per-document context)', () => {
     expect(z.signature).toBe(docA.signature);
   });
 
+  it('reset() drops all overrides (document swap) and reverts to the bundled-only map', () => {
+    const resolver = createFontResolver();
+    resolver.map('Georgia', 'Gelasio');
+    resolver.map('Calibri', 'MyCalibri');
+    expect(resolver.signature).not.toBe('');
+
+    resolver.reset();
+    expect(resolver.signature).toBe(''); // back to default identity
+    expect(resolver.resolvePrimaryPhysicalFamily('Georgia')).toBe('Georgia'); // override gone
+    expect(resolver.resolvePrimaryPhysicalFamily('Calibri')).toBe('Carlito'); // bundled default restored
+    expect(resolver.version).toBe(3); // 2 maps + 1 reset
+
+    const before = resolver.version;
+    resolver.reset(); // already empty -> no-op, no version bump
+    expect(resolver.version).toBe(before);
+  });
+
   it('trims the physical family and ignores empty/whitespace mappings', () => {
     const resolver = createFontResolver();
     resolver.map('Georgia', '  Gelasio  ');

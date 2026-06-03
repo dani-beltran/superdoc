@@ -74,8 +74,9 @@ function splitStack(cssFontFamily: string): string[] {
  * Per-document logical -> physical font resolver. Seeded with the bundled clean-clone
  * map; also holds per-instance runtime overrides (a customer `fonts.map`). Because each
  * document owns its instance, two documents can map the same logical family to different
- * physical families without interfering. A {@link version} bumps on every mapping change
- * so measure/paint reuse signatures can fold it in and bust stale reuse.
+ * physical families without interfering. Its {@link signature} (NOT the numeric
+ * {@link version}) is the identity measure-cache keys and paint reuse signatures fold in,
+ * so two documents at the same version with different mappings never collide.
  */
 export class FontResolver {
   /** Normalized logical family -> physical family. Takes precedence over the bundled map. */
@@ -101,6 +102,17 @@ export class FontResolver {
   /** Remove a runtime mapping; the family reverts to its bundled default (or identity). */
   unmap(logicalFamily: string): void {
     if (this.#overrides.delete(normalizeFamilyKey(logicalFamily))) this.#version += 1;
+  }
+
+  /**
+   * Drop all runtime overrides, reverting to the bundled-only map. Call on a document swap
+   * (the same editor instance is reused, so the prior document's `fonts.map` must not leak
+   * into the next). Bumps {@link version} only if something was actually cleared.
+   */
+  reset(): void {
+    if (this.#overrides.size === 0) return;
+    this.#overrides.clear();
+    this.#version += 1;
   }
 
   /** Monotonic version; bumps on every mapping change. A lightweight "did it change" signal. */
