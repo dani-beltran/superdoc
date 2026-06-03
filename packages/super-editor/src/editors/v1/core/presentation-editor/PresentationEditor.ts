@@ -180,6 +180,7 @@ import { measureBlock } from '@superdoc/measuring-dom';
 import { createFontResolver, type FontResolutionRecord, type FontLoadSummary } from '@superdoc/font-system';
 import { installBundledSubstitutes } from '@superdoc/font-system/bundled';
 import { FontReadinessGate } from './fonts/FontReadinessGate';
+import { DocumentFontController } from './fonts/DocumentFontController';
 import { planRequiredFontFaces } from './fonts/font-load-planner';
 import type { FontsChangedPayload } from '../types/EditorEvents';
 import type {
@@ -543,11 +544,29 @@ export class PresentationEditor extends EventEmitter {
    * MEASURE (body, footnotes, header/footer, per-rId header/footer, and field-annotation pills),
    * and PAINT all resolve through THIS instance, and its signature keys every measure cache AND
    * every paint-reuse version, so two documents with different mappings can never share a measure
-   * or reuse each other's painted DOM. `superdoc.fonts.map` (see {@link mapFont}) mutates it at
-   * runtime: the changed signature re-measures and repaints THIS document while others are left
-   * untouched. The instance is seeded with the bundled clean-clone map.
+   * or reuse each other's painted DOM. `superdoc.fonts.map` mutates it at runtime through the
+   * document font controller (the only writer): the changed signature re-measures and repaints
+   * THIS document while others are left untouched. Seeded with the bundled clean-clone map.
    */
   readonly #fontResolver = createFontResolver();
+  /**
+   * Source for the NEXT `fonts-changed` emit. The controller sets it to 'config-change' when a
+   * runtime mapping change is applied, so the emit is not mislabelled 'late-load'. Consumed (and
+   * cleared) by #emitFontsChangedIfChanged on the next emit.
+   */
+  #nextFontsChangedSource: 'config-change' | null = null;
+  /**
+   * The single writer for this document's font state (map/unmap/reset; add/preload follow). Config
+   * and `superdoc.fonts.*` route through it so they share one path. It owns orchestration, not the
+   * resolver: it mutates the injected #fontResolver and reflows via the gate's mapping path.
+   */
+  readonly #fontController = new DocumentFontController({
+    resolver: this.#fontResolver,
+    getGate: () => this.#fontGate,
+    onMappingApplied: () => {
+      this.#nextFontsChangedSource = 'config-change';
+    },
+  });
   /** Layout blocks for the current render, stashed so the gate's planner reads the live set. */
   #fontPlanBlocks: FlowBlock[] | null = null;
   /** Dedup key for `fonts-changed`: epoch + per-face load status. Null until the first emit. */
@@ -970,8 +989,8 @@ export class PresentationEditor extends EventEmitter {
           const converter = (this.#editor as Editor & { converter?: { getDocumentFonts?: () => string[] } }).converter;
           return converter?.getDocumentFonts?.() ?? [];
         },
-        // A font finished loading: reflow so unchanged blocks re-measure (see #requestFontReflow;
-        // shared with mapFont, which reflows on a resolution change).
+        // Reflow so unchanged blocks re-measure (see #requestFontReflow). The gate calls this for
+        // a late font load AND for a mapping change (notifyFontMappingChanged via the controller).
         requestReflow: () => this.#requestFontReflow(),
         // Face-aware required set: the exact physical faces (family + weight + style) the
         // rendered document uses, from the planner walking the current layout blocks. The
@@ -2934,28 +2953,29 @@ export class PresentationEditor extends EventEmitter {
   }
 
   /**
-   * Map a logical family to a physical render family for THIS document, overriding the bundled
-   * default (e.g. "Georgia" -> "Gelasio"), then reflow so the change is measured and painted. The
-   * physical family must be one the registry can load (bundled, or registered via `addFont`).
-   * Per-document: only this editor's resolver + layout change; other editors on the page are
-   * untouched. Surfaced as `superdoc.fonts.map()`.
+   * Map logical families to physical render families for THIS document (e.g.
+   * `{ Georgia: 'Gelasio' }`), via the document font controller (the sole writer), which reflows
+   * once iff the mapping actually changed. Per-document: other editors on the page are untouched.
+   * Surfaced as `superdoc.fonts.map()`.
    */
-  mapFont(logicalFamily: string, physicalFamily: string): void {
-    this.#fontResolver.map(logicalFamily, physicalFamily);
-    // The mapping changed, so the current layout was measured and painted with the old physical
-    // family. Reflow exactly as a late font load does: the re-layout re-plans the new physical
-    // face (the gate awaits it before measure), re-measures against the new resolver signature,
-    // and repaints. previousMeasures reuse is already gated by the signature, but the reflow
-    // clears the cached measures to force the re-measure regardless.
-    this.#requestFontReflow();
+  mapFonts(mappings: Record<string, string>): void {
+    this.#fontController.map(mappings);
   }
 
   /**
-   * Drop this editor's cached blocks + measures and schedule a full document re-layout. Shared by
-   * the font-readiness gate (a late font load) and {@link mapFont} (a resolution change):
-   * incremental layout reuses previousMeasures for unchanged blocks, so clearing them is what
-   * forces the re-measure; the pending-change flag routes through the document re-layout path
-   * (not the selection-only render).
+   * Remove runtime font mappings for THIS document; each family reverts to its bundled default.
+   * Via the document font controller. Surfaced as `superdoc.fonts.unmap()`.
+   */
+  unmapFonts(families: string | string[]): void {
+    this.#fontController.unmap(families);
+  }
+
+  /**
+   * Drop this editor's cached blocks + measures and schedule a full document re-layout. The
+   * font-readiness gate calls this (via its requestReflow option) for both a late font load and a
+   * mapping change (notifyFontMappingChanged): incremental layout reuses previousMeasures for
+   * unchanged blocks, so clearing them is what forces the re-measure; the pending-change flag
+   * routes through the document re-layout path (not the selection-only render).
    */
   #requestFontReflow(): void {
     this.#layoutState = { ...this.#layoutState, blocks: [], measures: [], layout: null };
@@ -2985,6 +3005,13 @@ export class PresentationEditor extends EventEmitter {
     if (key === this.#lastFontsChangedKey) return;
     const isInitial = this.#lastFontsChangedKey === null;
     this.#lastFontsChangedKey = key;
+    // Consume the pending source flag: a runtime mapping change (set by the font controller) is a
+    // 'config-change', but the FIRST emit is always 'initial' - the document's initial font
+    // picture, even when a config-time map ran before first layout. Otherwise a font load is
+    // 'late-load'.
+    const pendingSource = this.#nextFontsChangedSource;
+    this.#nextFontsChangedSource = null;
+    const source: FontsChangedPayload['source'] = isInitial ? 'initial' : (pendingSource ?? 'late-load');
 
     let resolutions: FontResolutionRecord[];
     try {
@@ -2997,7 +3024,7 @@ export class PresentationEditor extends EventEmitter {
       resolutions,
       missingFonts: resolutions.filter((record) => record.missing).map((record) => record.logicalFamily),
       loadSummary: summary ?? { loaded: 0, failed: 0, timedOut: 0, fallbackUsed: 0, results: [] },
-      source: isInitial ? 'initial' : 'late-load',
+      source,
       version,
     };
     this.#lastFontsChangedPayload = payload;
@@ -5077,7 +5104,7 @@ export class PresentationEditor extends EventEmitter {
       // late-load reflow + required-face state and its runtime font mappings - otherwise a
       // flush armed under the old document reflows the new one, or a prior `fonts.map` leaks in.
       this.#fontGate?.resetForDocumentChange();
-      this.#fontResolver.reset();
+      this.#fontController.reset();
       this.#refreshHeaderFooterStructureThenRerender({ purgeCachedEditors: true });
     };
     this.#editor.on('documentReplaced', handleDocumentReplaced);

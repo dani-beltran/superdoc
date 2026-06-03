@@ -105,14 +105,22 @@ export interface SuperDocFontsApi {
    */
   onReport(callback: (payload: FontsChangedPayload) => void): () => void;
   /**
-   * Map a logical family to a physical render family for the ACTIVE document, overriding the
-   * bundled default (e.g. `map('Georgia', 'Gelasio')`). Re-measures and repaints the document so
-   * the change is visible immediately; observe completion via {@link onReport} / `fonts-changed`.
-   * The physical family must be one the registry can load (a bundled substitute, or a face
-   * registered via `add`). No-op when no editor is active. Other editors on the page are
-   * unaffected - mapping is per document.
+   * Map logical families to physical render families for the ACTIVE document, overriding bundled
+   * defaults: `map({ Georgia: 'Gelasio', Arial: 'Liberation Sans' })`. Applies all entries, then
+   * re-measures and repaints once (a no-op map does neither); observe via {@link onReport} /
+   * `fonts-changed` (`source: 'config-change'`). Each physical family must be loadable - a bundled
+   * substitute, or a face added via `add`. Per document: other editors on the page are unaffected.
+   * Render-only - export keeps the logical family name.
+   * @throws Error if no editor is active (a write needs a document; this fails loudly, not silently).
    */
-  map(logicalFamily: string, physicalFamily: string): void;
+  map(mappings: Record<string, string>): void;
+  /**
+   * Remove runtime mappings for the ACTIVE document; each family reverts to its bundled default
+   * (or its logical name). Accepts one family or several. Re-measures and repaints if anything
+   * changed.
+   * @throws Error if no editor is active.
+   */
+  unmap(families: string | string[]): void;
 }
 
 /**

@@ -41,7 +41,12 @@ export interface FontsChangedPayload {
   resolutions: FontResolutionRecord[];
   missingFonts: string[];
   loadSummary: FontLoadSummary;
-  source: 'initial' | 'late-load';
+  /**
+   * Why the report changed: `initial` (first resolve), `late-load` (a font finished loading and
+   * bumped the global epoch), or `config-change` (a runtime `superdoc.fonts` mutation - map/unmap/
+   * add - on this document).
+   */
+  source: 'initial' | 'late-load' | 'config-change';
   version: number;
 }
 
