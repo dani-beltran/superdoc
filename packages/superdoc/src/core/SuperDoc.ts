@@ -1570,7 +1570,16 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
     if (!editor || typeof editor.on !== 'function') return;
     if (this.#fontsRelayEditors.has(editor)) return;
     this.#fontsRelayEditors.add(editor);
-    editor.on('fonts-changed', (payload) => this.#deliverFontsChanged(payload));
+    editor.on('fonts-changed', (payload) => {
+      // Only surface the active editor's report. After a document swap an old editor can
+      // still emit `fonts-changed` (e.g. a timed-out font finishing later), and the payload
+      // carries no document id to disambiguate; forwarding it would deliver a stale report
+      // for the prior document and poison the `onReport` cache. Drop events from any editor
+      // that is no longer active. (When no editor is active yet, the sole editor's events
+      // still surface, matching the documented active-editor semantics.)
+      if (this.activeEditor && editor !== this.activeEditor) return;
+      this.#deliverFontsChanged(payload);
+    });
     const cached = editor.presentationEditor?.getLastFontsChangedPayload?.();
     if (cached) this.#deliverFontsChanged(cached);
   }

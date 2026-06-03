@@ -1029,6 +1029,41 @@ describe('SuperDoc core', () => {
       expect(instance.fonts.getMissingFonts()).toEqual([]);
       expect(instance.fonts.getDocumentFonts()).toEqual([]);
     });
+
+    it('does not relay fonts-changed from an editor that is no longer active', async () => {
+      const instance = await makeInstance();
+      const oldEditor = makeEmitterEditor();
+      const newEditor = makeEmitterEditor();
+      instance.broadcastEditorCreate(oldEditor);
+      instance.broadcastEditorCreate(newEditor);
+      instance.activeEditor = newEditor; // document swap: newEditor is the active document
+
+      const received = [];
+      instance.on('fonts-changed', (p) => received.push(p));
+
+      // The old (inactive) editor finishes a timed-out font and emits late.
+      oldEditor.emit('fonts-changed', {
+        documentFonts: ['Calibri'],
+        resolutions: [],
+        missingFonts: [],
+        loadSummary: { loaded: 1, failed: 0, timedOut: 0, fallbackUsed: 0, results: [] },
+        source: 'late-load',
+        version: 9,
+      });
+      expect(received).toEqual([]); // dropped: not the active editor
+
+      // The active editor's report still surfaces.
+      const activePayload = {
+        documentFonts: ['Cambria'],
+        resolutions: [],
+        missingFonts: [],
+        loadSummary: { loaded: 1, failed: 0, timedOut: 0, fallbackUsed: 0, results: [] },
+        source: 'late-load',
+        version: 1,
+      };
+      newEditor.emit('fonts-changed', activePayload);
+      expect(received).toEqual([activePayload]);
+    });
   });
 
   it('uses visible search model in SuperDoc.search()', async () => {
