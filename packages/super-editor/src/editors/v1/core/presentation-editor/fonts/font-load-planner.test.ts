@@ -150,9 +150,19 @@ describe('planFontFaces (face-aware single plan)', () => {
       { logicalFamily: 'Georgia', weight: '400', style: 'normal' },
       { logicalFamily: 'Georgia', weight: '700', style: 'normal' },
     ]);
-    // effectiveSignature records each face's resolution (incl. reason), excluding load status.
-    expect(plan.effectiveSignature).toContain('georgia|400|normal=>gelasio|custom_mapping');
-    expect(plan.effectiveSignature).toContain('georgia|700|normal=>georgia|fallback_face_absent');
+    // effectiveSignature records each face's resolution (incl. reason), excluding load status, as
+    // collision-safe JSON tuples [logicalLower, weight, style, physicalLower, reason].
+    expect(plan.effectiveSignature).toContain('["georgia","400","normal","gelasio","custom_mapping"]');
+    expect(plan.effectiveSignature).toContain('["georgia","700","normal","georgia","fallback_face_absent"]');
+  });
+
+  it('treats a quoted primary family as the same used face as its bare form', () => {
+    const resolver = createFontResolver();
+    // '"Calibri"' (quoted) and 'Calibri' (bare) are ONE logical family: primaryFamily strips
+    // surrounding quotes like the resolver, so they collapse to a single used face / signature
+    // entry instead of two divergent rows.
+    const plan = planFontFaces([para('p', [text('"Calibri"'), text('Calibri')])], resolver);
+    expect(plan.usedFaces).toEqual([{ logicalFamily: 'Calibri', weight: '400', style: 'normal' }]);
   });
 
   it('effectiveSignature changes when face availability changes for the SAME family map', () => {

@@ -35,8 +35,9 @@ export interface FontPlan {
   /** Logical faces the document renders, for the face-level report (`buildFaceReport`). */
   usedFaces: UsedFace[];
   /**
-   * Render/measure CACHE IDENTITY: a stable, sorted serialization of the document's resolved faces,
-   * each `logicalPrimary|weight|style=>physicalPrimary|reason`. This (NOT `resolver.signature`, which
+   * Render/measure CACHE IDENTITY: a stable, sorted, collision-safe JSON serialization of the
+   * document's resolved faces - sorted tuples `[logicalLower, weight, style, physicalLower, reason]`
+   * (empty `''` when no faces are used). This (NOT `resolver.signature`, which
    * captures only the family map) is what measure/paint/layout cache keys must fold in: a
    * `fonts.add()` that makes a face available changes a face's resolution for the SAME family map, so
    * two documents with the same map but different registered faces resolve differently and must not
@@ -57,7 +58,10 @@ interface FontBearing {
 /** The bare primary family of a CSS value: "Calibri, sans-serif" -> "Calibri". */
 function primaryFamily(css: string): string {
   const comma = css.indexOf(',');
-  return (comma === -1 ? css : css.slice(0, comma)).trim();
+  // Strip surrounding quotes like the resolver's normalizeFamilyKey, so a quoted primary
+  // (`"Calibri"`) and its bare form collapse to ONE used face / report row / signature entry
+  // instead of two. Case is preserved for display; the dedup key lowercases separately.
+  return (comma === -1 ? css : css.slice(0, comma)).trim().replace(/^["']|["']$/g, '');
 }
 
 /** Resolve a logical family + face to its physical render family and reason, for this document. */
@@ -89,8 +93,14 @@ function makeResolveFace(resolver: FontResolver | undefined, hasFace: HasFace | 
 interface Acc {
   requiredFaces: Map<string, FontFaceRequest>;
   usedFaces: Map<string, UsedFace>;
-  /** usedKey -> "logicalPrimary|weight|style=>physicalPrimary|reason" for the effective signature. */
-  sigEntries: Map<string, string>;
+  /**
+   * usedKey -> the structured resolution tuple `[logicalLower, weight, style, physicalLower, reason]`.
+   * Serialized to the effective signature as JSON (NOT a delimited join): a font family is a free
+   * ST_String that may contain `;`, `|`, or `=>`, so a delimited form could serialize two distinct
+   * resolution sets to the same key and cause wrong cache reuse. JSON of structured tuples is
+   * collision-safe, matching {@link FontResolver.signature}.
+   */
+  sigEntries: Map<string, [string, '400' | '700', 'normal' | 'italic', string, string]>;
 }
 
 /** Collect a face from any font-bearing object into the dedup maps + signature entries. */
@@ -104,7 +114,13 @@ function collect(acc: Acc, node: FontBearing | null | undefined, resolveFace: Re
   if (acc.usedFaces.has(usedKey)) return; // already collected this used face
   const { physicalFamily, reason } = resolveFace(node.fontFamily, { weight, style });
   acc.usedFaces.set(usedKey, { logicalFamily: logicalPrimary, weight, style });
-  acc.sigEntries.set(usedKey, `${usedKey}=>${(physicalFamily || '').toLowerCase()}|${reason}`);
+  acc.sigEntries.set(usedKey, [
+    logicalPrimary.toLowerCase(),
+    weight,
+    style,
+    (physicalFamily || '').toLowerCase(),
+    reason,
+  ]);
   if (physicalFamily) {
     const reqKey = `${physicalFamily.toLowerCase()}|${weight}|${style}`;
     if (!acc.requiredFaces.has(reqKey)) acc.requiredFaces.set(reqKey, { family: physicalFamily, weight, style });
@@ -186,7 +202,16 @@ export function planFontFaces(
   return {
     requiredFaces: [...acc.requiredFaces.values()],
     usedFaces: [...acc.usedFaces.values()],
-    effectiveSignature: [...acc.sigEntries.values()].sort().join(';'),
+    // Collision-safe: sort by usedKey (deterministic, order-independent) and JSON-encode the
+    // structured resolution tuples, so a family name containing a delimiter cannot forge a
+    // colliding signature (see Acc.sigEntries). Empty stays '' (not '[]') so default documents keep
+    // the shared-cache fast path that keys on a falsy signature.
+    effectiveSignature:
+      acc.sigEntries.size === 0
+        ? ''
+        : JSON.stringify(
+            [...acc.sigEntries.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([, tuple]) => tuple),
+          ),
   };
 }
 
