@@ -313,6 +313,7 @@ vi.mock('@core/layout-adapter', async (importOriginal) => {
 // Mock layout-bridge functions
 vi.mock('@superdoc/layout-bridge', () => ({
   incrementalLayout: mockIncrementalLayout,
+  measureCache: { clear: vi.fn() },
   normalizeMargin: (value: number | undefined, fallback: number) =>
     Number.isFinite(value) ? (value as number) : fallback,
   selectionToRects: mockSelectionToRects,
@@ -561,8 +562,10 @@ describe('PresentationEditor', () => {
 
         expect(order).toContain('custom-font-add');
         expect(order.indexOf('custom-font-add')).toBeLessThan(order.indexOf('layout'));
-        const resolvePhysical = mockMeasureBlock.mock.calls[0]?.[2] as ((family: string) => string) | undefined;
-        expect(resolvePhysical?.('Georgia')).toBe('Gelasio');
+        const fontContext = mockMeasureBlock.mock.calls[0]?.[2] as
+          | { resolvePhysical?: (family: string) => string }
+          | undefined;
+        expect(fontContext?.resolvePhysical?.('Georgia')).toBe('Gelasio');
       } finally {
         if (originalFonts) Object.defineProperty(document, 'fonts', originalFonts);
         else Reflect.deleteProperty(document, 'fonts');
