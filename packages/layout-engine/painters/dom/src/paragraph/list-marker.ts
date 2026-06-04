@@ -100,11 +100,10 @@ export const createListMarkerElement = (
   markerEl.classList.add('superdoc-paragraph-marker');
   markerEl.textContent = markerText;
   markerEl.style.pointerEvents = 'none';
-  // Paint the physical render family (a per-document fonts.map or the bundled substitute) - the
-  // same family the marker glyph was measured in, so its advance matches the laid-out position.
-  // Defaults to the global resolver when no per-document resolver is present (e.g. tests).
-  const physicalFamily = resolvePhysical(run.fontFamily ?? '');
-  markerEl.style.fontFamily = toCssFontFamily(physicalFamily) ?? physicalFamily ?? '';
+  // Compose the Word fallback stack first, then let the resolver swap only the primary family.
+  // This keeps Times New Roman -> Liberation Serif on a serif fallback instead of inventing sans-serif.
+  const cssFontFamily = toCssFontFamily(run.fontFamily) ?? run.fontFamily ?? '';
+  markerEl.style.fontFamily = resolvePhysical(cssFontFamily);
 
   if (run.fontSize != null) {
     markerEl.style.fontSize = `${run.fontSize}px`;

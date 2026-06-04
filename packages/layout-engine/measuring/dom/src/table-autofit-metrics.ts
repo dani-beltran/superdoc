@@ -12,7 +12,7 @@ import type {
   TableBlock,
   TableCell,
 } from '@superdoc/contracts';
-import type { FontMeasureContext } from '@superdoc/font-system';
+import { DEFAULT_FONT_MEASURE_CONTEXT, type FontMeasureContext } from '@superdoc/font-system';
 import { toCssFontFamily } from '@superdoc/font-utils';
 import type { AutoFitRowInput } from './autofit-columns.js';
 import type { WorkingTableCellInput, WorkingTableGridInput } from './autofit-normalize.js';
@@ -87,7 +87,8 @@ export type TableCellContentMetricsOptions = {
    */
   measureBlock: AutoFitMeasureBlock;
   /**
-   * Per-document font measure context.
+   * Per-document font measure context. Exported helpers default to the shared context
+   * for tests and context-free callers; runtime layout passes the document context.
    *
    * `resolvePhysical` maps the run's logical family (e.g. "Calibri") to the
    * physical render family (e.g. "Carlito") so token min-width is measured in
@@ -95,12 +96,16 @@ export type TableCellContentMetricsOptions = {
    * key so two documents with different `fonts.map` tables never share cached
    * widths.
    */
-  fontContext: FontMeasureContext;
+  fontContext?: FontMeasureContext;
   /**
    * Optional external invalidation dimension. If measurement already depends on
    * a layout epoch or similar version, callers can fold it into the cache key.
    */
   layoutEpoch?: number | string;
+};
+
+type NormalizedTableCellContentMetricsOptions = TableCellContentMetricsOptions & {
+  fontContext: FontMeasureContext;
 };
 
 /**
@@ -272,9 +277,10 @@ export function buildTableCellContentMetricsCacheKey(
   cell: TableCell,
   options: Omit<TableCellContentMetricsOptions, 'measureBlock'>,
 ): string {
+  const fontContext = options.fontContext ?? DEFAULT_FONT_MEASURE_CONTEXT;
   return stableSerialize({
     maxWidth: Math.max(1, Math.round(options.maxWidth)),
-    fontSignature: options.fontContext.fontSignature ?? '',
+    fontSignature: fontContext.fontSignature ?? '',
     layoutEpoch: options.layoutEpoch ?? null,
     attrs: cell.attrs ?? null,
     paragraph: cell.paragraph ?? null,
@@ -355,7 +361,9 @@ export async function measureTableCellContentMetrics(
   cell: TableCell,
   options: TableCellContentMetricsOptions,
 ): Promise<TableCellContentMetrics> {
-  const cacheKey = buildTableCellContentMetricsCacheKey(cell, options);
+  const fontContext = options.fontContext ?? DEFAULT_FONT_MEASURE_CONTEXT;
+  const normalizedOptions: NormalizedTableCellContentMetricsOptions = { ...options, fontContext };
+  const cacheKey = buildTableCellContentMetricsCacheKey(cell, normalizedOptions);
   const cached = tableCellMetricsCache.get(cacheKey);
   if (cached) {
     return cached;
@@ -377,7 +385,7 @@ export async function measureTableCellContentMetrics(
   let maxContentWidthPx = 0;
 
   for (const block of contentBlocks) {
-    const metrics = await measureIntrinsicBlockWidthMetrics(block, options);
+    const metrics = await measureIntrinsicBlockWidthMetrics(block, normalizedOptions);
     minContentWidthPx = Math.max(minContentWidthPx, metrics.minWidthPx);
     maxContentWidthPx = Math.max(maxContentWidthPx, metrics.maxWidthPx);
   }
@@ -404,8 +412,8 @@ export async function measureTableCellContentMetrics(
  * @param table - Runtime table block being measured.
  * @param workingInput - Normalized working-grid input for the table.
  * @param measureBlock - Existing block measurer reused for intrinsic widths.
- * @param fontContext - Per-document font measure context. Drives physical-family
- *   resolution for token min-width and folds the font signature into both caches.
+ * @param fontContext - Per-document font measure context. Omitted callers use the
+ *   shared default; runtime layout passes the document context.
  * @returns Row/cell-indexed content metrics plus compatibility rows.
  */
 export async function measureTableAutoFitContentMetrics(
@@ -413,7 +421,7 @@ export async function measureTableAutoFitContentMetrics(
   workingInput: WorkingTableGridInput,
   fixedLayout: FixedLayoutResult,
   measureBlock: AutoFitMeasureBlock,
-  fontContext: FontMeasureContext,
+  fontContext: FontMeasureContext = DEFAULT_FONT_MEASURE_CONTEXT,
 ): Promise<TableAutoFitContentMetricsResult> {
   const tableMeasurementBasis = Math.max(1, fixedLayout.totalWidth);
   const cellMetricKeys: string[] = [];
@@ -488,7 +496,7 @@ export async function measureTableAutoFitContentMetrics(
  */
 async function measureIntrinsicBlockWidthMetrics(
   block: ParagraphBlock | ImageBlock | DrawingBlock | TableBlock,
-  options: TableCellContentMetricsOptions,
+  options: NormalizedTableCellContentMetricsOptions,
 ): Promise<TableCellContentMetrics> {
   if (block.kind === 'paragraph') {
     return measureParagraphIntrinsicWidthMetrics(block, options.measureBlock, options.fontContext);
@@ -540,7 +548,7 @@ async function measureParagraphIntrinsicWidthMetrics(
  */
 async function measureNestedTableIntrinsicWidthMetrics(
   table: TableBlock,
-  options: TableCellContentMetricsOptions,
+  options: NormalizedTableCellContentMetricsOptions,
 ): Promise<TableCellContentMetrics> {
   const nestedMeasure = await options.measureBlock(table, {
     maxWidth: Math.max(1, options.maxWidth),

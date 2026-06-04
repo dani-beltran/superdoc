@@ -371,6 +371,7 @@ vi.mock('@superdoc/painter-dom', () => ({
 // Mock measuring-dom
 vi.mock('@superdoc/measuring-dom', () => ({
   measureBlock: mockMeasureBlock,
+  clearTextMeasurementCaches: vi.fn(),
 }));
 
 vi.mock('@superdoc/layout-resolved', () => ({

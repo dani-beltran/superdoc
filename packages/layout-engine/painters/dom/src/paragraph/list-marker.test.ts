@@ -14,7 +14,7 @@ describe('createListMarkerElement per-document paint isolation', () => {
     // signatures. (Plain Calibri with an empty signature would only exercise the bundled default and
     // would not prove isolation - the whole point of keying paint by the document resolver.)
     const docA = createFontResolver();
-    docA.map('Calibri', 'Carlito');
+    docA.map('Calibri', 'Liberation Sans');
     const docB = createFontResolver();
     docB.map('Calibri', 'Tinos');
     expect(docA.signature).not.toBe('');
@@ -24,7 +24,7 @@ describe('createListMarkerElement per-document paint isolation', () => {
     const markerB = createListMarkerElement(makeDoc(), '1.', run, undefined, (f) => docB.resolvePhysicalFamily(f));
 
     // The marker glyph paints each document's mapped physical family, so the two documents differ.
-    expect(markerFontFamily(markerA)).toContain('Carlito');
+    expect(markerFontFamily(markerA)).toContain('Liberation Sans');
     expect(markerFontFamily(markerB)).toContain('Tinos');
     expect(markerFontFamily(markerA)).not.toBe(markerFontFamily(markerB));
   });
