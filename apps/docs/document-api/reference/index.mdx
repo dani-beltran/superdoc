@@ -26,6 +26,7 @@ This reference is sourced from `packages/document-api/src/contract/*`.
 | Sections | 18 | 0 | 18 | [Open](/document-api/reference/sections/index) |
 | Format | 45 | 1 | 46 | [Open](/document-api/reference/format/index) |
 | Styles | 1 | 0 | 1 | [Open](/document-api/reference/styles/index) |
+| Templates | 1 | 0 | 1 | [Open](/document-api/reference/templates/index) |
 | Lists | 39 | 0 | 39 | [Open](/document-api/reference/lists/index) |
 | Comments | 5 | 0 | 5 | [Open](/document-api/reference/comments/index) |
 | Track Changes | 3 | 0 | 3 | [Open](/document-api/reference/track-changes/index) |
@@ -183,6 +184,12 @@ The tables below are grouped by namespace.
 | Operation | API member path | Description |
 | --- | --- | --- |
 | <span style={{ whiteSpace: 'nowrap', wordBreak: 'normal', overflowWrap: 'normal' }}><a href="/document-api/reference/styles/apply"><code>styles.apply</code></a></span> | <span style={{ whiteSpace: 'nowrap', wordBreak: 'normal', overflowWrap: 'normal' }}><code>editor.doc.styles.apply(...)</code></span> | Apply document-level default style changes to the stylesheet (word/styles.xml). Targets docDefaults run and paragraph channels with set-style patch semantics. |
+
+#### Templates
+
+| Operation | API member path | Description |
+| --- | --- | --- |
+| <span style={{ whiteSpace: 'nowrap', wordBreak: 'normal', overflowWrap: 'normal' }}><a href="/document-api/reference/templates/apply"><code>templates.apply</code></a></span> | <span style={{ whiteSpace: 'nowrap', wordBreak: 'normal', overflowWrap: 'normal' }}><code>await editor.doc.templates.apply(...)</code></span> | Apply detected DOCX template/substrate (styles, numbering, settings, theme, font table, web settings, headers/footers, section defaults) from a source package onto the current document, preserving body content. Scopes are auto-detected from source package evidence. |
 
 #### Lists
 
