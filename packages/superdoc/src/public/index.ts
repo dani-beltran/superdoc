@@ -44,7 +44,7 @@ export const BlankDOCX: string = BlankDOCXAsset;
 export { DOCX, PDF, HTML, getFileObject, compareVersions };
 
 // =============================================================================
-// SUPPORTED ROOT (132)
+// SUPPORTED ROOT
 // First-class public API. Documented, advertised, supported long-term.
 // =============================================================================
 
@@ -172,6 +172,8 @@ export type { FieldValue } from '@superdoc/super-editor';
 export type { FontAssetUrlContext } from '@superdoc/super-editor';
 export type { FontAssetUrlResolver } from '@superdoc/super-editor';
 export type { FontConfig } from '@superdoc/super-editor';
+export type { FontFaceConfig } from '@superdoc/super-editor';
+export type { FontFamilyConfig } from '@superdoc/super-editor';
 export type { FontResolutionRecord } from '@superdoc/super-editor';
 export type { FontsChangedPayload } from '@superdoc/super-editor';
 export type { FontsConfig } from '@superdoc/super-editor';

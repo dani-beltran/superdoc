@@ -249,11 +249,11 @@ describe('FontReadinessGate', () => {
     expect(requestReflow).not.toHaveBeenCalled();
   });
 
-  it('notifyFontMappingChanged bumps the LOCAL version and reflows, without the global epoch', () => {
+  it('notifyDocumentFontConfigChanged bumps the LOCAL version and reflows, without the global epoch', () => {
     __resetFontConfigVersion();
     const gate = makeGate(['Calibri']);
 
-    gate.notifyFontMappingChanged();
+    gate.notifyDocumentFontConfigChanged();
 
     expect(gate.fontConfigVersion).toBe(1); // local version bumped so fonts-changed re-emits
     expect(getFontConfigVersion()).toBe(0); // a mapping is document-local: NO global epoch bump
@@ -261,14 +261,14 @@ describe('FontReadinessGate', () => {
     expect(requestReflow).toHaveBeenCalledTimes(1);
   });
 
-  it('notifyFontMappingChanged cancels a pending batched late-load (no double reflow)', async () => {
+  it('notifyDocumentFontConfigChanged cancels a pending batched late-load (no double reflow)', async () => {
     registry.statuses.set('Carlito', 'timed_out');
     const gate = makeGate(['Calibri']);
     await gate.ensureReadyForMeasure();
 
     registry.statuses.set('Carlito', 'loaded');
     fontSet.fire('loadingdone', { fontfaces: [{ family: 'Carlito' }] }); // schedules a batched reflow
-    gate.notifyFontMappingChanged(); // immediate reflow; must also cancel the pending batch
+    gate.notifyDocumentFontConfigChanged(); // immediate reflow; must also cancel the pending batch
     expect(requestReflow).toHaveBeenCalledTimes(1);
 
     clock.advance(300); // the cancelled quiet timer must NOT fire a second reflow

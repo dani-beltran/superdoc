@@ -28,6 +28,8 @@ import type {
   CollaborationProvider as SuperEditorCollaborationProvider,
   Comment,
   FontConfig,
+  FontFaceConfig,
+  FontFamilyConfig,
   FontsConfig,
   FontsResolvedPayload,
   FontsChangedPayload,
@@ -72,6 +74,8 @@ export type NavigableAddress = SuperEditorNavigableAddress;
  */
 export type { User } from '@superdoc/super-editor';
 export type {
+  FontFaceConfig,
+  FontFamilyConfig,
   FontResolutionRecord,
   FontsChangedPayload,
   FontsConfig,
@@ -88,22 +92,11 @@ export type {
  * editor is active; writes throw. {@link getReport} and {@link getDocumentFonts} cover the
  * document's DECLARED fonts (font table + theme + defaults), not only fonts visible on screen.
  */
-/** One physical font face to register: a URL source plus optional weight/style. */
-export interface SuperDocFontFace {
-  /** A plain URL the browser loads, e.g. '/fonts/Gelasio-Regular.woff2' or 'https://cdn/...'. */
-  source: string;
-  /** Font weight (e.g. 400, 700, 'bold'); defaults to 400. */
-  weight?: number | string;
-  /** Font style ('normal' | 'italic'); defaults to 'normal'. */
-  style?: string;
-}
+/** Public SuperDoc alias for the canonical font face config. */
+export type SuperDocFontFace = FontFaceConfig;
 
-/** A physical font family to register with SuperDoc, with its weight/style faces. */
-export interface SuperDocFontFamily {
-  /** The physical family documents map to and CSS renders (e.g. 'Gelasio'). */
-  family: string;
-  faces: SuperDocFontFace[];
-}
+/** Public SuperDoc alias for the canonical font family config. */
+export type SuperDocFontFamily = FontFamilyConfig;
 
 export interface SuperDocFontsApi {
   /** Per-font report: requested logical family -> physical render family, reason, load status, export family, missing. */

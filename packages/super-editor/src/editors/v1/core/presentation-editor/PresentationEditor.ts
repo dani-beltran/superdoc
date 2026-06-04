@@ -180,9 +180,10 @@ import { measureBlock } from '@superdoc/measuring-dom';
 import { createFontResolver, type FontResolutionRecord, type FontLoadSummary } from '@superdoc/font-system';
 import { installBundledSubstitutes } from '@superdoc/font-system/bundled';
 import { FontReadinessGate } from './fonts/FontReadinessGate';
-import { DocumentFontController, type ManagedFontFamily } from './fonts/DocumentFontController';
+import { DocumentFontController } from './fonts/DocumentFontController';
 import { planRequiredFontFaces } from './fonts/font-load-planner';
 import type { FontsChangedPayload } from '../types/EditorEvents';
+import type { FontFamilyConfig } from '../types/EditorConfig';
 import type {
   ColumnLayout,
   FlowBlock,
@@ -563,7 +564,7 @@ export class PresentationEditor extends EventEmitter {
   readonly #fontController = new DocumentFontController({
     resolver: this.#fontResolver,
     getGate: () => this.#fontGate,
-    onMappingApplied: () => {
+    onDocumentFontConfigApplied: () => {
       this.#nextFontsChangedSource = 'config-change';
     },
   });
@@ -990,7 +991,7 @@ export class PresentationEditor extends EventEmitter {
           return converter?.getDocumentFonts?.() ?? [];
         },
         // Reflow so unchanged blocks re-measure (see #requestFontReflow). The gate calls this for
-        // a late font load AND for a mapping change (notifyFontMappingChanged via the controller).
+        // a late font load AND for a document font config change from the controller.
         requestReflow: () => this.#requestFontReflow(),
         // Face-aware required set: the exact physical faces (family + weight + style) the
         // rendered document uses, from the planner walking the current layout blocks. The
@@ -1018,6 +1019,7 @@ export class PresentationEditor extends EventEmitter {
           return fontSet && FontFaceCtor ? { fontSet, FontFaceCtor } : null;
         },
       });
+      this.#fontController.applyInitialConfig(this.#options.fontAssets);
       if (typeof this.#options.disableContextMenu === 'boolean') {
         this.setContextMenuDisabled(this.#options.disableContextMenu);
       }
@@ -2975,7 +2977,7 @@ export class PresentationEditor extends EventEmitter {
    * reflow so a newly-registered face the document already uses is awaited and applied. Surfaced
    * as `superdoc.fonts.add()`.
    */
-  addFonts(families: ManagedFontFamily[]): void {
+  addFonts(families: FontFamilyConfig[]): void {
     this.#fontController.add(families);
   }
 
@@ -2990,9 +2992,9 @@ export class PresentationEditor extends EventEmitter {
   /**
    * Drop this editor's cached blocks + measures and schedule a full document re-layout. The
    * font-readiness gate calls this (via its requestReflow option) for both a late font load and a
-   * mapping change (notifyFontMappingChanged): incremental layout reuses previousMeasures for
-   * unchanged blocks, so clearing them is what forces the re-measure; the pending-change flag
-   * routes through the document re-layout path (not the selection-only render).
+   * document font config change: incremental layout reuses previousMeasures for unchanged blocks,
+   * so clearing them is what forces the re-measure; the pending-change flag routes through the
+   * document re-layout path (not the selection-only render).
    */
   #requestFontReflow(): void {
     this.#layoutState = { ...this.#layoutState, blocks: [], measures: [], layout: null };
@@ -4536,6 +4538,7 @@ export class PresentationEditor extends EventEmitter {
     this.#postPaintPipeline.destroy();
     this.#proofingManager?.dispose();
     this.#proofingManager = null;
+    this.#fontController.dispose();
     this.#fontGate?.dispose();
     this.#fontGate = null;
 
@@ -5132,10 +5135,11 @@ export class PresentationEditor extends EventEmitter {
     // importer tab matches the collaborator tab without waiting for an edit.
     const handleDocumentReplaced = () => {
       // A new document reuses this gate AND this resolver, so drop the old document's pending
-      // late-load reflow + required-face state and its runtime font mappings - otherwise a
-      // flush armed under the old document reflows the new one, or a prior `fonts.map` leaks in.
+      // late-load reflow + required-face state and its runtime font mappings, then reapply the
+      // instance-level fonts config before the rerender.
       this.#fontGate?.resetForDocumentChange();
       this.#fontController.reset();
+      this.#fontController.applyInitialConfig(this.#options.fontAssets);
       this.#resetFontReportStateForDocumentChange();
       this.#refreshHeaderFooterStructureThenRerender({ purgeCachedEditors: true });
     };

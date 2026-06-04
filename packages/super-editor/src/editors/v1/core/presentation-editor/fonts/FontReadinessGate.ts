@@ -279,17 +279,16 @@ export class FontReadinessGate {
   }
 
   /**
-   * Signal that this document's font MAPPING changed at runtime (`fonts.map`/`unmap`). This is
-   * document-local state: it changes the per-document resolver's signature, which the resolver
-   * context already threads through the measure caches, previous-measure reuse, and paint-reuse
-   * versions - so the new physical family produces fresh cache keys on its own. It therefore does
-   * NOT bump the global font epoch (that would needlessly repaint OTHER editors on the page) and
-   * does NOT invalidate the shared measurement caches; only an actual face-availability change (a
-   * face the shared FontFaceSet finished loading, handled in `#onLoadingDone`) is global. Bumps
-   * the gate's LOCAL version so `fonts-changed` re-emits, re-plans the required set, cancels any
-   * pending late-load reflow, and reflows THIS document.
+   * Signal that this document's font CONFIG changed at runtime (`fonts.map`/`unmap`/`add`). This
+   * is document-local state: mappings change the per-document resolver signature and registrations
+   * change what this document can await. It therefore does NOT bump the global font epoch (that
+   * would needlessly repaint OTHER editors on the page) and does NOT invalidate the shared
+   * measurement caches; only an actual face-availability change (a face the shared FontFaceSet
+   * finished loading, handled in `#onLoadingDone`) is global. Bumps the gate's LOCAL version so
+   * `fonts-changed` re-emits, re-plans the required set, cancels any pending late-load reflow, and
+   * reflows THIS document.
    */
-  notifyFontMappingChanged(): void {
+  notifyDocumentFontConfigChanged(): void {
     this.#fontConfigVersion += 1;
     // Reset the required + seen sets so an in-flight `loadingdone` can't re-arm a reflow for a
     // face this immediate reflow already corrects; the next pass re-plans from scratch.

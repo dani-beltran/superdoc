@@ -91,6 +91,8 @@
         "FontAssetUrlContext",
         "FontAssetUrlResolver",
         "FontConfig",
+        "FontFaceConfig",
+        "FontFamilyConfig",
         "FontResolutionRecord",
         "FontsChangedPayload",
         "FontsConfig",
@@ -324,6 +326,8 @@
         "FontAssetUrlContext",
         "FontAssetUrlResolver",
         "FontConfig",
+        "FontFaceConfig",
+        "FontFamilyConfig",
         "FontResolutionRecord",
         "FontsChangedPayload",
         "FontsConfig",
@@ -573,11 +577,11 @@
     }
   },
   "counts": {
-    "types.import": 225,
-    "types.require": 225,
+    "types.import": 229,
+    "types.require": 229,
     "import": 41,
     "require": 41,
-    "union": 225
+    "union": 229
   },
   "divergences": {
     "typesImportVsRequire": {
@@ -658,6 +662,8 @@
         "FontAssetUrlContext",
         "FontAssetUrlResolver",
         "FontConfig",
+        "FontFaceConfig",
+        "FontFamilyConfig",
         "FontResolutionRecord",
         "FontsChangedPayload",
         "FontsConfig",

@@ -5,6 +5,7 @@ import type { Editor as EditorInstance } from '../../Editor.js';
 import { Editor } from '../../Editor.js';
 import { HeaderFooterEditorManager, HeaderFooterLayoutAdapter } from '../../header-footer/HeaderFooterRegistry.js';
 import { buildMultiSectionIdentifier } from '@superdoc/layout-bridge';
+import type { FlowBlock } from '@superdoc/contracts';
 import { NodeSelection } from 'prosemirror-state';
 
 type MockedEditor = Mock<(...args: unknown[]) => EditorInstance> & {
@@ -490,6 +491,75 @@ describe('PresentationEditor', () => {
       await new Promise((resolve) => setTimeout(resolve, 50));
 
       expect(editor.historyCoordinator).toBeNull();
+    });
+  });
+
+  describe('document font config', () => {
+    it('registers configured families and maps before the first measure callback', async () => {
+      const order: string[] = [];
+      const originalFonts = Object.getOwnPropertyDescriptor(document, 'fonts');
+      const originalFontFace = Object.getOwnPropertyDescriptor(window, 'FontFace');
+
+      class TestFontFace {
+        readonly status = 'unloaded';
+
+        constructor(public readonly family: string) {}
+
+        load(): Promise<TestFontFace> {
+          return Promise.resolve(this);
+        }
+      }
+
+      const fontSet = {
+        add: vi.fn((face: { family: string }) => {
+          if (face.family === 'Gelasio') order.push('custom-font-add');
+        }),
+        load: vi.fn(async () => [new TestFontFace('loaded')]),
+        check: vi.fn(() => true),
+      };
+
+      Object.defineProperty(document, 'fonts', { configurable: true, value: fontSet });
+      Object.defineProperty(window, 'FontFace', { configurable: true, value: TestFontFace });
+
+      try {
+        const block = {
+          kind: 'paragraph',
+          id: 'p-font-config',
+          runs: [{ kind: 'text', text: 'Hello', fontFamily: 'Georgia', fontSize: 12 }],
+        } as FlowBlock;
+
+        mockToFlowBlocks.mockReturnValueOnce({ blocks: [block], bookmarks: new Map() });
+        mockIncrementalLayout.mockImplementationOnce(
+          async (_previousBlocks, _previousLayout, blocks, _layoutOptions, measureBlock) => {
+            order.push('layout');
+            await (measureBlock as (block: FlowBlock, constraints: { maxWidth: number; maxHeight: number }) => unknown)(
+              blocks[0] as FlowBlock,
+              { maxWidth: 500, maxHeight: 700 },
+            );
+            return { layout: { pages: [] }, measures: [] };
+          },
+        );
+
+        editor = new PresentationEditor({
+          element: container,
+          fontAssets: {
+            families: [{ family: 'Gelasio', faces: [{ source: '/fonts/Gelasio-Regular.woff2' }] }],
+            map: { Georgia: 'Gelasio' },
+          },
+        });
+
+        await vi.waitFor(() => expect(mockIncrementalLayout).toHaveBeenCalled());
+
+        expect(order).toContain('custom-font-add');
+        expect(order.indexOf('custom-font-add')).toBeLessThan(order.indexOf('layout'));
+        const resolvePhysical = mockMeasureBlock.mock.calls[0]?.[2] as ((family: string) => string) | undefined;
+        expect(resolvePhysical?.('Georgia')).toBe('Gelasio');
+      } finally {
+        if (originalFonts) Object.defineProperty(document, 'fonts', originalFonts);
+        else Reflect.deleteProperty(document, 'fonts');
+        if (originalFontFace) Object.defineProperty(window, 'FontFace', originalFontFace);
+        else Reflect.deleteProperty(window, 'FontFace');
+      }
     });
   });
 

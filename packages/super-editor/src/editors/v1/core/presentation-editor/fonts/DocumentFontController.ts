@@ -1,22 +1,6 @@
 import type { FontFaceRequest, FontResolver } from '@superdoc/font-system';
+import type { FontFamilyConfig, FontsConfig } from '../../types/EditorConfig.js';
 import type { FontReadinessGate } from './FontReadinessGate.js';
-
-/** One physical font face: a URL source plus optional weight/style (default 400/normal). */
-export interface ManagedFontFace {
-  /** A plain URL the face loads (e.g. '/fonts/x.woff2'); normalized to a CSS url(...) internally. v1 is URL-only. */
-  source: string;
-  /** Font weight (e.g. 400, 700, 'bold'); defaults to 400. */
-  weight?: number | string;
-  /** Font style ('normal' | 'italic'); defaults to 'normal'. */
-  style?: string;
-}
-
-/** A physical family to register, with its weight/style faces. */
-export interface ManagedFontFamily {
-  /** The physical family name documents map to and CSS renders (e.g. 'Gelasio'). */
-  family: string;
-  faces: ManagedFontFace[];
-}
 
 export interface DocumentFontControllerDeps {
   /**
@@ -32,10 +16,12 @@ export interface DocumentFontControllerDeps {
    */
   getGate: () => FontReadinessGate | null;
   /**
-   * Invoked once after a mapping change is actually applied (signature changed), so the next
+   * Invoked once after a runtime document font config change is applied, so the next
    * `fonts-changed` is labelled `source: 'config-change'` instead of `late-load`.
    */
-  onMappingApplied: () => void;
+  onDocumentFontConfigApplied: () => void;
+  /** Microtask scheduler, injectable for deterministic tests. */
+  scheduleMicrotask?: (callback: () => void) => void;
 }
 
 /**
@@ -49,37 +35,38 @@ function toCssFontSource(url: string): string {
 /**
  * The single writer for a document's font state: `map`/`unmap` change the resolver, `add`
  * registers customer faces through the registry, and `preload` loads them. Runtime
- * `superdoc.fonts.*` routes through here (config-time `new SuperDoc({ fonts })` will use the same
- * methods), so every mutation shares one orchestration path: mutate, then reflow ONCE - and only
- * when something actually changed. Mapping changes are document-local (the per-document resolver
+ * `superdoc.fonts.*` and config-time `new SuperDoc({ fonts })` route through here, so every
+ * mutation shares one orchestration path. Runtime mutations coalesce into one document-local
+ * reflow; config-time mutations apply before the first measure with no event. Font config changes
+ * are document-local (the per-document resolver
  * signature already busts this document's measure/paint caches), so a reflow goes through
- * {@link FontReadinessGate.notifyFontMappingChanged} and never bumps the global font epoch or
+ * {@link FontReadinessGate.notifyDocumentFontConfigChanged} and never bumps the global font epoch or
  * touches other editors on the page.
  */
 export class DocumentFontController {
   readonly #resolver: FontResolver;
   readonly #getGate: () => FontReadinessGate | null;
-  readonly #onMappingApplied: () => void;
+  readonly #onDocumentFontConfigApplied: () => void;
+  readonly #scheduleMicrotask: (callback: () => void) => void;
+  #runtimeReflowQueued = false;
+  #runtimeReflowToken = 0;
 
   constructor(deps: DocumentFontControllerDeps) {
     this.#resolver = deps.resolver;
     this.#getGate = deps.getGate;
-    this.#onMappingApplied = deps.onMappingApplied;
+    this.#onDocumentFontConfigApplied = deps.onDocumentFontConfigApplied;
+    this.#scheduleMicrotask = deps.scheduleMicrotask ?? defaultScheduleMicrotask;
   }
 
   /**
    * Map logical families to physical render families, e.g. `map({ Georgia: 'Gelasio' })`. Applies
-   * every entry, then reflows the document ONCE - and only if the resolver signature actually
+   * every entry, then queues one document reflow - and only if the resolver signature actually
    * changed, so a redundant map (same target already set) neither reflows nor emits. The physical
    * family must be loadable (a bundled substitute, or a face registered via `add`); an
    * unmapped/unloadable target falls back at the gate. Render-only: export keeps the logical name.
    */
   map(mappings: Record<string, string>): void {
-    const before = this.#resolver.signature;
-    for (const [logicalFamily, physicalFamily] of Object.entries(mappings)) {
-      this.#resolver.map(logicalFamily, physicalFamily);
-    }
-    this.#reflowIfChanged(before);
+    if (this.#applyMappings(mappings)) this.#queueRuntimeReflow();
   }
 
   /** Remove runtime mappings; each family reverts to its bundled default (or identity). */
@@ -96,7 +83,25 @@ export class DocumentFontController {
    * leak into the next). No reflow here: the swap re-renders the new document from scratch.
    */
   reset(): void {
+    this.#cancelPendingRuntimeReflow();
     this.#resolver.reset();
+  }
+
+  /** Cancel pending runtime font work on editor teardown. */
+  dispose(): void {
+    this.#cancelPendingRuntimeReflow();
+  }
+
+  /**
+   * Apply initial config before the first layout measure. Mutates the same registry/resolver state
+   * as runtime writes, but does not emit `config-change` or request a reflow because the first
+   * render has not happened yet.
+   */
+  applyInitialConfig(config: Pick<FontsConfig, 'families' | 'map'> | null | undefined): void {
+    this.#cancelPendingRuntimeReflow();
+    if (!config) return;
+    this.#registerFamilies(config.families);
+    this.#applyMappings(config.map);
   }
 
   /**
@@ -107,7 +112,12 @@ export class DocumentFontController {
    * this document once: the gate re-plans and awaits any newly-registered face the document already
    * uses. Export is unaffected (mapping/render only).
    */
-  add(families: ManagedFontFamily[]): void {
+  add(families: FontFamilyConfig[]): void {
+    if (this.#registerFamilies(families)) this.#queueRuntimeReflow();
+  }
+
+  #registerFamilies(families: FontFamilyConfig[] | null | undefined): boolean {
+    if (!families?.length) return false;
     const registry = this.#getGate()?.resolveRegistry();
     if (!registry) throw new Error('[superdoc] fonts.add: the font registry is not ready yet');
     let changed = false;
@@ -121,10 +131,7 @@ export class DocumentFontController {
         if (result.changed) changed = true;
       }
     }
-    // Registration does not change the resolver signature (unlike map/unmap), so reflow whenever a
-    // face was actually registered - but skip it (and the config-change event) for a fully
-    // idempotent re-add, where availability did not change.
-    if (changed) this.#reflow();
+    return changed;
   }
 
   /**
@@ -149,12 +156,45 @@ export class DocumentFontController {
    * (signature unchanged) must not reflow or emit.
    */
   #reflowIfChanged(signatureBefore: string): void {
-    if (this.#resolver.signature !== signatureBefore) this.#reflow();
+    if (this.#resolver.signature !== signatureBefore) this.#queueRuntimeReflow();
   }
 
-  /** Document-local reflow + mark the next `fonts-changed` as a config change. */
-  #reflow(): void {
-    this.#onMappingApplied();
-    this.#getGate()?.notifyFontMappingChanged();
+  #applyMappings(mappings: Record<string, string> | null | undefined): boolean {
+    if (!mappings) return false;
+    const before = this.#resolver.signature;
+    for (const [logicalFamily, physicalFamily] of Object.entries(mappings)) {
+      this.#resolver.map(logicalFamily, physicalFamily);
+    }
+    return this.#resolver.signature !== before;
   }
+
+  /**
+   * Runtime writes can arrive as `add(); map();` in the same tick. Coalesce them so consumers see
+   * one `config-change` report and the editor performs one document-local reflow.
+   */
+  #queueRuntimeReflow(): void {
+    if (this.#runtimeReflowQueued) return;
+    this.#runtimeReflowQueued = true;
+    const token = ++this.#runtimeReflowToken;
+    this.#scheduleMicrotask(() => {
+      if (!this.#runtimeReflowQueued || token !== this.#runtimeReflowToken) return;
+      this.#runtimeReflowQueued = false;
+      this.#onDocumentFontConfigApplied();
+      this.#getGate()?.notifyDocumentFontConfigChanged();
+    });
+  }
+
+  #cancelPendingRuntimeReflow(): void {
+    if (!this.#runtimeReflowQueued) return;
+    this.#runtimeReflowQueued = false;
+    this.#runtimeReflowToken += 1;
+  }
+}
+
+function defaultScheduleMicrotask(callback: () => void): void {
+  if (typeof queueMicrotask === 'function') {
+    queueMicrotask(callback);
+    return;
+  }
+  void Promise.resolve().then(callback);
 }
