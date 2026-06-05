@@ -173,6 +173,34 @@ describe('SearchIndex lineBreak leaf text', () => {
     expect(index.text).toBe('Alpha\nBeta');
     expect(index.search('Alpha\nBeta')).toHaveLength(1);
   });
+
+  it('coalesces a hit spanning text + lineBreak + text into one contiguous doc range', () => {
+    const index = new SearchIndex();
+    index.ensureValid(buildLineBreakDoc());
+
+    // The full 'Alpha\nBeta' span (text + lineBreak + text, all PM-adjacent in
+    // one block) must map to a single contiguous range, not discontiguous text
+    // ranges that the downstream D5 contiguity guard would reject.
+    const ranges = index.offsetRangeToDocRanges(0, index.text.length);
+    expect(ranges).toHaveLength(1);
+  });
+
+  it('does NOT coalesce across a block separator (negative)', () => {
+    const index = new SearchIndex();
+    index.ensureValid(
+      schema.nodes.doc.create(null, [
+        schema.nodes.paragraph.create(null, [schema.text('Alpha')]),
+        schema.nodes.paragraph.create(null, [schema.text('Beta')]),
+      ]),
+    );
+
+    // 'Alpha\nBeta' here is two paragraphs joined by a block separator, not an
+    // inline break. The separator is a real split: the span must stay two ranges
+    // (one per block), never a single editable text range.
+    expect(index.text).toBe('Alpha\nBeta');
+    const ranges = index.offsetRangeToDocRanges(0, index.text.length);
+    expect(ranges).toHaveLength(2);
+  });
 });
 
 describe('SearchIndex searchModel: visible', () => {

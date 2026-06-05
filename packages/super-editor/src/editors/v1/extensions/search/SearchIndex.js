@@ -380,8 +380,16 @@ export class SearchIndex {
         to = segment.docTo;
       }
 
-      if (current && segment.offsetStart === current.offsetEnd) {
-        current.to = Math.max(current.to, to);
+      // Coalesce only when the next segment is BOTH offset-contiguous (same
+      // search hit) AND PM-contiguous (`from === current.to`, i.e. immediately
+      // adjacent in the document). This merges `text + lineBreak + text` within
+      // one run into a single range, but never bridges a document gap — a
+      // skipped/tracked-deleted leaf, a run boundary, or any content the match
+      // does not actually cover. A non-coalesced segment becomes its own range;
+      // since it stays offset-contiguous, the downstream block coalescing still
+      // sees no gap, while the D5 guard keeps rejecting genuinely separate edits.
+      if (current && segment.offsetStart === current.offsetEnd && from === current.to) {
+        current.to = to;
         current.offsetEnd = overlapEnd;
       } else {
         if (current) ranges.push({ from: current.from, to: current.to });
