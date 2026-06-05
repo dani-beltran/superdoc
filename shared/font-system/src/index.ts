@@ -59,7 +59,7 @@ export { buildFontReport, buildFaceReport } from './report';
 export type { EmbeddingPolicy } from './os2';
 export { parseEmbeddingPolicy } from './os2';
 
-export type { FontSetLike, FontFaceLike, FontFaceCtor, FontRegistryOptions } from './registry';
+export type { FontSetLike, FontFaceLike, FontFaceCtor, FontRegistryOptions, OwnedFaceDescriptor } from './registry';
 export {
   FontRegistry,
   getFontRegistryFor,
