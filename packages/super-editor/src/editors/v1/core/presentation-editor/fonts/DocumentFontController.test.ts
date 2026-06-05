@@ -30,6 +30,10 @@ class FakeRegistry {
     return [];
   }
 
+  hasFace(family: string, weight: '400' | '700', style: 'normal' | 'italic'): boolean {
+    return this.#sources.has(`${family.toLowerCase()}|${weight}|${style}`);
+  }
+
   asRegistry(): FontRegistry {
     return this as unknown as FontRegistry;
   }
@@ -206,10 +210,26 @@ describe('DocumentFontController', () => {
   it('preload resolves logical families through the document resolver', async () => {
     const { controller, registry } = makeController();
 
-    controller.applyInitialConfig({ map: { Georgia: 'Gelasio' } });
+    // Register Gelasio (so the map target is loadable), then map Georgia -> Gelasio.
+    controller.applyInitialConfig({
+      families: [{ family: 'Gelasio', faces: [{ source: '/fonts/Gelasio-Regular.woff2' }] }],
+      map: { Georgia: 'Gelasio' },
+    });
     await controller.preload(['Georgia']);
 
     expect(registry.awaited).toEqual([[{ family: 'Gelasio', weight: '400', style: 'normal' }]]);
+  });
+
+  it('preload prefers a registered real face over the bundled substitute (provider precedence)', async () => {
+    const { controller, registry } = makeController();
+
+    // The document registered real Calibri faces; preload must load Calibri, NOT the bundled Carlito.
+    controller.applyInitialConfig({
+      families: [{ family: 'Calibri', faces: [{ source: '/fonts/Calibri.woff2' }] }],
+    });
+    await controller.preload(['Calibri']);
+
+    expect(registry.awaited).toEqual([[{ family: 'Calibri', weight: '400', style: 'normal' }]]);
   });
 
   it('still reflows for faces committed before a later conflicting face throws', () => {

@@ -155,6 +155,40 @@ describe('buildFaceReport (face-level)', () => {
     ]);
   });
 
+  it('a registered real face for the logical family reports registered_face, not the bundled substitute', () => {
+    const reg = new FaceRegistry();
+    // A document/customer registered real Calibri faces (vs the bundled Carlito clone).
+    reg.setFace('Calibri', '400', 'normal', 'loaded');
+    reg.setFace('Calibri', '700', 'normal', 'loaded');
+    const rows = buildFaceReport(
+      [
+        { logicalFamily: 'Calibri', weight: '400', style: 'normal' },
+        { logicalFamily: 'Calibri', weight: '700', style: 'normal' },
+      ],
+      reg.asRegistry(),
+    );
+    expect(rows).toEqual([
+      {
+        logicalFamily: 'Calibri',
+        physicalFamily: 'Calibri', // the real family, not Carlito
+        reason: 'registered_face',
+        loadStatus: 'loaded',
+        exportFamily: 'Calibri',
+        missing: false,
+        face: { weight: '400', style: 'normal' },
+      },
+      {
+        logicalFamily: 'Calibri',
+        physicalFamily: 'Calibri',
+        reason: 'registered_face',
+        loadStatus: 'loaded',
+        exportFamily: 'Calibri',
+        missing: false,
+        face: { weight: '700', style: 'normal' },
+      },
+    ]);
+  });
+
   it('uses per-FACE status: a failed Bold face does not make the loaded Regular row missing', () => {
     const reg = new FaceRegistry();
     reg.setFace('Carlito', '400', 'normal', 'loaded');
