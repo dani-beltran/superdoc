@@ -10,7 +10,7 @@ type MarkerStyle = {
 
 /**
  * Helper: get computed font styles of a list marker by index.
- * DomPainter renders markers as .superdoc-paragraph-marker — CSS is the
+ * DomPainter renders markers as .superdoc-paragraph-marker. CSS is the
  * authoritative source for visual font since the layout engine sets it.
  */
 async function getMarkerStyle(
@@ -39,9 +39,7 @@ test('existing list markers restyle when font family changes (SD-3238)', async (
   await superdoc.assertTextMarkAttrs('first item', 'textStyle', { fontFamily: 'Times New Roman' });
 
   const firstMarker = await getMarkerStyle(superdoc, 0);
-  // The marker paints the RESOLVED physical font (list-marker.ts -> resolvePhysical), so Times New
-  // Roman shows as its clone Liberation Serif, not the logical name.
-  expect(firstMarker.fontFamily.toLowerCase()).toContain('liberation serif');
+  expect(firstMarker.fontFamily.toLowerCase()).toContain('times new roman');
 });
 
 test('existing list markers restyle when font size changes (SD-3238)', async ({ superdoc }) => {
@@ -82,8 +80,7 @@ test('new empty list item marker inherits font from previous paragraph', async (
   expect(markerCount).toBe(3);
 
   const newMarker = await getMarkerStyle(superdoc, 2);
-  // Resolved physical (Times New Roman -> Liberation Serif); see the note above.
-  expect(newMarker.fontFamily.toLowerCase()).toContain('liberation serif');
+  expect(newMarker.fontFamily.toLowerCase()).toContain('times new roman');
 });
 
 test('existing list markers restyle after toggle-list flow with pre-typed font (SD-3238)', async ({ superdoc }) => {
