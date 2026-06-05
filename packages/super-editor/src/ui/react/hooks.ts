@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { shallowEqual } from '../equality.js';
 import type {
   CommentsSlice,
@@ -8,6 +8,8 @@ import type {
   SelectionSlice,
   ToolbarSnapshotSlice,
   UIToolbarCommandState,
+  ZoomMode,
+  ZoomSlice,
 } from '../types.js';
 import { useSuperDocSlice, useSuperDocUI } from './provider.js';
 
@@ -85,6 +87,57 @@ export function useSuperDocToolbar(): ToolbarSnapshotSlice {
  */
 export function useSuperDocDocument(): DocumentSlice {
   return useSuperDocSlice((ui) => ui.select((state) => state.document, shallowEqual), EMPTY_DOCUMENT);
+}
+
+const EMPTY_ZOOM: ZoomSlice = {
+  mode: 'manual',
+  value: 100,
+  fitZoom: null,
+  min: 10,
+  max: 100,
+  metrics: null,
+};
+
+/**
+ * Zoom state + actions for custom zoom UIs. The snapshot updates on
+ * value changes, mode-only transitions, and viewport metric updates;
+ * `set(percent)` switches the host to manual mode by contract,
+ * `setMode('fit-width')` re-enters automatic fitting.
+ *
+ * ```tsx
+ * const zoom = useSuperDocZoom();
+ * return (
+ *   <>
+ *     <span>{zoom.value}%</span>
+ *     <button
+ *       aria-pressed={zoom.mode === 'fit-width'}
+ *       onClick={() => zoom.setMode(zoom.mode === 'fit-width' ? 'manual' : 'fit-width')}
+ *     >
+ *       Fit width
+ *     </button>
+ *   </>
+ * );
+ * ```
+ */
+export function useSuperDocZoom(): ZoomSlice & {
+  set: (percent: number) => void;
+  setMode: (mode: ZoomMode) => void;
+} {
+  const ui = useSuperDocUI();
+  const slice = useSuperDocSlice((controller) => controller.select((state) => state.zoom, shallowEqual), EMPTY_ZOOM);
+  const set = useCallback(
+    (percent: number) => {
+      ui?.zoom.set(percent);
+    },
+    [ui],
+  );
+  const setMode = useCallback(
+    (mode: ZoomMode) => {
+      ui?.zoom.setMode(mode);
+    },
+    [ui],
+  );
+  return { ...slice, set, setMode };
 }
 
 const FALLBACK_COMMAND_STATE: UIToolbarCommandState = {

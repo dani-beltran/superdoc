@@ -270,16 +270,23 @@ import { createSuperDocUI } from 'superdoc/ui';
 void createHeadlessToolbar({ superdoc });
 void createSuperDocUI({ superdoc });
 
-// Custom UI host stub typed precisely to the 3 events the UI
+// Custom UI host stub typed precisely to the 4 events the UI
 // controller subscribes to must satisfy `SuperDocLike`. Pinning this
 // so a future widening of `SuperDocUIHostEvent` (e.g. re-adding
 // `formatting-marks-change`) doesn't silently regress this stub
 // shape: such a change would fail this assertion under strict
 // (property-syntax) variance, and would still be a precision loss
-// even under TS method bivariance.
+// even under TS method bivariance. `viewport-change` joined the set
+// when `ui.zoom` started observing viewport metrics (SD-3294).
 declare const customUIHost: {
-  on?(event: 'editorCreate' | 'document-mode-change' | 'zoomChange', handler: (...args: unknown[]) => void): unknown;
-  off?(event: 'editorCreate' | 'document-mode-change' | 'zoomChange', handler: (...args: unknown[]) => void): unknown;
+  on?(
+    event: 'editorCreate' | 'document-mode-change' | 'zoomChange' | 'viewport-change',
+    handler: (...args: unknown[]) => void,
+  ): unknown;
+  off?(
+    event: 'editorCreate' | 'document-mode-change' | 'zoomChange' | 'viewport-change',
+    handler: (...args: unknown[]) => void,
+  ): unknown;
 };
 void createSuperDocUI({ superdoc: customUIHost });
 
