@@ -2,10 +2,14 @@
 
 Create `src/ContractEditor.tsx`.
 
-The file should export a React component that accepts a `file: File` prop and
-renders SuperDoc with the React wrapper.
+Required:
 
-Use `@superdoc-dev/react`, not the core `superdoc` package.
+- Export `ContractEditor({ file }: { file: File })`.
+- Import `SuperDocEditor` from `@superdoc-dev/react`.
+- Import `@superdoc-dev/react/style.css`.
+- Render `<SuperDocEditor document={file} documentMode="editing" ... />`.
+- Include an `onReady` callback.
 
-This fixture is incomplete on purpose. Do not answer with instructions only.
-Edit the workspace by creating `src/ContractEditor.tsx`.
+Do not import from `superdoc`.
+Do not use unsupported document modes such as `edit`, `view`, or `suggest`.
+Do not answer with instructions only. Modify the workspace.

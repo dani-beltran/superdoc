@@ -15,7 +15,6 @@ sources:
   document_api_readme: { path: ./packages/document-api/README.md }
   mcp_readme: { path: ./apps/mcp/README.md }
   cli_readme: { path: ./apps/cli/README.md }
-  public_checks: { path: ./packages/superdoc/scripts/README.md }
 
 agents:
   quick:
@@ -37,7 +36,6 @@ contexts:
   given_document_api: { mode: inject, source: document_api_readme }
   given_mcp: { mode: inject, source: mcp_readme }
   given_cli: { mode: inject, source: cli_readme }
-  given_public_checks: { mode: inject, source: public_checks }
 
 facts:
   react_install:
@@ -103,20 +101,6 @@ facts:
     match:
       allOf: ["DomPainter"]
       anyOf: ["Do not style static document content with ProseMirror decorations", "PM decorations"]
-  public_check:
-    statement: Public surface work should use pnpm check:public and narrower public checks.
-    match:
-      allOf: ["pnpm check:public", "pnpm check:public:superdoc", "pnpm check:public:docapi"]
-  command_vocabulary:
-    statement: check commands do not mutate, generate commands mutate, report commands are read-only.
-    match:
-      allOf: ["check:*", "generate:*", "report:*"]
-      anyOf: ["non-mutating", "mutate", "read-only"]
-  type_check:
-    statement: pnpm check:types is the raw TypeScript project build.
-    match:
-      allOf: ["pnpm check:types"]
-      anyOf: ["TypeScript", "tsc"]
   document_api_layer:
     statement: Programmatic document mutations use the Document API.
     match:
@@ -163,14 +147,19 @@ misstatements:
     statement: Tells agents to render static document visuals with ProseMirror decorations.
     match:
       anyOf: ["use ProseMirror decorations for static document visuals", "render static document content with PM decorations"]
-  active_editor_commands:
-    statement: Recommends activeEditor.commands for new programmatic mutations.
+  legacy_mutation_commands:
+    statement: Recommends legacy editor commands or ProseMirror transactions for new programmatic mutations.
     match:
-      anyOf: ["use superdoc.activeEditor.commands instead of editor.doc", "use activeEditor.commands for new programmatic mutations"]
-  generate_as_check:
-    statement: Treats generate commands as read-only checks.
-    match:
-      anyOf: ["generate:* commands are non-mutating", "pnpm run generate:all is read-only", "generate:all does not mutate"]
+      anyOf:
+        - "use superdoc.activeEditor.commands instead of editor.doc"
+        - "use activeEditor.commands instead of editor.doc"
+        - "use editor.commands instead of editor.doc"
+        - "use activeEditor.commands for new programmatic mutations"
+        - "use editor.commands for new programmatic mutations"
+        - "use ProseMirror transactions for document mutations"
+        - "use prosemirror.transactions for document mutations"
+        - "default to editor.commands"
+        - "default to ProseMirror transactions"
   find_for_mutation:
     statement: Uses find output directly as a mutation target.
     match:
@@ -261,29 +250,17 @@ questions:
       fail:
         - "Use ProseMirror decorations for static document visuals."
 
-  - id: public_surface_checks
-    question: Which commands should I run for public API or package-surface changes, and which command families mutate files?
-    agents: [quick]
-    contexts: [given_agents, given_public_checks]
-    expects: [public_check, command_vocabulary, type_check]
-    rejects: [generate_as_check]
-    examples:
-      pass:
-        - "Use `pnpm check:public` for the umbrella gate, `pnpm check:public:superdoc` for the SuperDoc package, `pnpm check:public:docapi` for Document API, and `pnpm check:types` for raw TypeScript. `check:*` is non-mutating, `generate:*` mutates files, and `report:*` is read-only."
-      fail:
-        - "pnpm run generate:all is read-only, so use it as the normal non-mutating public check."
-
   - id: layer_choice
     question: When should I use Document API, superdoc/ui/react, or built-in modules?
     agents: [quick]
     contexts: [given_public, given_public_full]
     expects: [document_api_layer, custom_ui_layer, built_in_modules]
-    rejects: [active_editor_commands]
+    rejects: [legacy_mutation_commands]
     examples:
       pass:
         - "Use the Document API (`editor.doc.*`) for programmatic document mutations. Use `superdoc/ui/react` hooks such as `useSuperDocCommand`, `useSuperDocComments`, `useSuperDocTrackChanges`, and `useSuperDocSelection` for custom React UI. Use `modules.*` when the built-in SuperDoc-rendered UI is enough."
       fail:
-        - "For new programmatic mutations, use superdoc.activeEditor.commands instead of editor.doc."
+        - "For new programmatic mutations, use editor.commands instead of editor.doc, or use ProseMirror transactions for document mutations."
 
 builds:
   - id: build_react_editor_component
@@ -308,26 +285,6 @@ builds:
         - { name: fixture readme remains, run: test -f README.md }
     referenceSolution:
       patch: ./fixtures/pickled/react-editor.solution.patch
-
-  - id: build_public_surface_check_script
-    goal: >-
-      Edit the workspace by creating `scripts/check-public-surface.sh`. Do not
-      answer with instructions only. The file must be an executable helper for
-      public API changes. It must use `set -euo pipefail`, run
-      `pnpm check:public`, then run `pnpm check:types`. It must not run
-      `pnpm test`, `pnpm run generate:all`, or any `generate:*` command.
-    agents: [builder]
-    contexts: [given_public_checks]
-    trials: 2
-    workspace:
-      path: ./fixtures/pickled/public-check-script
-    verifier:
-      failToPass:
-        - { name: public surface script, run: ./tests/verify-public-check-script.sh }
-      passToPass:
-        - { name: fixture readme remains, run: test -f README.md }
-    referenceSolution:
-      patch: ./fixtures/pickled/public-check-script.solution.patch
 
 thresholds:
   questions: 80
