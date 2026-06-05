@@ -805,7 +805,11 @@ function buildFontString(
   if (run.italic) parts.push('italic');
   if (run.bold) parts.push('bold');
   parts.push(`${normalizeFontSize(run.fontSize)}px`);
-  const physicalFamily = normalizeFontFamily(fontContext.resolvePhysical(normalizeFontFamily(run.fontFamily)));
+  const face = {
+    weight: run.bold ? ('700' as const) : ('400' as const),
+    style: run.italic ? ('italic' as const) : ('normal' as const),
+  };
+  const physicalFamily = normalizeFontFamily(fontContext.resolvePhysical(normalizeFontFamily(run.fontFamily), face));
   parts.push(toCssFontFamily(physicalFamily) ?? physicalFamily);
   return parts.join(' ');
 }

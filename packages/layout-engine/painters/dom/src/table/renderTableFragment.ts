@@ -9,6 +9,7 @@ import type {
   TableMeasure,
 } from '@superdoc/contracts';
 import { getTableVisualDirection } from '@superdoc/contracts';
+import type { ResolvePhysicalFamily } from '@superdoc/font-system';
 import { CLASS_NAMES, fragmentStyles } from '../styles.js';
 import { DOM_CLASS_NAMES } from '../constants.js';
 import type { FragmentRenderContext } from '../renderer.js';
@@ -89,7 +90,7 @@ export type TableRenderDependencies = {
    * from the renderer's per-document resolver so they paint the same physical family they were
    * measured in. Undefined falls back to the global resolver.
    */
-  resolvePhysical?: (cssFontFamily: string) => string;
+  resolvePhysical?: ResolvePhysicalFamily;
 };
 
 /**

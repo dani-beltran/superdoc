@@ -178,11 +178,16 @@ import type {
 } from '@superdoc/layout-bridge';
 
 import { measureBlock } from '@superdoc/measuring-dom';
-import { createFontResolver, type FontResolutionRecord, type FontLoadSummary } from '@superdoc/font-system';
+import {
+  createFontResolver,
+  type FontResolutionRecord,
+  type FontLoadSummary,
+  type ResolvePhysicalFamily,
+} from '@superdoc/font-system';
 import { installBundledSubstitutes } from '@superdoc/font-system/bundled';
 import { FontReadinessGate } from './fonts/FontReadinessGate';
 import { DocumentFontController } from './fonts/DocumentFontController';
-import { planRequiredFontFaces } from './fonts/font-load-planner';
+import { planFontFaces, type FontPlan } from './fonts/font-load-planner';
 import type { FontsChangedPayload } from '../types/EditorEvents';
 import type { FontFamilyConfig } from '../types/EditorConfig';
 import type {
@@ -546,13 +551,17 @@ export class PresentationEditor extends EventEmitter {
    * This document's logical->physical font resolver. Per-instance (per document) so two
    * editors can map the same logical family differently without leaking. Planner, gate, report,
    * MEASURE (body, footnotes, header/footer, per-rId header/footer, field-annotation pills, table
-   * AutoFit column widths, and line-height metrics), and document-content PAINT (text, field
-   * annotations, list markers, drop caps) resolve through THIS instance; its signature keys the
-   * measure caches and the paint-reuse version, so two documents with different mappings do not
-   * share a measure or reuse each other's content paint. (Editor chrome such as formatting marks is
-   * not document content and is out of scope.) `superdoc.fonts.map` mutates it at runtime through the
-   * document font controller (the only writer): the changed signature re-measures and repaints
-   * THIS document while others are left untouched. Seeded with the bundled clean-clone map.
+   * AutoFit column widths, and line-height metrics) and document-content PAINT (text, field
+   * annotations, list markers, drop caps) resolve through THIS instance, FACE-aware (per weight/style)
+   * so a single-face clone is never mapped onto a face it lacks. Rendered-layout identity - measure
+   * caches and paint-reuse versions - is keyed on the stored render plan's `FontPlan.effectiveSignature`,
+   * which captures the actual per-face resolutions (so a `fonts.add()` that changes a face for an
+   * UNCHANGED family map still busts the cache); `resolver.signature` is used ONLY for map-change
+   * detection in the document font controller, never as a cache key. Two documents with different
+   * mappings do not share a measure or reuse each other's content paint. (Editor chrome such as
+   * formatting marks is not document content and is out of scope.) `superdoc.fonts.map` mutates this
+   * resolver at runtime through that controller (the only writer): the changed resolution re-measures
+   * and repaints THIS document while others are left untouched. Seeded with the bundled clean-clone map.
    */
   readonly #fontResolver = createFontResolver();
   /**
@@ -575,8 +584,22 @@ export class PresentationEditor extends EventEmitter {
   });
   /** Layout blocks for the current render, stashed so the gate's planner reads the live set. */
   #fontPlanBlocks: FlowBlock[] | null = null;
+  /**
+   * The current render font plan, rebuilt each render before the gate runs. The SINGLE source for
+   * load (requiredFaces), diagnostics (usedFaces), and measure/paint cache identity (effectiveSignature).
+   */
+  #fontPlan: FontPlan | null = null;
+  /**
+   * Face-availability oracle for face-aware resolution: is a (family, weight, style) face REGISTERED
+   * (bundled + `fonts.add()`) in THIS document's registry? False before the gate/registry exists.
+   */
+  #hasFace = (family: string, weight: '400' | '700', style: 'normal' | 'italic'): boolean =>
+    this.#fontGate ? this.#fontGate.resolveRegistry().hasFace(family, weight, style) : false;
   /** Dedup key for `fonts-changed`: epoch + per-face load status. Null until the first emit. */
   #lastFontsChangedKey: string | null = null;
+  /** Font-config epoch at the last emit, so a face-set delta (epoch unchanged) is distinguished from a
+   *  late load (epoch bumped) when labelling the `fonts-changed` source. */
+  #lastFontsChangedVersion = -1;
   /** Last emitted `fonts-changed` payload, so a late relay subscriber can replay it. */
   #lastFontsChangedPayload: FontsChangedPayload | null = null;
   /**
@@ -932,7 +955,7 @@ export class PresentationEditor extends EventEmitter {
       initBudgetMs: HEADER_FOOTER_INIT_BUDGET_MS,
       defaultPageSize: DEFAULT_PAGE_SIZE,
       defaultMargins: DEFAULT_MARGINS,
-      getFontSignature: () => this.#fontResolver.signature,
+      getFontSignature: () => this.#layoutFontSignature,
     });
     this.#headerFooterSession.setHoverElements({
       hoverOverlay: this.#hoverOverlay,
@@ -1006,7 +1029,10 @@ export class PresentationEditor extends EventEmitter {
         // rendered document uses, from the planner walking the current layout blocks. The
         // gate awaits these - so bold/italic load before measure and declared-but-unused
         // fonts are not fetched. Reads the blocks stashed just before each gate await.
-        getRequiredFaces: () => planRequiredFontFaces(this.#fontPlanBlocks, this.#fontResolver),
+        // Consume the stored render plan (built each render just before this gate runs) so the gate
+        // never recomputes independently: load awaits its requiredFaces, the report uses its usedFaces.
+        getRequiredFaces: () => this.#fontPlan?.requiredFaces ?? [],
+        getUsedFaces: () => this.#fontPlan?.usedFaces ?? [],
         // The document's resolver: the gate derives the family-path resolution from it and
         // resolves its report through it (load + diagnostics). The document's measure and
         // content-paint paths resolve through this same instance, so load, measure, paint, and
@@ -3006,9 +3032,15 @@ export class PresentationEditor extends EventEmitter {
    * `superdoc.fonts.getMissingFonts()`.
    */
   getMissingFonts(): string[] {
-    return this.getFontReport()
-      .filter((record) => record.missing)
-      .map((record) => record.logicalFamily);
+    // Deduped by logical family: the report can now carry multiple FACE rows per family, but a
+    // missing-font list is per family.
+    return [
+      ...new Set(
+        this.getFontReport()
+          .filter((record) => record.missing)
+          .map((record) => record.logicalFamily),
+      ),
+    ];
   }
 
   /**
@@ -3077,17 +3109,27 @@ export class PresentationEditor extends EventEmitter {
           .sort()
           .join(',')
       : '';
-    const key = `${version}|${statusKey}`;
+    // Include the render plan's effectiveSignature so a face-set change (e.g. Regular -> add Bold, or
+    // a fonts.add() that flips a face from fallback to substitute) emits even when the rolled-up
+    // family status stays 'loaded'.
+    const key = `${version}|${this.#fontPlan?.effectiveSignature ?? ''}|${statusKey}`;
     if (key === this.#lastFontsChangedKey) return;
     const isInitial = this.#lastFontsChangedKey === null;
+    // The epoch (gate.fontConfigVersion) bumps on a late load and on a config mutation, but NOT on
+    // ordinary editing - so an unchanged epoch with a changed key means the rendered face set changed
+    // from editing (e.g. the first Bold of a family), not a font load.
+    const epochBumped = !isInitial && version !== this.#lastFontsChangedVersion;
     this.#lastFontsChangedKey = key;
+    this.#lastFontsChangedVersion = version;
     // Consume the pending source flag: a runtime mapping change (set by the font controller) is a
-    // 'config-change', but the FIRST emit is always 'initial' - the document's initial font
-    // picture, even when a config-time map ran before first layout. Otherwise a font load is
-    // 'late-load'.
+    // 'config-change'. The FIRST emit is always 'initial'. Otherwise an epoch bump is a font
+    // 'late-load'; a key change with NO epoch bump is a 'render-change' (face-set delta from editing),
+    // not a late load - consumers filtering on 'late-load' must not see spurious load signals on typing.
     const pendingSource = this.#nextFontsChangedSource;
     this.#nextFontsChangedSource = null;
-    const source: FontsChangedPayload['source'] = isInitial ? 'initial' : (pendingSource ?? 'late-load');
+    const source: FontsChangedPayload['source'] = isInitial
+      ? 'initial'
+      : (pendingSource ?? (epochBumped ? 'late-load' : 'render-change'));
 
     let resolutions: FontResolutionRecord[];
     try {
@@ -3096,9 +3138,9 @@ export class PresentationEditor extends EventEmitter {
       return;
     }
     const payload: FontsChangedPayload = {
-      documentFonts: resolutions.map((record) => record.logicalFamily),
+      documentFonts: [...new Set(resolutions.map((record) => record.logicalFamily))],
       resolutions,
-      missingFonts: resolutions.filter((record) => record.missing).map((record) => record.logicalFamily),
+      missingFonts: [...new Set(resolutions.filter((record) => record.missing).map((record) => record.logicalFamily))],
       loadSummary: summary ?? { loaded: 0, failed: 0, timedOut: 0, fallbackUsed: 0, results: [] },
       source,
       version,
@@ -3132,7 +3174,12 @@ export class PresentationEditor extends EventEmitter {
   #resetFontReportStateForDocumentChange(): void {
     this.#nextFontsChangedSource = null;
     this.#lastFontsChangedKey = null;
+    this.#lastFontsChangedVersion = -1;
     this.#lastFontsChangedPayload = null;
+    // Drop the prior document's render plan so getReport() cannot leak its used-face rows before the
+    // next render rebuilds the plan.
+    this.#fontPlan = null;
+    this.#fontPlanBlocks = null;
   }
 
   /**
@@ -3383,7 +3430,7 @@ export class PresentationEditor extends EventEmitter {
       flowMode: this.#layoutOptions.flowMode ?? 'paginated',
       blocks,
       measures,
-      fontSignature: this.#fontResolver.signature,
+      fontSignature: this.#layoutFontSignature,
     });
 
     const isSemanticFlow = this.#layoutOptions.flowMode === 'semantic';
@@ -6880,19 +6927,24 @@ export class PresentationEditor extends EventEmitter {
       const previousBlocks = this.#layoutState.blocks;
       const previousLayout = this.#layoutState.layout;
       const previousMeasures = this.#layoutState.measures;
-      // Per-document font context for this render: bind the resolver into the measure callback
-      // (so measurement uses THIS document's physical substitutes) and capture its signature for
-      // the measure-cache keys. previousFontSignature is the signature the prior measures were
-      // produced with - if it differs, incrementalLayout must not reuse them (the reuse fast
-      // path bypasses the cache key). The signature is '' for a document with no runtime overrides
-      // and becomes non-empty once the public `superdoc.fonts.*` API maps a family - which is when
-      // this document's measures must not be shared with a default or differently-mapped document.
-      const resolvePhysical = (css: string): string => this.#fontResolver.resolvePhysicalFamily(css);
-      const fontSignature = this.#fontResolver.signature;
+      // Per-document font context for this render: a FACE-aware resolver bound into the measure
+      // callback (measurement uses THIS document's physical substitute per weight/style), and the
+      // render plan's effectiveSignature (assigned below, after the plan is built) as the measure-cache
+      // key. previousFontSignature is the signature the prior measures were produced with - if it
+      // differs, incrementalLayout must not reuse them (the reuse fast path bypasses the cache key).
+      const resolvePhysical: ResolvePhysicalFamily = (css, face) =>
+        this.#fontResolver.resolvePhysicalFamilyForFace(css, face, this.#hasFace);
+      // Cache identity is the render plan's effectiveSignature (face-aware), assigned once the plan is
+      // built below - NOT resolver.signature (family map only), which would miss a fonts.add() that
+      // changes a face's resolution without changing the map. The single context object (resolver +
+      // signature) is built AFTER the plan so the measure callback and cache signature can never
+      // drift - both come from `fontMeasureContext`.
+      let fontSignature = '';
       const previousFontSignature = this.#layoutFontSignature;
-      // One context object so the measure callback and the cache signature can never drift:
-      // both the resolver and the fontSignature passed to incrementalLayout come from here.
-      const fontMeasureContext = { resolvePhysical, fontSignature };
+      // Declared here (outer scope) so the incrementalLayout call below can see it; REBUILT after the
+      // plan with the face-aware effectiveSignature. Initialized with '' so it is always defined even
+      // if font planning throws (the readiness try/catch swallows errors and must not break layout).
+      let fontMeasureContext = { resolvePhysical, fontSignature };
 
       let layout: Layout;
       let measures: Measure[];
@@ -6919,7 +6971,7 @@ export class PresentationEditor extends EventEmitter {
         // used faces: body + notes (blocksForLayout), header/footer blocks, and - in paginated
         // mode - footnote blocks (measured via layoutOptions.footnotes, NOT in blocksForLayout;
         // semantic mode already folds footnotes into blocksForLayout). One planner input;
-        // planRequiredFontFaces dedups, so any overlap is harmless.
+        // planFontFaces dedups, so any overlap is harmless.
         this.#fontPlanBlocks = [
           ...blocksForLayout,
           ...(headerFooterInput ? this.#collectHeaderFooterFaceBlocks(headerFooterInput) : []),
@@ -6927,6 +6979,15 @@ export class PresentationEditor extends EventEmitter {
             ? [...footnotesLayoutInput.blocksById.values()].flat()
             : []),
         ];
+        // ONE render font plan from this walk (the single source): the gate awaits its requiredFaces,
+        // the report uses its usedFaces, and its effectiveSignature is the measure/paint cache identity.
+        // Built before the gate runs so load, report, resolution, and cache identity all agree.
+        this.#fontPlan = planFontFaces(this.#fontPlanBlocks, this.#fontResolver, this.#hasFace);
+        fontSignature = this.#fontPlan.effectiveSignature;
+        // Rebuild with the face-aware effectiveSignature now the plan exists, so the measure callback
+        // and the cache signature can never drift: both the face-aware resolver and the fontSignature
+        // passed to incrementalLayout come from this one object.
+        fontMeasureContext = { resolvePhysical, fontSignature };
         const fontSummary = (await this.#fontGate?.ensureReadyForMeasure()) ?? null;
         // Now that the gate has settled, the font report reflects real load status. Emit
         // the authoritative `fonts-changed` once the picture first resolves and whenever it
@@ -7167,7 +7228,8 @@ export class PresentationEditor extends EventEmitter {
       contentControlsChrome: this.#layoutOptions.contentControlsChrome ?? 'default',
       // Paint each run in THIS document's physical substitute - the same family measurement used -
       // so two editors that map a logical family differently never paint each other's font.
-      resolvePhysical: (css: string): string => this.#fontResolver.resolvePhysicalFamily(css),
+      resolvePhysical: (css: string, face: { weight: '400' | '700'; style: 'normal' | 'italic' }): string =>
+        this.#fontResolver.resolvePhysicalFamilyForFace(css, face, this.#hasFace),
     });
 
     // Pass the current zoom so virtualization accounts for the CSS transform scale
@@ -8129,7 +8191,7 @@ export class PresentationEditor extends EventEmitter {
   /**
    * Flatten a header/footer layout input into the FlowBlocks it will measure, so the font
    * planner can include header/footer faces. getBatch variants and getBlocksByRId can cover
-   * the same content; planRequiredFontFaces dedups by face, so the overlap is harmless.
+   * the same content; planFontFaces dedups by face, so the overlap is harmless.
    */
   #collectHeaderFooterFaceBlocks(input: {
     headerBlocks?: Partial<Record<string, FlowBlock[]>>;
@@ -8316,7 +8378,14 @@ export class PresentationEditor extends EventEmitter {
     sectionMetadata: SectionMetadata[],
   ): Promise<void> {
     if (this.#headerFooterSession) {
-      await this.#headerFooterSession.layoutPerRId(headerFooterInput, layout, sectionMetadata, this.#fontResolver);
+      await this.#headerFooterSession.layoutPerRId(
+        headerFooterInput,
+        layout,
+        sectionMetadata,
+        this.#fontResolver,
+        this.#hasFace,
+        this.#fontPlan?.effectiveSignature ?? '',
+      );
     }
   }
 

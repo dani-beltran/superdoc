@@ -136,6 +136,29 @@ describe('FontReadinessGate', () => {
     });
   }
 
+  it('installs the bundled pack even with NO font set, so bundled substitutes are not disabled', () => {
+    // A document with no `document.fonts` (SSR/jsdom, some iframe/embedded timings) still needs the
+    // bundled face METADATA so `hasFace` is true and a substitute (e.g. Calibri -> Carlito) applies;
+    // loading needs a font set, availability must not.
+    const onRegistryResolved = vi.fn();
+    const gate = new FontReadinessGate({
+      registry: registry.asRegistry(),
+      getDocumentFonts: () => [],
+      requestReflow,
+      invalidateCaches,
+      getFontEnvironment: () => null, // no font set
+      onRegistryResolved,
+      timeoutMs: 1000,
+      scheduleTimeout: clock.scheduleTimeout,
+      cancelTimeout: clock.cancelTimeout,
+    });
+
+    gate.resolveRegistry();
+    expect(onRegistryResolved).toHaveBeenCalledTimes(1); // installed despite no font set
+    gate.resolveRegistry();
+    expect(onRegistryResolved).toHaveBeenCalledTimes(1); // idempotent per registry instance
+  });
+
   it('awaits the resolved physical family, not the logical one', async () => {
     registry.statuses.set('Carlito', 'loaded');
     registry.available.add('Carlito');

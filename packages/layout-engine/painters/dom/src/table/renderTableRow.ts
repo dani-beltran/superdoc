@@ -9,6 +9,7 @@ import type {
   TableBorders,
   TableMeasure,
 } from '@superdoc/contracts';
+import type { ResolvePhysicalFamily } from '@superdoc/font-system';
 import { renderTableCell } from './renderTableCell.js';
 import {
   resolveTableCellBorders,
@@ -215,7 +216,7 @@ type TableRowRenderDependencies = {
    * from the renderer's per-document resolver so they paint the same physical family they were
    * measured in. Undefined falls back to the global resolver.
    */
-  resolvePhysical?: (cssFontFamily: string) => string;
+  resolvePhysical?: ResolvePhysicalFamily;
 };
 
 /**

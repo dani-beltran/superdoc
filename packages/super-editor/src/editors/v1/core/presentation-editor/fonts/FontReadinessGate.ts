@@ -2,12 +2,14 @@ import {
   getFontRegistryFor,
   bumpFontConfigVersion,
   buildFontReport,
+  buildFaceReport,
   DEFAULT_FONT_LOAD_TIMEOUT_MS,
   type FontRegistry,
   type FontLoadResult,
   type FontFaceRequest,
   type FontFaceLoadResult,
   type FontLoadSummary,
+  type UsedFace,
   type FontLoadStatus,
   type FontResolutionRecord,
   type FontResolver,
@@ -41,6 +43,11 @@ export interface FontReadinessGateOptions {
    * path when omitted (tests / non-layout callers).
    */
   getRequiredFaces?: () => FontFaceRequest[];
+  /**
+   * The logical faces (family + weight + style) the document RENDERS, for the face-level report.
+   * From the same stored render plan as {@link getRequiredFaces}, so report and load agree.
+   */
+  getUsedFaces?: () => UsedFace[];
   /** Trigger a re-measure + re-layout + repaint (PresentationEditor's immediate render). */
   requestReflow: () => void;
   /**
@@ -104,6 +111,7 @@ export interface FontReadinessGateOptions {
 export class FontReadinessGate {
   readonly #getDocumentFonts: () => string[];
   readonly #getRequiredFaces: (() => FontFaceRequest[]) | null;
+  readonly #getUsedFaces: (() => UsedFace[]) | null;
   readonly #resolveFamilies: (families: string[]) => string[];
   readonly #fontResolver: FontResolver | null;
   readonly #requestReflow: () => void;
@@ -115,6 +123,8 @@ export class FontReadinessGate {
 
   /** Resolved once a real font set is available: the watched set + its registry, paired. */
   #context: { fontSet: FontFaceSet | null; registry: FontRegistry } | null = null;
+  /** The registry instance the bundled pack was installed into, so it installs once per registry. */
+  #packInstalledFor: FontRegistry | null = null;
 
   #fontConfigVersion = 0;
   #requiredSignature = '';
@@ -133,6 +143,7 @@ export class FontReadinessGate {
   constructor(options: FontReadinessGateOptions) {
     this.#getDocumentFonts = options.getDocumentFonts;
     this.#getRequiredFaces = options.getRequiredFaces ?? null;
+    this.#getUsedFaces = options.getUsedFaces ?? null;
     this.#fontResolver = options.fontResolver ?? null;
     const resolver = this.#fontResolver;
     this.#resolveFamilies =
@@ -174,13 +185,26 @@ export class FontReadinessGate {
    * exactly what was measured and painted - not an independent computation.
    */
   getReport(): FontResolutionRecord[] {
-    let logical: string[] = [];
+    let declared: string[] = [];
     try {
-      logical = this.#getDocumentFonts();
+      declared = this.#getDocumentFonts();
     } catch {
       return [];
     }
-    return buildFontReport(logical, this.#resolveContext().registry, this.#fontResolver ?? undefined);
+    const registry = this.#resolveContext().registry;
+    const resolver = this.#fontResolver ?? undefined;
+    // Face-level rows for the faces the document actually RENDERS, so a substitute that lacks a face
+    // is reported `fallback_face_absent` per face (e.g. Baskerville Bold), from the stored plan's
+    // usedFaces - the same plan the load gate awaited.
+    const usedFaces = this.#getUsedFaces?.() ?? [];
+    const faceRows = buildFaceReport(usedFaces, registry, resolver);
+    // Preserve the DECLARED-font contract: a family declared but never rendered must still appear.
+    // Add a family-level row (face undefined) for each declared family absent from the used faces -
+    // NOT a synthetic Regular row (that would imply a Regular run rendered).
+    const usedFamilies = new Set(usedFaces.map((u) => u.logicalFamily.toLowerCase()));
+    const declaredOnly = declared.filter((family) => family && !usedFamilies.has(family.toLowerCase()));
+    const declaredRows = buildFontReport(declaredOnly, registry, resolver);
+    return [...faceRows, ...declaredRows];
   }
 
   /**
@@ -379,9 +403,16 @@ export class FontReadinessGate {
         (env?.FontFaceCtor ?? null) as unknown as FontFaceCtorArg,
       );
     this.#context = { fontSet, registry };
-    // Let the editor install the bundled substitute pack into the registry once a real
-    // font set exists. Kept out of the gate so the gate never imports the font assets.
-    if (fontSet && this.#onRegistryResolved) {
+    // Install the bundled substitute pack into the registry whenever one is resolved - even WITHOUT a
+    // real font set. The pack registers face METADATA (family + weight + style), which is what
+    // `hasFace` reads to decide whether a substitute provides a face; LOADING still needs a font set,
+    // but face AVAILABILITY must not. Without this, an editor whose document has no `document.fonts`
+    // (SSR/jsdom, some iframe/embedded timings) sees `hasFace` false for every bundled face, so even
+    // Calibri Regular stops resolving to Carlito. Guarded per registry instance so it installs once
+    // (the domless registry is a singleton; a real font set's registry is cached). Kept out of the
+    // gate's imports - the editor injects the installer so the gate never imports the font assets.
+    if (this.#onRegistryResolved && registry !== this.#packInstalledFor) {
+      this.#packInstalledFor = registry;
       try {
         this.#onRegistryResolved(registry);
       } catch {

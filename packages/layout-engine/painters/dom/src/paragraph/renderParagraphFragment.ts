@@ -8,7 +8,7 @@ import type {
 } from '@superdoc/contracts';
 import { isMinimalWordLayout as isMinimalWordLayoutShared } from '@superdoc/common/list-marker-utils';
 import type { MinimalWordLayout } from '@superdoc/common/list-marker-utils';
-import { resolvePhysicalFamily } from '@superdoc/font-system';
+import { resolvePhysicalFamily, type ResolvePhysicalFamily } from '@superdoc/font-system';
 import { CLASS_NAMES, fragmentStyles } from '../styles.js';
 import { shouldRenderSdtContainerChrome, type SdtBoundaryOptions } from '../sdt/container.js';
 import type { BetweenBorderInfo } from './borders/index.js';
@@ -39,7 +39,7 @@ type RenderParagraphFragmentParams = {
    * the renderer's per-document resolver so they paint the same physical family they were measured
    * in. Undefined falls back to the global resolver, matching text runs and field annotations.
    */
-  resolvePhysical?: (cssFontFamily: string) => string;
+  resolvePhysical?: ResolvePhysicalFamily;
 };
 
 const isMinimalWordLayout = (value: unknown): value is MinimalWordLayout => isMinimalWordLayoutShared(value);
@@ -60,7 +60,7 @@ export const renderParagraphFragment = (params: RenderParagraphFragmentParams): 
     captureLineSnapshot,
     createErrorPlaceholder,
     contentControlsChrome,
-    resolvePhysical = resolvePhysicalFamily,
+    resolvePhysical = (css) => resolvePhysicalFamily(css),
   } = params;
 
   try {
@@ -157,7 +157,7 @@ const renderDropCap = (
   doc: Document,
   descriptor: DropCapDescriptor,
   measure: ParagraphMeasure['dropCap'],
-  resolvePhysical: (cssFontFamily: string) => string = resolvePhysicalFamily,
+  resolvePhysical: ResolvePhysicalFamily = (css) => resolvePhysicalFamily(css),
 ): HTMLElement => {
   const { run, mode } = descriptor;
 
@@ -166,9 +166,13 @@ const renderDropCap = (
   dropCapEl.textContent = run.text;
 
   // Paint the physical render family (a per-document fonts.map or the bundled substitute) - the
-  // same family the drop cap was measured in, so its box matches the laid-out geometry. Defaults
-  // to the global resolver when no per-document resolver is present (e.g. tests).
-  dropCapEl.style.fontFamily = resolvePhysical(run.fontFamily);
+  // same family the drop cap was measured in, so its box matches the laid-out geometry. Resolve for
+  // the drop cap's ACTUAL face so a single-face substitute is not mis-mapped. Defaults to the global
+  // resolver when no per-document resolver is present (e.g. tests).
+  dropCapEl.style.fontFamily = resolvePhysical(run.fontFamily, {
+    weight: run.bold ? '700' : '400',
+    style: run.italic ? 'italic' : 'normal',
+  });
   dropCapEl.style.fontSize = `${run.fontSize}px`;
   if (run.bold) {
     dropCapEl.style.fontWeight = 'bold';

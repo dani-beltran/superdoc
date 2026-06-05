@@ -263,6 +263,19 @@ export class FontRegistry {
   }
 
   /**
+   * Is a face (family + weight + style) REGISTERED/known in this registry, regardless of load
+   * state? The face-availability oracle the face-aware resolver consults to answer "does the
+   * physical family actually provide this face?" - so a single-face substitute is never mapped
+   * onto a weight/style it lacks (which the painter would faux-synthesize). Covers bundled faces
+   * (registered by `installBundledSubstitutes`) and customer `fonts.add()` faces alike, because
+   * both register through {@link register}. Distinct from {@link isAvailable}, which asks whether a
+   * face is LOADED right now; this asks only whether it EXISTS to be loaded.
+   */
+  hasFace(family: string, weight: '400' | '700', style: 'normal' | 'italic'): boolean {
+    return this.#facesByFamily.get(normalizeFamilyKey(family))?.has(faceKeyOf(family, weight, style)) ?? false;
+  }
+
+  /**
    * Synchronous availability check: is a real face for this family loaded and
    * usable in the set *right now*? Used by the gate's late-load handler to detect
    * a face that finished after the first measure. Returns false where there is no

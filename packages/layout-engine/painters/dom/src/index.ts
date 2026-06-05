@@ -110,7 +110,7 @@ export type DomPainterOptions = {
    * so glyph advances match the laid-out positions. Set per painter instance (per document) so two
    * editors can map one logical family differently. Defaults to the global bundled resolver.
    */
-  resolvePhysical?: (cssFontFamily: string) => string;
+  resolvePhysical?: (cssFontFamily: string, face: { weight: '400' | '700'; style: 'normal' | 'italic' }) => string;
 };
 
 export type DomPainterHandle = {

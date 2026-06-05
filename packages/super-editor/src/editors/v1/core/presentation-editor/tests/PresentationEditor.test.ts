@@ -563,9 +563,11 @@ describe('PresentationEditor', () => {
         expect(order).toContain('custom-font-add');
         expect(order.indexOf('custom-font-add')).toBeLessThan(order.indexOf('layout'));
         const fontContext = mockMeasureBlock.mock.calls[0]?.[2] as
-          | { resolvePhysical?: (family: string) => string }
+          | {
+              resolvePhysical?: (family: string, face: { weight: '400' | '700'; style: 'normal' | 'italic' }) => string;
+            }
           | undefined;
-        expect(fontContext?.resolvePhysical?.('Georgia')).toBe('Gelasio');
+        expect(fontContext?.resolvePhysical?.('Georgia', { weight: '400', style: 'normal' })).toBe('Gelasio');
       } finally {
         if (originalFonts) Object.defineProperty(document, 'fonts', originalFonts);
         else Reflect.deleteProperty(document, 'fonts');

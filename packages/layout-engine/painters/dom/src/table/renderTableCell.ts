@@ -19,6 +19,7 @@ import type {
   WrapTextMode,
 } from '@superdoc/contracts';
 import { rescaleColumnWidths, normalizeZIndex, getCellSpacingPx } from '@superdoc/contracts';
+import type { ResolvePhysicalFamily } from '@superdoc/font-system';
 import type { MinimalWordLayout } from '@superdoc/common/list-marker-utils';
 import type { FragmentRenderContext, RenderedLineInfo } from '../renderer.js';
 import { applySquareWrapExclusionsToLines } from '../utils/anchor-helpers';
@@ -609,7 +610,7 @@ type TableCellRenderDependencies = {
    * from the renderer's per-document resolver so they paint the same physical family they were
    * measured in. Undefined falls back to the global resolver.
    */
-  resolvePhysical?: (cssFontFamily: string) => string;
+  resolvePhysical?: ResolvePhysicalFamily;
 };
 
 /**

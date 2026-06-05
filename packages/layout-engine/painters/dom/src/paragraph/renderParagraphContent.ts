@@ -17,7 +17,7 @@ import {
   sliceRunsForLine,
 } from '@superdoc/contracts';
 import { resolveMarkerIndent, type MinimalWordLayout } from '@superdoc/common/list-marker-utils';
-import { resolvePhysicalFamily } from '@superdoc/font-system';
+import { resolvePhysicalFamily, type ResolvePhysicalFamily } from '@superdoc/font-system';
 import {
   applySdtContainerChrome,
   getSdtContainerMetadata,
@@ -106,7 +106,7 @@ export type RenderParagraphContentParams = {
    * per-document resolver so a marker paints the same physical family it was measured in. Undefined
    * (or omitted) falls back to the global resolver, matching text runs and field annotations.
    */
-  resolvePhysical?: (cssFontFamily: string) => string;
+  resolvePhysical?: ResolvePhysicalFamily;
   captureLineSnapshot?: (
     lineEl: HTMLElement,
     options?: { inTableParagraph?: boolean; wrapperEl?: HTMLElement; sourceAnchor?: SourceAnchor },
@@ -479,7 +479,7 @@ const renderResolvedLines = (
     convertFinalParagraphMark,
     lineTopOffset = 0,
     sourceAnchor,
-    resolvePhysical = resolvePhysicalFamily,
+    resolvePhysical = (css) => resolvePhysicalFamily(css),
   } = params;
   const renderedLines: RenderedParagraphLineInfo[] = [];
   const resolvedMarker = content.marker;
@@ -563,7 +563,7 @@ const renderMeasuredLines = (
     convertFinalParagraphMark,
     lineTopOffset = 0,
     sourceAnchor,
-    resolvePhysical = resolvePhysicalFamily,
+    resolvePhysical = (css) => resolvePhysicalFamily(css),
   } = params;
   const lines = linesOverride ?? measure.lines ?? [];
   const paraIndent = block.attrs?.indent;

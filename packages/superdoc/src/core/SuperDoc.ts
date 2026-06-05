@@ -1633,8 +1633,12 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
       this.#fontsApi = {
         getReport: () => this.activeEditor?.presentationEditor?.getFontReport() ?? [],
         getMissingFonts: () => this.activeEditor?.presentationEditor?.getMissingFonts() ?? [],
-        getDocumentFonts: () =>
-          (this.activeEditor?.presentationEditor?.getFontReport() ?? []).map((record) => record.logicalFamily),
+        getDocumentFonts: () => [
+          // Deduped by logical family: the report can now carry multiple FACE rows per family.
+          ...new Set(
+            (this.activeEditor?.presentationEditor?.getFontReport() ?? []).map((record) => record.logicalFamily),
+          ),
+        ],
         onReport: (callback) => {
           // Snapshot-then-subscribe: the report may already have resolved (it fires during
           // load, before a consumer subscribes - and a document swap creates a fresh editor),

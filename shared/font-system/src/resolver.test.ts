@@ -224,3 +224,74 @@ describe('FontResolver (per-document context)', () => {
     expect(resolver.version).toBe(1);
   });
 });
+
+describe('face-aware resolution (resolveFace / resolvePhysicalFamilyForFace)', () => {
+  const allFaces = () => true;
+  const regularOnly = (_f: string, w: '400' | '700', s: 'normal' | 'italic') => w === '400' && s === 'normal';
+  const noFaces = () => false;
+  const FACES = [
+    { weight: '400', style: 'normal' },
+    { weight: '700', style: 'normal' },
+    { weight: '400', style: 'italic' },
+    { weight: '700', style: 'italic' },
+  ] as const;
+
+  it('four-face clones substitute on EVERY face (unchanged vs family-level)', () => {
+    const r = createFontResolver();
+    for (const face of FACES) {
+      expect(r.resolveFace('Calibri', face, allFaces)).toEqual({
+        logicalFamily: 'Calibri',
+        physicalFamily: 'Carlito',
+        reason: 'bundled_substitute',
+      });
+      expect(r.resolvePhysicalFamilyForFace('Calibri, sans-serif', face, allFaces)).toBe('Carlito, sans-serif');
+    }
+  });
+
+  it('single-face substitute: maps the provided face, passes other faces through (fallback_face_absent)', () => {
+    const r = createFontResolver();
+    r.map('Georgia', 'Gelasio'); // a single-face clone, Regular-only registered (regularOnly)
+    expect(r.resolveFace('Georgia', { weight: '400', style: 'normal' }, regularOnly)).toEqual({
+      logicalFamily: 'Georgia',
+      physicalFamily: 'Gelasio',
+      reason: 'custom_mapping',
+    });
+    // Bold/italic: substitute lacks the face -> pass the LOGICAL family through, reported non-metric.
+    expect(r.resolveFace('Georgia', { weight: '700', style: 'normal' }, regularOnly)).toEqual({
+      logicalFamily: 'Georgia',
+      physicalFamily: 'Georgia',
+      reason: 'fallback_face_absent',
+    });
+    expect(r.resolveFace('Georgia', { weight: '400', style: 'italic' }, regularOnly).reason).toBe(
+      'fallback_face_absent',
+    );
+    // CSS-stack variant: substitute only the present face; return the value UNCHANGED for an absent
+    // face (so the painter never faux-styles the substitute's Regular).
+    expect(r.resolvePhysicalFamilyForFace('Georgia, serif', { weight: '400', style: 'normal' }, regularOnly)).toBe(
+      'Gelasio, serif',
+    );
+    expect(r.resolvePhysicalFamilyForFace('Georgia, serif', { weight: '700', style: 'normal' }, regularOnly)).toBe(
+      'Georgia, serif',
+    );
+  });
+
+  it('map to an UNREGISTERED physical family passes through (fallback_face_absent), never faux-styled', () => {
+    const r = createFontResolver();
+    r.map('Georgia', 'Some System Font'); // not bundled, not added via fonts.add() -> hasFace false
+    expect(r.resolveFace('Georgia', { weight: '400', style: 'normal' }, noFaces)).toEqual({
+      logicalFamily: 'Georgia',
+      physicalFamily: 'Georgia',
+      reason: 'fallback_face_absent',
+    });
+    expect(r.resolvePhysicalFamilyForFace('Georgia', { weight: '400', style: 'normal' }, noFaces)).toBe('Georgia');
+  });
+
+  it('an unmapped family with no substitute is as_requested regardless of hasFace', () => {
+    const r = createFontResolver();
+    expect(r.resolveFace('Aptos', { weight: '400', style: 'normal' }, noFaces)).toEqual({
+      logicalFamily: 'Aptos',
+      physicalFamily: 'Aptos',
+      reason: 'as_requested',
+    });
+  });
+});

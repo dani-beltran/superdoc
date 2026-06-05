@@ -84,7 +84,10 @@ export const applyRunStyles = (
   element: HTMLElement,
   run: Run,
   _isLink = false,
-  resolvePhysical: (cssFontFamily: string) => string = resolvePhysicalFamily,
+  resolvePhysical: (
+    cssFontFamily: string,
+    face: { weight: '400' | '700'; style: 'normal' | 'italic' },
+  ) => string = resolvePhysicalFamily,
 ): void => {
   if (
     run.kind === 'tab' ||
@@ -102,7 +105,10 @@ export const applyRunStyles = (
   // text was measured in, so glyph advances match the laid-out positions. The resolver is the
   // per-document one (passed by the caller from the render context), so two editors that map a
   // logical family differently paint different physical families. Defaults to the global bundled.
-  element.style.fontFamily = resolvePhysical(run.fontFamily);
+  element.style.fontFamily = resolvePhysical(run.fontFamily, {
+    weight: run.bold ? '700' : '400',
+    style: run.italic ? 'italic' : 'normal',
+  });
   element.style.fontSize = `${run.fontSize}px`;
   if (run.bold) element.style.fontWeight = 'bold';
   if (run.italic) element.style.fontStyle = 'italic';

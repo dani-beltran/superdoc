@@ -47,7 +47,7 @@ import {
 } from '../../header-footer/HeaderFooterRegistry.js';
 import { initHeaderFooterRegistry } from '../../header-footer/HeaderFooterRegistryInit.js';
 import { layoutPerRIdHeaderFooters } from '../../header-footer/HeaderFooterPerRidLayout.js';
-import type { FontResolver } from '@superdoc/font-system';
+import type { FontResolver, HasFace } from '@superdoc/font-system';
 import {
   extractIdentifierFromConverter,
   getHeaderFooterType,
@@ -1789,6 +1789,8 @@ export class HeaderFooterSessionManager {
     layout: Layout,
     sectionMetadata: SectionMetadata[],
     fontResolver?: FontResolver,
+    hasFace?: HasFace,
+    effectiveSignature?: string,
   ): Promise<void> {
     await layoutPerRIdHeaderFooters(
       headerFooterInput,
@@ -1799,6 +1801,8 @@ export class HeaderFooterSessionManager {
         footerLayoutsByRId: this.#footerLayoutsByRId,
       },
       fontResolver,
+      hasFace,
+      effectiveSignature,
     );
 
     // Rebuild resolved maps aligned 1:1 with the raw rId maps.

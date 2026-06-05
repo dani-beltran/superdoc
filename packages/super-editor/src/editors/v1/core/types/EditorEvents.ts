@@ -43,10 +43,13 @@ export interface FontsChangedPayload {
   loadSummary: FontLoadSummary;
   /**
    * Why the report changed: `initial` (first resolve), `late-load` (a font finished loading and
-   * bumped the global epoch), or `config-change` (a runtime `superdoc.fonts` mutation - map/unmap/
-   * add - on this document).
+   * bumped the font-config epoch), `config-change` (a runtime `superdoc.fonts` mutation - map/unmap/
+   * add - on this document), or `render-change` (the set of rendered faces changed from ordinary
+   * editing - e.g. the first Bold of a family introduces a new face - with no font load or config
+   * mutation). Consumers filtering on `late-load` to mean "a font just loaded" should treat
+   * `render-change` separately.
    */
-  source: 'initial' | 'late-load' | 'config-change';
+  source: 'initial' | 'late-load' | 'config-change' | 'render-change';
   version: number;
 }
 

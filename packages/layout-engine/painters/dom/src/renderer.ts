@@ -248,8 +248,8 @@ type PainterOptions = {
   showFormattingMarks?: boolean;
   /** Built-in SDT chrome rendering mode. */
   contentControlsChrome?: 'default' | 'none';
-  /** Per-document logical->physical font resolver; see DomPainterOptions.resolvePhysical. */
-  resolvePhysical?: (cssFontFamily: string) => string;
+  /** Per-document logical->physical font resolver (face-aware); see DomPainterOptions.resolvePhysical. */
+  resolvePhysical?: (cssFontFamily: string, face: { weight: '400' | '700'; style: 'normal' | 'italic' }) => string;
 };
 
 type FragmentDomState = {
