@@ -36,10 +36,10 @@ export interface Subscribable<T> {
 
 /**
  * Event names the UI controller (`createSuperDocUI`) subscribes to on
- * a SuperDoc-like host. Narrower than
- * `HeadlessToolbarSuperdocHostEvent` (which adds
- * `formatting-marks-change`); a custom UI host stub only has to
- * support the three events the UI controller actually consumes.
+ * a SuperDoc-like host. Differs from `HeadlessToolbarSuperdocHostEvent`
+ * (which adds `formatting-marks-change` but not `viewport-change`); a
+ * custom UI host stub only has to support the four events the UI
+ * controller actually consumes.
  */
 export type SuperDocUIHostEvent = 'editorCreate' | 'document-mode-change' | 'zoomChange' | 'viewport-change';
 
