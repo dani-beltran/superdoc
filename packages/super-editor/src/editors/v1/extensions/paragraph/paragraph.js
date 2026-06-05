@@ -411,6 +411,10 @@ export const Paragraph = OxmlNode.create({
               const contentStart = $from.start(paragraphDepth);
               const contentEnd = $from.end(paragraphDepth);
               tr = tr.delete(contentStart, contentEnd).insertText(event.data, contentStart);
+              // insertText at an explicit position leaves the caret before the inserted
+              // text, so subsequent native keystrokes prepend instead of append (typing
+              // "abcdef" lands as "bcdefa"). Place the caret after the inserted text.
+              tr = tr.setSelection(TextSelection.create(tr.doc, contentStart + event.data.length));
             } else {
               tr = tr.insertText(event.data);
             }
