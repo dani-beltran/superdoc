@@ -14,6 +14,7 @@ const URL_PREFIX = '/fonts/';
 
 const contentType = (file) => {
   if (file.endsWith('.woff2')) return 'font/woff2';
+  if (file.endsWith('.json')) return 'application/json; charset=utf-8';
   if (file.endsWith('.md')) return 'text/markdown; charset=utf-8';
   return 'text/plain; charset=utf-8';
 };

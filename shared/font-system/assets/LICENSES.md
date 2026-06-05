@@ -20,6 +20,7 @@ These notices, `OFL.txt`, and `Apache-2.0.txt` are a single unit. Distribute
 them together with the font files wherever the fonts go.
 
 SPDX license expression for this bundled font set: `OFL-1.1 AND Apache-2.0`.
+Machine-readable asset metadata: `font-assets.manifest.json`.
 
 ## Families
 
