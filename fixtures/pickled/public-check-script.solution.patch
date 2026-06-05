@@ -1,0 +1,11 @@
+diff --git a/scripts/check-public-surface.sh b/scripts/check-public-surface.sh
+new file mode 100755
+index 0000000..d6c3a11
+--- /dev/null
++++ b/scripts/check-public-surface.sh
+@@ -0,0 +1,5 @@
++#!/usr/bin/env bash
++set -euo pipefail
++
++pnpm check:public
++pnpm check:types
