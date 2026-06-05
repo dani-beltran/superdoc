@@ -69,7 +69,12 @@ import { normalizeFragmentsForRegion } from './normalize-header-footer-fragments
 import { createPaginator, type PageState, type ConstraintBoundary } from './paginator.js';
 import { formatPageNumber } from './pageNumbering.js';
 import { shouldSuppressSpacingForEmpty, shouldSuppressOwnSpacing } from './layout-utils.js';
-import { balanceSectionOnPage, type BalancingFragment, type MeasureData } from './column-balancing.js';
+import {
+  balanceSectionOnPage,
+  type BalancingFragment,
+  type MeasureData,
+  type SectionColumnLayout,
+} from './column-balancing.js';
 import { cloneColumnLayout } from './column-utils.js';
 
 type PageSize = { w: number; h: number };
@@ -2296,13 +2301,7 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
           balanceResult = balanceSectionOnPage({
             fragments: state.page.fragments as BalancingFragment[],
             sectionIndex: endingSectionIndex!,
-            sectionColumns: {
-              count: normalized.count,
-              gap: normalized.gap,
-              width: normalized.width,
-              widths: endingSectionColumns!.widths,
-              equalWidth: endingSectionColumns!.equalWidth,
-            },
+            sectionColumns: toBalancingColumns(normalized),
             sectionHasExplicitColumnBreak: false,
             blockSectionMap,
             margins: { left: activeLeftMargin },
@@ -3086,13 +3085,7 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
     balanceSectionOnPage({
       fragments: lastPageForSection.fragments as BalancingFragment[],
       sectionIndex: sectionIdx,
-      sectionColumns: {
-        count: normalized.count,
-        gap: normalized.gap,
-        width: normalized.width,
-        widths: sectionCols.widths,
-        equalWidth: sectionCols.equalWidth,
-      },
+      sectionColumns: toBalancingColumns(normalized),
       sectionHasExplicitColumnBreak: false, // already filtered above
       blockSectionMap,
       margins: { left: sectionLeftMargin },
@@ -3470,6 +3463,22 @@ export function layoutHeaderFooter(
  */
 function normalizeColumns(input: ColumnLayout | undefined, contentWidth: number): NormalizedColumns {
   return normalizeColumnLayout(input, contentWidth, COLUMN_EPSILON);
+}
+
+// Build balanceSectionOnPage's column input from the RESOLVED (normalized) layout. Both balancing
+// call sites must source widths/gaps from `normalized` (sliced to the resolved count), never the raw
+// config: raw widths can be longer than the count, which makes the equal-width balancing guard read
+// surplus entries (vetoing balancing of columns that render equal) and builds phantom geometry
+// columns. Single builder so the two call sites cannot drift apart. (SD-2629)
+function toBalancingColumns(normalized: NormalizedColumns): SectionColumnLayout {
+  return {
+    count: normalized.count,
+    gap: normalized.gap,
+    width: normalized.width,
+    ...(Array.isArray(normalized.widths) ? { widths: normalized.widths } : {}),
+    ...(Array.isArray(normalized.gaps) ? { gaps: normalized.gaps } : {}),
+    ...(normalized.equalWidth !== undefined ? { equalWidth: normalized.equalWidth } : {}),
+  };
 }
 
 const _buildMeasureMap = (blocks: FlowBlock[], measures: Measure[]): Map<string, Measure> => {
