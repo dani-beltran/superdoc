@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { shallowEqual } from '../equality.js';
 import type {
   CommentsSlice,
@@ -137,7 +137,11 @@ export function useSuperDocZoom(): ZoomSlice & {
     },
     [ui],
   );
-  return { ...slice, set, setMode };
+  // Memoized so the returned object keeps its identity while the slice and
+  // actions are unchanged; the controller-side slice memo makes `slice`
+  // reference-stable, and effects keyed on this hook's result must not
+  // re-run on unrelated parent renders.
+  return useMemo(() => ({ ...slice, set, setMode }), [slice, set, setMode]);
 }
 
 const FALLBACK_COMMAND_STATE: UIToolbarCommandState = {

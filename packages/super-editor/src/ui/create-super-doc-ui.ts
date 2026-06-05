@@ -1093,7 +1093,21 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
   };
   // zoomChange fires *before* the re-render, so notifying then would hand
   // consumers stale rects. Tag the next post-paint layout flush as 'zoom'.
-  const onGeometryZoom = () => {
+  // Only a changed VALUE schedules a repaint; mode-only transitions
+  // (setZoomMode with an unchanged value) would latch a tag no flush ever
+  // consumes, mis-labeling the next unrelated layout notification.
+  let lastGeometryZoomValue: number | null = (() => {
+    try {
+      return superdoc.getZoomState?.().value ?? null;
+    } catch {
+      return null;
+    }
+  })();
+  const onGeometryZoom = (...args: unknown[]) => {
+    const payload = args[0] as { zoom?: number } | undefined;
+    const nextZoom = typeof payload?.zoom === 'number' ? payload.zoom : null;
+    if (nextZoom !== null && nextZoom === lastGeometryZoomValue) return;
+    lastGeometryZoomValue = nextZoom;
     zoomPending = true;
   };
   const onGeometryLayout = () => {
