@@ -1057,7 +1057,7 @@ class SuperConverter {
    * not embeddable (Restricted-License) or whose OS/2 table was unreadable (conservative: no license
    * proof -> fall through to the bundled substitute).
    *
-   * @returns {Array<{ family: string, source: Uint8Array, weight: '400'|'700', style: 'normal'|'italic', fsType: number|null, embeddable: boolean, relationshipId: string }>}
+   * @returns {Array<{ family: string, source: ArrayBuffer, weight: '400'|'700', style: 'normal'|'italic', fsType: number|null, embeddable: boolean, relationshipId: string }>}
    */
   getEmbeddedFontFaces() {
     const fontTable = this.convertedXml['word/fontTable.xml'];

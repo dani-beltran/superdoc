@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createFontResolver, type FontFaceRequest, type RegisterFaceResult } from '@superdoc/font-system';
 import type { FontRegistry } from '@superdoc/font-system';
-import { DocumentFontController } from './DocumentFontController';
+import { DocumentFontController, type EmbeddedFontFace } from './DocumentFontController';
 import type { FontReadinessGate } from './FontReadinessGate';
 
 class FakeRegistry {
@@ -25,6 +25,33 @@ class FakeRegistry {
     return { family: input.family, status: 'unloaded', changed: true };
   }
 
+  readonly ownedRegistered: Array<{ family: string; weight: string; style: string }> = [];
+  readonly ownedReleased: Array<{ family: string; weight: string; style: string }> = [];
+
+  /** Model the document-owned binary face path: each call registers a distinct face and returns a
+   *  disposer that releases exactly it. Reflected in `hasFace` so the resolver's `registered_face`
+   *  rung sees it. (Refcounting a shared key is the real registry's job, covered in registry.test.ts;
+   *  these controller tests use distinct families.) */
+  registerOwnedFace(input: {
+    family: string;
+    source: ArrayBuffer | ArrayBufferView;
+    weight: '400' | '700';
+    style: 'normal' | 'italic';
+  }): (() => boolean) | null {
+    const record = { family: input.family, weight: input.weight, style: input.style };
+    this.ownedRegistered.push(record);
+    const key = `${input.family.toLowerCase()}|${input.weight}|${input.style}`;
+    this.#sources.set(key, 'owned');
+    let released = false;
+    return () => {
+      if (released) return false;
+      released = true;
+      this.ownedReleased.push(record);
+      this.#sources.delete(key);
+      return true;
+    };
+  }
+
   async awaitFaceRequests(requests: Iterable<FontFaceRequest>): Promise<[]> {
     this.awaited.push([...requests]);
     return [];
@@ -39,8 +66,9 @@ class FakeRegistry {
   }
 }
 
-function makeController() {
-  const registry = new FakeRegistry();
+function makeController(sharedRegistry?: FakeRegistry) {
+  // Pass a shared registry to model two editors on one FontFaceSet (the real per-document sharing).
+  const registry = sharedRegistry ?? new FakeRegistry();
   const notifyDocumentFontConfigChanged = vi.fn();
   const invalidateCachesForConfigRegistration = vi.fn();
   const onDocumentFontConfigApplied = vi.fn();
@@ -302,5 +330,121 @@ describe('DocumentFontController', () => {
     expect(resolver.resolvePrimaryPhysicalFamily('Calibri')).toBe('Carlito');
     expect(resolver.signature).toBe('');
     expect(notifyDocumentFontConfigChanged).toHaveBeenCalledTimes(2);
+  });
+
+  describe('applyEmbeddedFaces (embedded DOCX fonts)', () => {
+    const embed = (over: Partial<EmbeddedFontFace> & { family: string }): EmbeddedFontFace => ({
+      source: new ArrayBuffer(8),
+      weight: '400',
+      style: 'normal',
+      fsType: 0,
+      embeddable: true,
+      relationshipId: 'rId1',
+      ...over,
+    });
+
+    it('registers embeddable faces, skips restricted, and invalidates caches without a reflow/event', () => {
+      const {
+        controller,
+        registry,
+        invalidateCachesForConfigRegistration,
+        notifyDocumentFontConfigChanged,
+        onDocumentFontConfigApplied,
+      } = makeController();
+
+      controller.applyEmbeddedFaces([
+        embed({ family: 'Calibri', weight: '400' }),
+        embed({ family: 'Calibri', weight: '700', relationshipId: 'rId2' }),
+        // Restricted-License (fsType bit 1) / unreadable OS/2: not embeddable -> skipped.
+        embed({ family: 'SecretFont', fsType: 0x0002, embeddable: false, relationshipId: 'rId3' }),
+      ]);
+
+      expect(registry.ownedRegistered).toEqual([
+        { family: 'Calibri', weight: '400', style: 'normal' },
+        { family: 'Calibri', weight: '700', style: 'normal' },
+      ]);
+      expect(registry.hasFace('SecretFont', '400', 'normal')).toBe(false); // restricted never registered
+      // Config-time registration: clears the shared measure caches, but no reflow/event (first measure
+      // has not happened yet).
+      expect(invalidateCachesForConfigRegistration).toHaveBeenCalledTimes(1);
+      expect(onDocumentFontConfigApplied).not.toHaveBeenCalled();
+      expect(notifyDocumentFontConfigChanged).not.toHaveBeenCalled();
+    });
+
+    it('makes the resolver render the embedded real family via registered_face (not the bundled clone)', () => {
+      const { controller, resolver, registry } = makeController();
+      const hasFace = (f: string, w: '400' | '700', s: 'normal' | 'italic') => registry.hasFace(f, w, s);
+      const regular = { weight: '400', style: 'normal' } as const;
+
+      // Before: Calibri falls back to the bundled substitute (Carlito).
+      expect(resolver.resolveFace('Calibri', regular, hasFace).physicalFamily).toBe('Carlito');
+
+      controller.applyEmbeddedFaces([embed({ family: 'Calibri' })]);
+
+      const resolved = resolver.resolveFace('Calibri', regular, hasFace);
+      expect(resolved.physicalFamily).toBe('Calibri'); // the document's real embedded font
+      expect(resolved.reason).toBe('registered_face');
+    });
+
+    it('releases every embedded face on reset (document swap)', () => {
+      const { controller, registry } = makeController();
+      controller.applyEmbeddedFaces([
+        embed({ family: 'Calibri', weight: '400' }),
+        embed({ family: 'Calibri', weight: '700' }),
+      ]);
+      expect(registry.hasFace('Calibri', '400', 'normal')).toBe(true);
+
+      controller.reset();
+
+      expect(registry.ownedReleased).toEqual([
+        { family: 'Calibri', weight: '400', style: 'normal' },
+        { family: 'Calibri', weight: '700', style: 'normal' },
+      ]);
+      expect(registry.hasFace('Calibri', '400', 'normal')).toBe(false);
+    });
+
+    it('releases every embedded face on dispose (teardown)', () => {
+      const { controller, registry } = makeController();
+      controller.applyEmbeddedFaces([embed({ family: 'Calibri' })]);
+
+      controller.dispose();
+
+      expect(registry.ownedReleased).toEqual([{ family: 'Calibri', weight: '400', style: 'normal' }]);
+      expect(registry.hasFace('Calibri', '400', 'normal')).toBe(false);
+    });
+
+    it('replaces the prior embedded set on re-apply (releases old, registers new)', () => {
+      const { controller, registry } = makeController();
+      controller.applyEmbeddedFaces([embed({ family: 'Calibri' })]);
+      controller.applyEmbeddedFaces([embed({ family: 'Cambria' })]);
+
+      expect(registry.ownedReleased).toEqual([{ family: 'Calibri', weight: '400', style: 'normal' }]);
+      expect(registry.hasFace('Calibri', '400', 'normal')).toBe(false);
+      expect(registry.hasFace('Cambria', '400', 'normal')).toBe(true);
+    });
+
+    it('does nothing (no invalidate) when there are no embeddable faces', () => {
+      const { controller, registry, invalidateCachesForConfigRegistration } = makeController();
+      controller.applyEmbeddedFaces([embed({ family: 'SecretFont', embeddable: false })]);
+
+      expect(registry.ownedRegistered).toHaveLength(0);
+      expect(invalidateCachesForConfigRegistration).not.toHaveBeenCalled();
+    });
+
+    it("with a shared registry, one document's swap releases only its own embedded faces", () => {
+      // Two editors on ONE FontFaceSet (shared registry). This is exactly why release is handle-based:
+      // doc A's reset must not drop doc B's face.
+      const registry = new FakeRegistry();
+      const docA = makeController(registry);
+      const docB = makeController(registry);
+      docA.controller.applyEmbeddedFaces([embed({ family: 'Calibri' })]);
+      docB.controller.applyEmbeddedFaces([embed({ family: 'Cambria' })]);
+
+      docA.controller.reset();
+
+      expect(registry.ownedReleased).toEqual([{ family: 'Calibri', weight: '400', style: 'normal' }]);
+      expect(registry.hasFace('Calibri', '400', 'normal')).toBe(false); // doc A released
+      expect(registry.hasFace('Cambria', '400', 'normal')).toBe(true); // doc B intact
+    });
   });
 });
