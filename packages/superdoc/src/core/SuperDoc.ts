@@ -2623,39 +2623,53 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
     // else: UI store unhydrated → leave `comments` undefined and
     // let the engine's `converter.comments` fallback fire.
 
-    const docxPromises = this.#requireSuperdocStore('exportEditorsToDOCX').documents.map(
-      async (doc: RuntimeDocument) => {
-        if (!doc || doc.type !== DOCX) return null;
+    const bridgedExportErrors = new WeakSet<object>();
+    const rememberBridgedExportError = (payload: SuperDocExceptionPayload) => {
+      if ('editor' in payload && payload.error && typeof payload.error === 'object') {
+        bridgedExportErrors.add(payload.error);
+      }
+    };
 
-        const editor = typeof doc.getEditor === 'function' ? doc.getEditor() : null;
-        const fallbackDocx = () => {
-          if (!doc.data) return null;
-          if (doc.data.type && doc.data.type !== DOCX) return null;
-          return doc.data;
-        };
+    this.on('exception', rememberBridgedExportError);
+    try {
+      const docxPromises = this.#requireSuperdocStore('exportEditorsToDOCX').documents.map(
+        async (doc: RuntimeDocument) => {
+          if (!doc || doc.type !== DOCX) return null;
 
-        if (!editor) return fallbackDocx();
+          const editor = typeof doc.getEditor === 'function' ? doc.getEditor() : null;
+          const fallbackDocx = () => {
+            if (!doc.data) return null;
+            if (doc.data.type && doc.data.type !== DOCX) return null;
+            return doc.data;
+          };
 
-        try {
-          const exported = await editor.exportDocx({
-            isFinalDoc,
-            comments: comments as import('@superdoc/super-editor').Comment[] | undefined,
-            commentsType,
-            fieldsHighlightColor,
-          });
-          if (exported) return exported;
-        } catch (error) {
-          this.emit('exception', { error, document: doc });
-        }
+          if (!editor) return fallbackDocx();
 
-        return fallbackDocx();
-      },
-    );
+          try {
+            const exported = await editor.exportDocx({
+              isFinalDoc,
+              comments: comments as import('@superdoc/super-editor').Comment[] | undefined,
+              commentsType,
+              fieldsHighlightColor,
+            });
+            if (exported) return exported;
+          } catch (error) {
+            if (!error || typeof error !== 'object' || !bridgedExportErrors.has(error)) {
+              this.emit('exception', { error, document: doc });
+            }
+          }
 
-    const docxFiles = await Promise.all(docxPromises);
-    // Type-predicate filter so callers see `Blob[]` instead of `(Blob | null)[]`.
-    // `filter(Boolean)` narrows at runtime but not in the type system.
-    return docxFiles.filter((file): file is Blob => file != null);
+          return fallbackDocx();
+        },
+      );
+
+      const docxFiles = await Promise.all(docxPromises);
+      // Type-predicate filter so callers see `Blob[]` instead of `(Blob | null)[]`.
+      // `filter(Boolean)` narrows at runtime but not in the type system.
+      return docxFiles.filter((file): file is Blob => file != null);
+    } finally {
+      this.off('exception', rememberBridgedExportError);
+    }
   }
 
   /**

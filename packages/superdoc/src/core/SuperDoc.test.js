@@ -1218,6 +1218,91 @@ describe('SuperDoc core', () => {
     expect(results).toEqual([originalBlob]);
   });
 
+  it('falls back to original document data and keeps sibling exports when an editor export rejects', async () => {
+    createAppHarness();
+    const onException = vi.fn();
+
+    const instance = new SuperDoc({
+      selector: '#host',
+      document: 'https://example.com/doc.docx',
+      documents: [],
+      modules: { comments: {}, toolbar: {} },
+      colors: [],
+      user: { name: 'Jane', email: 'jane@example.com' },
+      onException,
+    });
+    await flushMicrotasks();
+
+    const exportError = new Error('export failed');
+    const originalBlob = new Blob(['fallback'], { type: DOCX });
+    const siblingBlob = new Blob(['exported'], { type: DOCX });
+    const failedExportDocxMock = vi.fn().mockRejectedValue(exportError);
+    const siblingExportDocxMock = vi.fn().mockResolvedValue(siblingBlob);
+    const failedDoc = {
+      id: 'doc-1',
+      type: DOCX,
+      data: originalBlob,
+      getEditor: () => ({ exportDocx: failedExportDocxMock }),
+    };
+    const siblingDoc = {
+      id: 'doc-2',
+      type: DOCX,
+      data: null,
+      getEditor: () => ({ exportDocx: siblingExportDocxMock }),
+    };
+
+    instance.superdocStore.documents = [failedDoc, siblingDoc];
+
+    const results = await instance.exportEditorsToDOCX();
+
+    expect(failedExportDocxMock).toHaveBeenCalledTimes(1);
+    expect(siblingExportDocxMock).toHaveBeenCalledTimes(1);
+    expect(results).toEqual([originalBlob, siblingBlob]);
+    expect(onException).toHaveBeenCalledTimes(1);
+    expect(onException).toHaveBeenCalledWith({ error: exportError, document: failedDoc });
+  });
+
+  it('does not emit a duplicate wrapper exception when the editor already bridged the export error', async () => {
+    createAppHarness();
+    const onException = vi.fn();
+
+    const instance = new SuperDoc({
+      selector: '#host',
+      document: 'https://example.com/doc.docx',
+      documents: [],
+      modules: { comments: {}, toolbar: {} },
+      colors: [],
+      user: { name: 'Jane', email: 'jane@example.com' },
+      onException,
+    });
+    await flushMicrotasks();
+
+    const exportError = new Error('export failed');
+    const originalBlob = new Blob(['fallback'], { type: DOCX });
+    const editor = {
+      exportDocx: vi.fn(async () => {
+        instance.emit('exception', { error: exportError, editor });
+        throw exportError;
+      }),
+    };
+
+    instance.superdocStore.documents = [
+      {
+        id: 'doc-1',
+        type: DOCX,
+        data: originalBlob,
+        getEditor: () => editor,
+      },
+    ];
+
+    const results = await instance.exportEditorsToDOCX();
+
+    expect(editor.exportDocx).toHaveBeenCalledTimes(1);
+    expect(results).toEqual([originalBlob]);
+    expect(onException).toHaveBeenCalledTimes(1);
+    expect(onException).toHaveBeenCalledWith({ error: exportError, editor });
+  });
+
   it('drops non-DOCX fallback data when an editor export yields no blob', async () => {
     const { superdocStore } = createAppHarness();
 
