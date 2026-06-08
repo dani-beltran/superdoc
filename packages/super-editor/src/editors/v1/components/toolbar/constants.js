@@ -29,7 +29,7 @@ function normalizeToolbarFamily(value) {
 function compareToolbarFontOptions(a, b) {
   return String(a.label ?? '')
     .trim()
-    .localeCompare(String(b.label ?? '').trim(), undefined, { sensitivity: 'base' });
+    .localeCompare(String(b.label ?? '').trim(), 'en', { sensitivity: 'base' });
 }
 
 /**

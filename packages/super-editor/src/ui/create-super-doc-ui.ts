@@ -573,9 +573,9 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
   refreshContentControlsListCache();
 
   let fontOptionsCache: FontFamilyOption[] = buildFontFamilyOptions([]);
-  let fontOptionsSignature = fontOptionsCache
-    .map((option) => `${option.label}:${option.value}:${option.previewFamily}`)
-    .join('|');
+  const fontOptionsSignatureFor = (options: readonly FontFamilyOption[]) =>
+    JSON.stringify(options.map((option) => [option.label, option.value, option.previewFamily]));
+  let fontOptionsSignature = fontOptionsSignatureFor(fontOptionsCache);
   const refreshFontOptionsCache = () => {
     let next: FontFamilyOption[];
     try {
@@ -583,7 +583,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     } catch {
       next = buildFontFamilyOptions([]);
     }
-    const signature = next.map((option) => `${option.label}:${option.value}:${option.previewFamily}`).join('|');
+    const signature = fontOptionsSignatureFor(next);
     if (signature === fontOptionsSignature) return false;
     fontOptionsSignature = signature;
     fontOptionsCache = next;
@@ -1239,7 +1239,10 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
 
   const attachEditorListeners = () => {
     const next = resolveRoutedEditor(superdoc);
-    if (next === currentEditor) return;
+    if (next === currentEditor) {
+      refreshFontOptionsAndNotify();
+      return;
+    }
     currentEditorTeardown?.();
     currentEditorTeardown = null;
     currentEditor = next;
@@ -2470,7 +2473,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
   };
 
   const fonts: FontsHandle = {
-    getSnapshot: () => computeState().fonts,
+    getSnapshot: () => ({ options: fontOptionsCache }),
     subscribe(listener) {
       return select((state) => state.fonts, shallowEqual).subscribe((snapshot) => {
         try {
@@ -2489,7 +2492,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
         }
       });
     },
-    getOptions: () => computeState().fonts.options,
+    getOptions: () => fontOptionsCache,
   };
 
   // Live scopes created via `ui.createScope()`. The controller's

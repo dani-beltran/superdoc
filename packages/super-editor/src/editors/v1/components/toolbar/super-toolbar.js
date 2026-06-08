@@ -289,7 +289,7 @@ export class SuperToolbar extends EventEmitter {
 
     /**
      * Bound event handlers stored for proper cleanup when switching editors.
-     * @type {{transaction: Function|null, selectionUpdate: Function|null, focus: Function|null}}
+     * @type {{transaction: Function|null, selectionUpdate: Function|null, focus: Function|null, fontsChanged: Function|null}}
      * @private
      */
     this._boundEditorHandlers = {
@@ -401,35 +401,46 @@ export class SuperToolbar extends EventEmitter {
   }
 
   /**
+   * Detach listeners from the current active editor.
+   * @private
+   * @returns {void}
+   */
+  #detachActiveEditorListeners() {
+    if (!this.activeEditor || !this._boundEditorHandlers.transaction) return;
+
+    this.activeEditor.off('transaction', this._boundEditorHandlers.transaction);
+    this.activeEditor.off('selectionUpdate', this._boundEditorHandlers.selectionUpdate);
+    this.activeEditor.off('focus', this._boundEditorHandlers.focus);
+    this.activeEditor.off('fonts-changed', this._boundEditorHandlers.fontsChanged);
+    this._boundEditorHandlers.transaction = null;
+    this._boundEditorHandlers.selectionUpdate = null;
+    this._boundEditorHandlers.focus = null;
+    this._boundEditorHandlers.fontsChanged = null;
+  }
+
+  /**
    * The toolbar expects an active Super Editor instance.
    * Removes listeners from the previous editor (if any) before attaching to the new one.
    * @param {Object|null} editor - The editor instance to attach to the toolbar, or null to detach
    * @returns {void}
    */
   setActiveEditor(editor) {
-    // Remove listeners from previous editor to prevent memory leaks
-    if (this.activeEditor && this._boundEditorHandlers.transaction) {
-      this.activeEditor.off('transaction', this._boundEditorHandlers.transaction);
-      this.activeEditor.off('selectionUpdate', this._boundEditorHandlers.selectionUpdate);
-      this.activeEditor.off('focus', this._boundEditorHandlers.focus);
-      this.activeEditor.off('fonts-changed', this._boundEditorHandlers.fontsChanged);
-      // Clear bound handlers when removing editor
-      this._boundEditorHandlers.transaction = null;
-      this._boundEditorHandlers.selectionUpdate = null;
-      this._boundEditorHandlers.focus = null;
-      this._boundEditorHandlers.fontsChanged = null;
+    const sameEditor = editor === this.activeEditor;
+    const alreadyListening = Boolean(this._boundEditorHandlers.transaction);
+    if (sameEditor && (!editor || alreadyListening)) {
+      this.updateToolbarState();
+      return;
     }
 
+    this.#detachActiveEditorListeners();
     this.activeEditor = editor;
 
-    // Only attach listeners if editor is not null
     if (editor) {
-      // Create and store bound handlers for later cleanup
       this._boundEditorHandlers.transaction = this.onEditorTransaction.bind(this);
       this._boundEditorHandlers.selectionUpdate = this.onEditorSelectionUpdate.bind(this);
       this._boundEditorHandlers.focus = this.onEditorFocus.bind(this);
       // Document fonts resolve asynchronously after load (the report can settle with no transaction), so
-      // the font list must rebuild on `fonts-changed`, not only on edits - otherwise status reads stale.
+      // the font list must rebuild on `fonts-changed`, not only on edits.
       this._boundEditorHandlers.fontsChanged = this.onEditorFontsChanged.bind(this);
 
       this.activeEditor.on('transaction', this._boundEditorHandlers.transaction);
@@ -570,8 +581,9 @@ export class SuperToolbar extends EventEmitter {
    * @returns {string}
    */
   #fontOptionsSignature() {
+    if (this.config.fonts) return 'custom-fonts';
     const options = this.superdoc?.fonts?.getDocumentFontOptions?.() ?? [];
-    return options.map((option) => `${option.logicalFamily}:${option.previewFamily}`).join('|');
+    return JSON.stringify(options.map((option) => [option.logicalFamily, option.previewFamily]));
   }
 
   /**
@@ -1056,7 +1068,7 @@ export class SuperToolbar extends EventEmitter {
     const signature = this.#fontOptionsSignature();
     if (signature !== this._lastFontOptionsSignature) {
       this._lastFontOptionsSignature = signature;
-      this.#rebuildToolbarItems(); // the document's fonts/statuses changed -> rebuild the dropdown options
+      this.#rebuildToolbarItems();
     }
     this.updateToolbarState();
   }
@@ -1172,6 +1184,7 @@ export class SuperToolbar extends EventEmitter {
       this._restoreFocusTimeoutId = null;
     }
 
+    this.#detachActiveEditorListeners();
     this.destroyHeadlessToolbar();
     this.app?.unmount();
   }

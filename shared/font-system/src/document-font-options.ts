@@ -80,7 +80,7 @@ export interface FontFamilyOption {
 }
 
 function compareByLabel(a: FontFamilyOption, b: FontFamilyOption): number {
-  return a.label.localeCompare(b.label, undefined, { sensitivity: 'base' });
+  return a.label.localeCompare(b.label, 'en', { sensitivity: 'base' });
 }
 
 /**

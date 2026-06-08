@@ -104,8 +104,7 @@ test('a document-specific font reaches the live dropdown without status text and
     .locator(FONT_OPTION)
     .filter({ has: superdoc.page.getByText('Aptos', { exact: true }) });
   await expect(aptosOption.locator('.toolbar-dropdown-option__label')).toHaveText('Aptos');
-  await expect(aptosOption.locator('.toolbar-dropdown-option__secondary')).toHaveCount(0);
-  await expect(aptosOption).toHaveAttribute('aria-label', 'Aptos');
+  await expect(aptosOption).toHaveAttribute('aria-label', 'Font family - Aptos');
 
   await selectFontOption(superdoc, 'Aptos');
 

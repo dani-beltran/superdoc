@@ -183,6 +183,33 @@ describe('createSuperDocUI', () => {
     expect(observed.at(-1)).toEqual(['Aptos', 'Arial', 'Calibri', 'Courier New', 'Helvetica', 'Times New Roman']);
   });
 
+  it('refreshes ui.fonts for delimiter-colliding font names', async () => {
+    const superdoc = makeSuperdocStub();
+    const ui = createSuperDocUI({ superdoc });
+    teardown.push(() => ui.destroy());
+
+    const observed: string[][] = [];
+    ui.fonts.observe((snapshot) => {
+      observed.push(snapshot.options.map((option) => option.label));
+    });
+
+    superdoc.setDocumentFontOptions([{ logicalFamily: 'Zulu', previewFamily: 'Preview:One|Zzz:Zzz:Two' }]);
+    superdoc.fireSuperdoc('fonts-changed');
+    await flushMicrotasks();
+    expect(observed.at(-1)).toContain('Zulu');
+    expect(observed.at(-1)).not.toContain('Zzz');
+
+    superdoc.setDocumentFontOptions([
+      { logicalFamily: 'Zulu', previewFamily: 'Preview:One' },
+      { logicalFamily: 'Zzz', previewFamily: 'Two' },
+    ]);
+    superdoc.fireSuperdoc('fonts-changed');
+    await flushMicrotasks();
+
+    expect(observed.at(-1)).toContain('Zulu');
+    expect(observed.at(-1)).toContain('Zzz');
+  });
+
   it('does not re-fire the listener when the selected slice is unchanged', async () => {
     const superdoc = makeSuperdocStub({ documentMode: 'editing' });
     const ui = createSuperDocUI({ superdoc });

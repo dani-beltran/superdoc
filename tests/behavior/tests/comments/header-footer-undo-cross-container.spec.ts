@@ -54,16 +54,9 @@ function getSurfaceLocator(page: Page, surface: SurfaceKind) {
 }
 
 async function clickBodySurface(page: Page) {
-  await page.locator('.superdoc-line').first().waitFor({ state: 'visible', timeout: 15_000 });
-  const point = await page.evaluate(() => {
-    const line = document.querySelector('.superdoc-line');
-    if (!line) return null;
-    line.scrollIntoView({ block: 'center', inline: 'nearest' });
-    const rect = line.getBoundingClientRect();
-    return { x: rect.left + Math.min(140, rect.width / 2), y: rect.top + rect.height / 2 };
-  });
-  expect(point).toBeTruthy();
-  await page.mouse.click(point!.x, point!.y);
+  const bodyLine = page.locator('.superdoc-line').first();
+  await bodyLine.scrollIntoViewIfNeeded();
+  await bodyLine.click();
 }
 
 async function activateBlankDocumentHeader(superdoc: SuperDocFixture) {

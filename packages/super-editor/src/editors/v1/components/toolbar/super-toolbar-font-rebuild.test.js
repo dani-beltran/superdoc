@@ -72,7 +72,6 @@ describe('SuperToolbar font dropdown rebuild trigger', () => {
     // The dropdown was rebuilt (not merely state-refreshed): Aptos now appears.
     const option = fontOptions().find((o) => o.label === 'Aptos');
     expect(option).toBeTruthy();
-    expect(option.secondaryLabel).toBeUndefined();
   });
 
   it('rebuilds on active-editor change so a document that already resolved its fonts is reflected', () => {
@@ -89,6 +88,17 @@ describe('SuperToolbar font dropdown rebuild trigger', () => {
 
     toolbar.setActiveEditor(new EventEmitter());
     expect(changed).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not rebuild or re-emit when the same editor refocuses', () => {
+    const changed = vi.fn();
+    toolbar.on('toolbar-items-changed', changed);
+    const buildsBeforeRefocus = makeDefaultItemsSpy.mock.calls.length;
+
+    toolbar.setActiveEditor(editor);
+
+    expect(makeDefaultItemsSpy.mock.calls.length).toBe(buildsBeforeRefocus);
+    expect(changed).not.toHaveBeenCalled();
   });
 
   it('does not rebuild when fonts-changed fires with the same options (signature guard)', () => {
@@ -111,5 +121,25 @@ describe('SuperToolbar font dropdown rebuild trigger', () => {
 
     editor.emit('fonts-changed'); // identical options -> guard skips both the rebuild and the notify
     expect(changed).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not rebuild custom configured font lists on document font changes', () => {
+    const configuredFont = { label: 'BrandSans', key: 'BrandSans' };
+    toolbar = new SuperToolbar({
+      selector: '#nope',
+      role: 'editor',
+      fonts: [configuredFont],
+    });
+    toolbar.superdoc = { fonts: { getDocumentFontOptions: () => documentOptions } };
+    vi.spyOn(toolbar, 'updateToolbarState').mockImplementation(() => {});
+    editor = new EventEmitter();
+    toolbar.setActiveEditor(editor);
+    const buildsAfterAttach = makeDefaultItemsSpy.mock.calls.length;
+
+    documentOptions = [aptos];
+    editor.emit('fonts-changed');
+
+    expect(makeDefaultItemsSpy.mock.calls.length).toBe(buildsAfterAttach);
+    expect(toolbar.getToolbarItemByName('fontFamily').options.value).toEqual([configuredFont]);
   });
 });

@@ -85,7 +85,7 @@ function deriveOfferings(): readonly FontOffering[] {
 export const FONT_OFFERINGS: readonly FontOffering[] = deriveOfferings();
 
 function compareLogicalFamily(a: FontOffering, b: FontOffering): number {
-  return a.logicalFamily.localeCompare(b.logicalFamily, undefined, { sensitivity: 'base' });
+  return a.logicalFamily.localeCompare(b.logicalFamily, 'en', { sensitivity: 'base' });
 }
 
 /**

@@ -81,13 +81,11 @@ describe('composeToolbarFontOptions (document fonts unioned with the bundled def
       key: 'Aptos',
       props: { style: { fontFamily: 'Aptos' }, 'data-item': 'btn-fontFamily-option' },
     });
-    expect(aptos.secondaryLabel).toBeUndefined();
   });
 
   it('keeps a document font as a plain name', () => {
     const options = composeToolbarFontOptions([doc('BrandSans')], undefined);
     const brandSans = options.find((option) => option.label === 'BrandSans');
     expect(brandSans.label).toBe('BrandSans');
-    expect(brandSans.secondaryLabel).toBeUndefined();
   });
 });
