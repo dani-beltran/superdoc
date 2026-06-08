@@ -5,11 +5,13 @@ import ToolbarDropdown from './ToolbarDropdown.vue';
 
 const waitForAnimationFrame = () => new Promise((resolve) => requestAnimationFrame(resolve));
 let wrapper;
+const originalInnerHeight = window.innerHeight;
 
 afterEach(() => {
   wrapper?.unmount();
   wrapper = null;
   document.body.innerHTML = '';
+  Object.defineProperty(window, 'innerHeight', { configurable: true, value: originalInnerHeight });
 });
 
 describe('ToolbarDropdown keyboard focus', () => {
@@ -55,5 +57,50 @@ describe('ToolbarDropdown keyboard focus', () => {
     await waitForAnimationFrame();
 
     expect(document.activeElement).toBe(trigger.element);
+  });
+
+  it('constrains long menus to the available viewport height', async () => {
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 220 });
+
+    const Harness = defineComponent({
+      components: { ToolbarDropdown },
+      setup() {
+        const show = ref(false);
+        const options = Array.from({ length: 30 }, (_, index) => ({
+          key: `font-${index}`,
+          label: `Font ${index}`,
+          props: {},
+        }));
+        return { options, show };
+      },
+      template: `
+        <ToolbarDropdown v-model:show="show" :options="options">
+          <template #trigger>
+            <button data-test="trigger" type="button">Font family</button>
+          </template>
+        </ToolbarDropdown>
+      `,
+    });
+
+    wrapper = mount(Harness, { attachTo: document.body });
+    const triggerRoot = wrapper.get('[data-sd-part="dropdown-trigger"]').element;
+    triggerRoot.getBoundingClientRect = () => ({
+      bottom: 40,
+      left: 10,
+      right: 120,
+      top: 8,
+      width: 110,
+      height: 32,
+      x: 10,
+      y: 8,
+      toJSON: () => {},
+    });
+
+    wrapper.vm.show = true;
+    await nextTick();
+    await nextTick();
+
+    const menu = document.body.querySelector('.toolbar-dropdown-menu');
+    expect(menu.style.maxHeight).toBe('168px');
   });
 });
