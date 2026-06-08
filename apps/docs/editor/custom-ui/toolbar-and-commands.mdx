@@ -102,14 +102,26 @@ Use `useSuperDocFontOptions()` for a custom font dropdown. It returns the built-
 ```tsx
 import { useSuperDocCommand, useSuperDocFontOptions, useSuperDocUI } from 'superdoc/ui/react';
 
+function firstFontName(value: unknown) {
+  return typeof value === 'string' ? value.split(',')[0]?.trim().replace(/^["']|["']$/g, '') || '' : '';
+}
+
 function FontFamilyPicker() {
   const ui = useSuperDocUI();
   const font = useSuperDocCommand('font-family');
   const options = useSuperDocFontOptions();
+  const current = firstFontName(font.value).toLowerCase();
+  const selected =
+    options.find((option) => {
+      return (
+        firstFontName(option.value).toLowerCase() === current ||
+        firstFontName(option.previewFamily).toLowerCase() === current
+      );
+    })?.value ?? '';
 
   return (
     <select
-      value={typeof font.value === 'string' ? font.value : ''}
+      value={selected}
       disabled={font.disabled}
       onChange={(e) => ui?.toolbar.execute('font-family', e.target.value)}
     >

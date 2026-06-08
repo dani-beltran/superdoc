@@ -33,6 +33,26 @@ const scope = ui.createScope();
 
 const toolbar = document.querySelector<HTMLElement>('#toolbar')!;
 
+type FontOption = { label: string; value: string; previewFamily: string };
+
+function normalizeFontToken(value: unknown): string {
+  return typeof value === 'string' ? value.split(',')[0]?.trim().replace(/^["']|["']$/g, '') || '' : '';
+}
+
+function optionValueForCurrentFont(value: unknown, options: readonly FontOption[]): string {
+  const current = normalizeFontToken(value).toLowerCase();
+  if (!current) return '';
+
+  const match = options.find((option) => {
+    const logical = normalizeFontToken(option.value).toLowerCase();
+    const label = normalizeFontToken(option.label).toLowerCase();
+    const preview = normalizeFontToken(option.previewFamily).toLowerCase();
+    return current === logical || current === label || current === preview;
+  });
+
+  return match?.value ?? '';
+}
+
 // Built-in command buttons. Same shape, different ids. Each one
 // subscribes per-id so unrelated state changes don't re-render the
 // row.
@@ -81,9 +101,11 @@ fontSelect.setAttribute('aria-label', 'Font family');
 toolbar.appendChild(fontSelect);
 
 let currentFontValue = '';
+let currentFontOptions: FontOption[] = [];
 
 scope.add(
   ui.fonts.observe((snapshot) => {
+    currentFontOptions = [...snapshot.options];
     fontSelect.replaceChildren(
       ...snapshot.options.map((font) => {
         const option = document.createElement('option');
@@ -93,7 +115,7 @@ scope.add(
         return option;
       }),
     );
-    fontSelect.value = currentFontValue;
+    fontSelect.value = optionValueForCurrentFont(currentFontValue, currentFontOptions);
   }),
 );
 
@@ -103,7 +125,7 @@ if (fontCommand) {
     fontCommand.observe((state) => {
       fontSelect.disabled = state.disabled;
       currentFontValue = typeof state.value === 'string' ? state.value : '';
-      fontSelect.value = currentFontValue;
+      fontSelect.value = optionValueForCurrentFont(currentFontValue, currentFontOptions);
     }),
   );
 }
