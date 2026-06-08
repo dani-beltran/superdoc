@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { DocumentMode } from 'superdoc';
 import type { SelectionCapture } from 'superdoc/ui';
 import {
@@ -123,15 +123,34 @@ function FontFamilyPicker() {
   const font = useSuperDocCommand('font-family');
   const options = useSuperDocFontOptions();
   const capturedSelection = useRef<SelectionCapture | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const [open, setOpen] = useState(false);
   const current = normalizeFontValue(font.value).toLowerCase();
-  const selected =
+  const selectedOption =
     options.find((option) => {
       return (
         normalizeFontValue(option.value).toLowerCase() === current ||
         normalizeFontValue(option.label).toLowerCase() === current ||
         normalizeFontValue(option.previewFamily).toLowerCase() === current
       );
-    })?.value ?? '';
+    }) ?? null;
+  const selected = selectedOption?.value ?? '';
+
+  useEffect(() => {
+    if (!open) return;
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (!menuRef.current?.contains(event.target as Node | null)) setOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', closeOnOutsideClick);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('mousedown', closeOnOutsideClick);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [open]);
 
   const rememberSelection = () => {
     const capture = ui?.selection.capture();
@@ -144,29 +163,51 @@ function FontFamilyPicker() {
       ui.selection.restore(capturedSelection.current);
       capturedSelection.current = null;
     }
+    setOpen(false);
     ui.toolbar.execute('font-family', value);
   };
 
   return (
-    <select
-      className="tb-select tb-font-select"
-      value={selected}
-      disabled={!ui || font.disabled}
-      aria-label="Font family"
-      title="Font family"
-      onPointerDown={rememberSelection}
-      onFocus={rememberSelection}
-      onChange={(event) => applyFont(event.target.value)}
-    >
-      <option value="" disabled>
-        Font
-      </option>
-      {options.map((option) => (
-        <option key={option.value} value={option.value} style={{ fontFamily: option.previewFamily }}>
-          {option.label}
-        </option>
-      ))}
-    </select>
+    <div className="tb-font-menu" ref={menuRef}>
+      <button
+        type="button"
+        className="tb-select tb-font-select"
+        disabled={!ui || font.disabled}
+        aria-label="Font family"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        title="Font family"
+        style={{ fontFamily: selectedOption?.previewFamily }}
+        onMouseDown={(event) => {
+          event.preventDefault();
+          rememberSelection();
+        }}
+        onClick={() => setOpen((value) => !value)}
+      >
+        {selectedOption?.label ?? 'Font'}
+      </button>
+      {open && (
+        <div className="tb-font-options" role="listbox" aria-label="Font family">
+          {options.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              role="option"
+              aria-selected={option.value === selected}
+              className="tb-font-option"
+              style={{ fontFamily: option.previewFamily }}
+              onMouseDown={(event) => {
+                event.preventDefault();
+                rememberSelection();
+              }}
+              onClick={() => applyFont(option.value)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

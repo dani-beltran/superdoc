@@ -95,10 +95,24 @@ const sep = document.createElement('span');
 sep.className = 'sep';
 toolbar.appendChild(sep);
 
-const fontSelect = document.createElement('select');
-fontSelect.title = 'Font family';
-fontSelect.setAttribute('aria-label', 'Font family');
-toolbar.appendChild(fontSelect);
+const fontPicker = document.createElement('div');
+fontPicker.className = 'font-picker';
+toolbar.appendChild(fontPicker);
+
+const fontButton = document.createElement('button');
+fontButton.type = 'button';
+fontButton.className = 'font-picker-trigger';
+fontButton.title = 'Font family';
+fontButton.setAttribute('aria-label', 'Font family');
+fontButton.setAttribute('aria-haspopup', 'listbox');
+fontButton.setAttribute('aria-expanded', 'false');
+fontPicker.appendChild(fontButton);
+
+const fontMenu = document.createElement('div');
+fontMenu.className = 'font-picker-menu';
+fontMenu.setAttribute('role', 'listbox');
+fontMenu.hidden = true;
+fontPicker.appendChild(fontMenu);
 
 let currentFontValue = '';
 let currentFontOptions: FontOption[] = [];
@@ -109,43 +123,90 @@ const rememberFontSelection = () => {
   if (capture) capturedFontSelection = capture;
 };
 
+const selectedFontOption = () => {
+  const value = optionValueForCurrentFont(currentFontValue, currentFontOptions);
+  return currentFontOptions.find((font) => font.value === value) ?? null;
+};
+
+const setFontMenuOpen = (open: boolean) => {
+  fontMenu.hidden = !open;
+  fontButton.setAttribute('aria-expanded', String(open));
+};
+
+const refreshFontButton = () => {
+  const selected = selectedFontOption();
+  fontButton.textContent = selected?.label ?? 'Font';
+  fontButton.style.fontFamily = selected?.previewFamily ?? '';
+};
+
+const applyFontValue = (value: string) => {
+  if (capturedFontSelection) {
+    ui.selection.restore(capturedFontSelection);
+    capturedFontSelection = null;
+  }
+  setFontMenuOpen(false);
+  ui.toolbar.execute('font-family', value);
+};
+
+const renderFontOptions = () => {
+  const selectedValue = selectedFontOption()?.value ?? '';
+  fontMenu.replaceChildren(
+    ...currentFontOptions.map((font) => {
+      const option = document.createElement('button');
+      option.type = 'button';
+      option.className = 'font-picker-option';
+      option.textContent = font.label;
+      option.style.fontFamily = font.previewFamily;
+      option.setAttribute('role', 'option');
+      option.setAttribute('aria-selected', String(font.value === selectedValue));
+      option.addEventListener('mousedown', (event) => {
+        event.preventDefault();
+        rememberFontSelection();
+      });
+      option.addEventListener('click', () => applyFontValue(font.value));
+      return option;
+    }),
+  );
+};
+
 scope.add(
   ui.fonts.observe((snapshot) => {
     currentFontOptions = [...snapshot.options];
-    fontSelect.replaceChildren(
-      ...snapshot.options.map((font) => {
-        const option = document.createElement('option');
-        option.value = font.value;
-        option.textContent = font.label;
-        option.style.fontFamily = font.previewFamily;
-        return option;
-      }),
-    );
-    fontSelect.value = optionValueForCurrentFont(currentFontValue, currentFontOptions);
+    renderFontOptions();
+    refreshFontButton();
   }),
 );
 
-fontSelect.addEventListener('pointerdown', rememberFontSelection);
-fontSelect.addEventListener('focus', rememberFontSelection);
+fontButton.addEventListener('mousedown', (event) => {
+  event.preventDefault();
+  rememberFontSelection();
+});
+fontButton.addEventListener('click', () => setFontMenuOpen(fontMenu.hidden));
+
+const closeFontMenuOnOutsideClick = (event: MouseEvent) => {
+  if (!fontPicker.contains(event.target as Node | null)) setFontMenuOpen(false);
+};
+const closeFontMenuOnEscape = (event: KeyboardEvent) => {
+  if (event.key === 'Escape') setFontMenuOpen(false);
+};
+document.addEventListener('mousedown', closeFontMenuOnOutsideClick);
+document.addEventListener('keydown', closeFontMenuOnEscape);
+scope.add(() => {
+  document.removeEventListener('mousedown', closeFontMenuOnOutsideClick);
+  document.removeEventListener('keydown', closeFontMenuOnEscape);
+});
 
 const fontCommand = ui.commands.get('font-family');
 if (fontCommand) {
   scope.add(
     fontCommand.observe((state) => {
-      fontSelect.disabled = state.disabled;
+      fontButton.disabled = state.disabled;
       currentFontValue = typeof state.value === 'string' ? state.value : '';
-      fontSelect.value = optionValueForCurrentFont(currentFontValue, currentFontOptions);
+      renderFontOptions();
+      refreshFontButton();
     }),
   );
 }
-
-fontSelect.addEventListener('change', () => {
-  if (capturedFontSelection) {
-    ui.selection.restore(capturedFontSelection);
-    capturedFontSelection = null;
-  }
-  ui.toolbar.execute('font-family', fontSelect.value);
-});
 
 const fontSep = document.createElement('span');
 fontSep.className = 'sep';

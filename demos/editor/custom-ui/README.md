@@ -26,7 +26,7 @@ Open http://localhost:5189.
 - Click **Scroll to** in the sources panel to navigate to a cited span. Uses `ui.metadata.scrollIntoView({ id })`.
 - Click **Edit** on a citation to change `displayText`, `locator`, or `excerpt`. Calls `editor.doc.metadata.update`.
 - Click **Remove** to strip the anchor and payload. Calls `editor.doc.metadata.remove`.
-- Click toolbar buttons (bold, italic, lists, undo, redo) wired through `useSuperDocCommand`, and use the font-family picker powered by `useSuperDocFontOptions`. The picker captures and restores the editor selection around the native select.
+- Click toolbar buttons (bold, italic, lists, undo, redo) wired through `useSuperDocCommand`, and use the font-family picker powered by `useSuperDocFontOptions`. The picker uses a button menu so opening it does not move focus away from the editor selection.
 - Insert a custom clause registered with `ui.commands.register`. The button works, and so does its keyboard shortcut `Mod-Shift-C`, declared on the registration rather than wired in a separate keydown listener.
 - Switch between Edit and Suggest. In Suggest, every edit lands as a tracked change.
 - Select text and watch the floating bubble menu appear next to the selection (anchored via `ui.selection.getAnchorRect()`, not `window.getSelection()`).
