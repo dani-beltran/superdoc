@@ -15,8 +15,8 @@
  * Derived from `SUBSTITUTION_EVIDENCE` x `BUNDLED_MANIFEST`. Adding/retiring a font is an evidence
  * edit, never a hand-maintained toolbar list.
  */
-import { SUBSTITUTION_EVIDENCE, type CssGeneric, type SubstituteVerdict } from './substitution-evidence';
 import { BUNDLED_MANIFEST } from './bundled-manifest';
+import { type CssGeneric, SUBSTITUTION_EVIDENCE, type SubstituteVerdict } from './substitution-evidence';
 
 /** CSS generic family used to terminate an offering's fallback stack. */
 export type FontGeneric = CssGeneric;
@@ -26,7 +26,7 @@ export type OfferingClass =
   | 'default' // metric_safe + bundled: safe to advertise as a normal default toolbar option
   | 'qualified' // bundled and renderable, but with fidelity caveats (visual_only / near_metric), e.g. Cambria
   | 'category_fallback' // a usable family fallback, not a faithful clone, e.g. Calibri Light -> Carlito
-  | 'requires_asset' // a candidate exists, but SuperDoc does not bundle its asset yet, e.g. Georgia -> Gelasio
+  | 'requires_asset' // a candidate exists, but SuperDoc does not bundle its asset yet, e.g. Arial Narrow
   | 'customer_supplied' // no open substitute; the real font must come from the customer, e.g. Aptos
   | 'preserve_only'; // keep the name, never a default option, e.g. Cambria Math
 
@@ -93,8 +93,8 @@ function compareLogicalFamily(a: FontOffering, b: FontOffering): number {
 
 /**
  * The metric-safe, bundled-backed offerings safe to treat as clean defaults, sorted by logical family.
- * Excludes qualified rows (Cambria, Cooper Black), category fallbacks (Calibri Light), and
- * not-yet-bundled candidates (Georgia).
+ * Excludes qualified rows (Cambria, Cooper Black, Georgia), category fallbacks (Calibri Light,
+ * Tahoma), and not-yet-bundled candidates.
  */
 export function getDefaultFontOfferings(): FontOffering[] {
   return FONT_OFFERINGS.filter((o) => o.offering === 'default').sort(compareLogicalFamily);

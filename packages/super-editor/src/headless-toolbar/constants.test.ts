@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { DEFAULT_FONT_FAMILY_OPTIONS } from './constants';
 
 describe('DEFAULT_FONT_FAMILY_OPTIONS (headless default font options, derived from the font-offering registry)', () => {
@@ -13,9 +13,13 @@ describe('DEFAULT_FONT_FAMILY_OPTIONS (headless default font options, derived fr
     ]);
   });
 
-  it('drops non-bundled fonts from defaults', () => {
+  it('drops non-advertised fonts from defaults', () => {
     const labels = new Set(DEFAULT_FONT_FAMILY_OPTIONS.map((o) => o.label));
     expect(labels.has('Aptos')).toBe(false);
     expect(labels.has('Georgia')).toBe(false);
+    expect(labels.has('Garamond')).toBe(false);
+    expect(labels.has('Comic Sans MS')).toBe(false);
+    expect(labels.has('Tahoma')).toBe(false);
+    expect(labels.has('Trebuchet MS')).toBe(false);
   });
 });
