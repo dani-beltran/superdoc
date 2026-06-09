@@ -7,8 +7,8 @@
  * Three consumers are intended:
  *   1. CLEAN defaults - reliable, bundled, metric-safe fonts SuperDoc can render deterministically.
  *      Built from {@link getDefaultFontOfferings}.
- *   2. BUILT-IN toolbar options - bundled choices SuperDoc can render, plus qualified rows the product
- *      has explicitly chosen to advertise. Built from {@link getBuiltInToolbarFontOfferings}.
+ *   2. BUILT-IN toolbar options - bundled choices SuperDoc can render, plus qualified/category rows
+ *      the product has explicitly chosen to advertise. Built from {@link getBuiltInToolbarFontOfferings}.
  *   3. DOCUMENT-specific options - whatever a given document actually uses. Those are
  *      document-scoped and runtime-aware; this static module only provides the default offerings.
  *
@@ -24,7 +24,7 @@ export type FontGeneric = CssGeneric;
 /** Which UI surface a logical font may appear on. A product decision, distinct from the verdict. */
 export type OfferingClass =
   | 'default' // metric_safe + bundled: safe to advertise as a normal default toolbar option
-  | 'qualified' // bundled and renderable, but with fidelity caveats (visual_only / near_metric), e.g. Cambria
+  | 'qualified' // bundled and renderable, but with fidelity caveats (visual_only / near_metric), e.g. Georgia
   | 'category_fallback' // a usable family fallback, not a faithful clone, e.g. Calibri Light -> Carlito
   | 'requires_asset' // a candidate exists, but SuperDoc does not bundle its asset yet, e.g. Arial Narrow
   | 'customer_supplied' // no open substitute; the real font must come from the customer, e.g. Aptos
@@ -44,14 +44,21 @@ export interface FontOffering {
    * later document-scoped offering function.
    */
   bundled: boolean;
-  /** docfonts fidelity verdict, used to separate clean defaults from qualified bundled fallbacks. */
+  /** docfonts fidelity verdict, used to separate clean defaults from qualified/category fallbacks. */
   verdict: SubstituteVerdict;
   /** Provenance back to the evidence row. */
   evidenceId: string;
 }
 
 const BUNDLED_FAMILIES: ReadonlySet<string> = new Set(BUNDLED_MANIFEST.map((f) => f.family));
-const ADVERTISED_QUALIFIED_TOOLBAR_FAMILIES: ReadonlySet<string> = new Set(['Cooper Black']);
+const ADVERTISED_BUILT_IN_TOOLBAR_FAMILIES: ReadonlySet<string> = new Set([
+  'Cooper Black',
+  'Comic Sans MS',
+  'Garamond',
+  'Georgia',
+  'Tahoma',
+  'Trebuchet MS',
+]);
 
 /** Classify one evidence row by its policy action, verdict, and whether its target is bundled. */
 function classifyOffering(
@@ -101,15 +108,17 @@ export function getDefaultFontOfferings(): FontOffering[] {
 }
 
 /**
- * Built-in font picker options SuperDoc can render from its bundled assets. Includes clean defaults
- * plus qualified bundled fallbacks that are explicit product choices. Consumers that need strict
- * metric-safe choices should use {@link getDefaultFontOfferings}.
+ * Built-in font picker options SuperDoc can render from its bundled assets. Includes clean defaults plus
+ * explicitly advertised qualified/category fallbacks. Consumers that need strict metric-safe choices
+ * should use {@link getDefaultFontOfferings}.
  */
 export function getBuiltInToolbarFontOfferings(): FontOffering[] {
   return FONT_OFFERINGS.filter(
     (o) =>
       o.offering === 'default' ||
-      (o.offering === 'qualified' && ADVERTISED_QUALIFIED_TOOLBAR_FAMILIES.has(o.logicalFamily)),
+      (o.bundled &&
+        ADVERTISED_BUILT_IN_TOOLBAR_FAMILIES.has(o.logicalFamily) &&
+        (o.offering === 'qualified' || o.offering === 'category_fallback')),
   ).sort(compareLogicalFamily);
 }
 

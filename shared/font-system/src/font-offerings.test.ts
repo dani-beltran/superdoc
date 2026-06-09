@@ -10,13 +10,25 @@ import {
 import { SUBSTITUTION_EVIDENCE } from './substitution-evidence';
 
 const EXPECTED_DEFAULTS = ['Arial', 'Calibri', 'Courier New', 'Helvetica', 'Times New Roman'];
-const EXPECTED_BUILT_IN_TOOLBAR = ['Arial', 'Calibri', 'Cooper Black', 'Courier New', 'Helvetica', 'Times New Roman'];
+const EXPECTED_BUILT_IN_TOOLBAR = [
+  'Arial',
+  'Calibri',
+  'Comic Sans MS',
+  'Cooper Black',
+  'Courier New',
+  'Garamond',
+  'Georgia',
+  'Helvetica',
+  'Tahoma',
+  'Times New Roman',
+  'Trebuchet MS',
+];
 
 /**
  * Must NOT appear as DEFAULT options yet. Aptos has no clone, Arial Narrow still requires an asset,
  * Cambria/Georgia/Cooper Black are qualified, and Calibri Light/Tahoma/Trebuchet MS/Garamond/Comic
- * Sans MS are category fallbacks. They can reach the toolbar as document-specific options, never as
- * silent defaults.
+ * Sans MS are category fallbacks. Some may be explicit built-in picker choices, but none should become
+ * silent strict defaults.
  */
 const NOT_DEFAULT_YET = [
   'Aptos',
@@ -45,7 +57,7 @@ describe('font offerings', () => {
     }
   });
 
-  it('built-in toolbar offerings include bundled qualified rows without reclassifying them as defaults', () => {
+  it('built-in toolbar offerings include advertised bundled rows without reclassifying them as defaults', () => {
     expect(getBuiltInToolbarFontOfferings().map((o) => o.logicalFamily)).toEqual(EXPECTED_BUILT_IN_TOOLBAR);
     expect(getBuiltInToolbarFontOfferings().find((o) => o.logicalFamily === 'Cooper Black')).toMatchObject({
       offering: 'qualified',
@@ -82,10 +94,15 @@ describe('font offerings', () => {
     expect(getDefaultFontFamilyOptions()).toEqual([
       { label: 'Arial', value: 'Arial, sans-serif' },
       { label: 'Calibri', value: 'Calibri, sans-serif' },
+      { label: 'Comic Sans MS', value: 'Comic Sans MS, sans-serif' },
       { label: 'Cooper Black', value: 'Cooper Black, serif' },
       { label: 'Courier New', value: 'Courier New, monospace' },
+      { label: 'Garamond', value: 'Garamond, serif' },
+      { label: 'Georgia', value: 'Georgia, serif' },
       { label: 'Helvetica', value: 'Helvetica, sans-serif' },
+      { label: 'Tahoma', value: 'Tahoma, sans-serif' },
       { label: 'Times New Roman', value: 'Times New Roman, serif' },
+      { label: 'Trebuchet MS', value: 'Trebuchet MS, sans-serif' },
     ]);
   });
 
