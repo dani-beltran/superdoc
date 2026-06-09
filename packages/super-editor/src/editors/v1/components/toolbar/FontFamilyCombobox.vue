@@ -2,7 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { toolbarIcons } from './toolbarIcons.js';
 import { useHighContrastMode } from '../../composables/use-high-contrast-mode';
-import { computeTypeahead, findPrefixMatchIndex } from './font-typeahead.js';
+import { computeTypeahead, findPrefixMatchIndex, normalizeCustomFontFamily } from './font-typeahead.js';
 
 const props = defineProps({
   item: {
@@ -196,15 +196,22 @@ const onInput = (event) => {
   if (isComposing.value) return;
   const el = event.target;
   const typed = el.value;
+  const selectionStart = typeof el.selectionStart === 'number' ? el.selectionStart : typed.length;
+  const selectionEnd = typeof el.selectionEnd === 'number' ? el.selectionEnd : selectionStart;
   const isDelete = typeof event.inputType === 'string' && event.inputType.startsWith('delete');
+  const editAtEnd = selectionStart === typed.length && selectionEnd === typed.length;
   query.value = typed;
-  const result = computeTypeahead(typed, optionLabels.value, { autocomplete: !isDelete });
+  const result = computeTypeahead(typed, optionLabels.value, { autocomplete: !isDelete && editAtEnd });
   // Drive the value imperatively: the autocompleted string can be identical across
   // keystrokes (typing "A" then "r" both complete to "Arial"), so a one-way :value
   // binding would not re-patch the DOM and the completion would be lost.
   inputDisplay.value = result.display;
   el.value = result.display;
-  setSelectionRange(result.selectionStart, result.selectionEnd);
+  if (result.display === typed && !editAtEnd) {
+    setSelectionRange(selectionStart, selectionEnd);
+  } else {
+    setSelectionRange(result.selectionStart, result.selectionEnd);
+  }
   if (isOpen.value) {
     activeIndex.value = result.matchIndex;
     nextTick(scrollActiveIntoView);
@@ -249,7 +256,7 @@ const applySelection = () => {
     applyOption(options.value[matchIndex]);
     return true;
   }
-  const custom = query.value.trim();
+  const custom = normalizeCustomFontFamily(query.value);
   if (custom) {
     emitFontCommand(custom, null);
     isEditing.value = false;
@@ -301,7 +308,7 @@ const onKeydown = (event) => {
     case 'Escape':
       event.preventDefault();
       resetToApplied();
-      inputRef.value?.blur();
+      nextTick(() => inputRef.value?.focus());
       break;
     default:
       break;

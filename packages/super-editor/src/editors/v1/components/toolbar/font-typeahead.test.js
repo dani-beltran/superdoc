@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { findPrefixMatchIndex, computeTypeahead } from './font-typeahead.js';
+import { findPrefixMatchIndex, computeTypeahead, normalizeCustomFontFamily } from './font-typeahead.js';
 
 const LABELS = ['Arial', 'Calibri', 'Cambria', 'Times New Roman'];
 
@@ -57,5 +57,25 @@ describe('computeTypeahead', () => {
     expect(result.display).toBe('Arial');
     expect(result.selectionStart).toBe(5);
     expect(result.selectionEnd).toBe(5);
+  });
+});
+
+describe('normalizeCustomFontFamily', () => {
+  it('keeps a bare logical font name', () => {
+    expect(normalizeCustomFontFamily('Brand Sans')).toBe('Brand Sans');
+  });
+
+  it('uses only the first family from a CSS-style stack', () => {
+    expect(normalizeCustomFontFamily('Arial,sans-serif')).toBe('Arial');
+    expect(normalizeCustomFontFamily('Arial, sans-serif')).toBe('Arial');
+  });
+
+  it('strips wrapping quotes and collapses whitespace', () => {
+    expect(normalizeCustomFontFamily(' "Brand   Sans" , serif')).toBe('Brand Sans');
+  });
+
+  it('rejects empty or control-only custom names', () => {
+    expect(normalizeCustomFontFamily(', serif')).toBe('');
+    expect(normalizeCustomFontFamily('\u0000\u0007')).toBe('');
   });
 });

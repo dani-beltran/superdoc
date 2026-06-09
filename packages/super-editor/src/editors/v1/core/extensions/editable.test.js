@@ -286,6 +286,47 @@ describe('Editable extension insertText beforeinput handling', () => {
     expect(nextPrevented).toBe(false);
   });
 
+  it('does not use a preserved toolbar selection after the caret moves', () => {
+    ({ editor } = initTestEditor({
+      mode: 'text',
+      content: '<p>seed text after</p>',
+    }));
+
+    const selectedRange = findTextRange(editor.state.doc, 'seed text');
+    const afterRange = findTextRange(editor.state.doc, 'after');
+    expect(selectedRange).not.toBeNull();
+    expect(afterRange).not.toBeNull();
+
+    const preservedSelection = TextSelection.create(editor.state.doc, selectedRange.from, selectedRange.to);
+    editor.view.dispatch(
+      editor.state.tr
+        .setSelection(TextSelection.create(editor.state.doc, selectedRange.to))
+        .setMeta(CustomSelectionPluginKey, {
+          focused: true,
+          preservedSelection,
+          showVisualSelection: true,
+          skipFocusReset: false,
+        }),
+    );
+
+    expect(CustomSelectionPluginKey.getState(editor.state)?.preservedSelection).not.toBeNull();
+
+    editor.view.dispatch(editor.state.tr.setSelection(TextSelection.create(editor.state.doc, afterRange.to)));
+
+    expect(CustomSelectionPluginKey.getState(editor.state)?.preservedSelection).toBeNull();
+
+    const beforeInputEvent = new InputEvent('beforeinput', {
+      data: 'X',
+      inputType: 'insertText',
+      bubbles: true,
+      cancelable: true,
+    });
+    const prevented = !editor.view.dom.dispatchEvent(beforeInputEvent);
+
+    expect(prevented).toBe(false);
+    expect(editor.state.doc.textContent).toBe('seed text after');
+  });
+
   it('does not intercept collapsed beforeinput insertText', () => {
     ({ editor } = initTestEditor({
       mode: 'text',

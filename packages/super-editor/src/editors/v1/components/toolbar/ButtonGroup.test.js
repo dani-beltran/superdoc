@@ -1,4 +1,4 @@
-import { afterEach, describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { mount, shallowMount } from '@vue/test-utils';
 import { h, nextTick, ref } from 'vue';
 import ButtonGroup from './ButtonGroup.vue';
@@ -213,14 +213,16 @@ describe('ButtonGroup dropdown trigger keyboard activation (codex P2 regression)
 
   // Real ToolbarButton (no stub) inside the dropdown branch so we exercise
   // the actual @keydown.enter handler + allowEnterPropagation plumbing.
-  const mountWithDropdownItem = (item) =>
+  const mountWithDropdownItem = (item, globalOverrides = {}) =>
     mount(ButtonGroup, {
       props: { toolbarItems: [item], overflowItems: [] },
       attachTo: document.body,
       global: {
+        ...globalOverrides,
         stubs: {
           // Render SdTooltip's trigger slot so the real ToolbarButton mounts.
           SdTooltip: { name: 'SdTooltip', template: '<div><slot name="trigger" /></div>' },
+          ...(globalOverrides.stubs ?? {}),
         },
       },
     });
@@ -353,6 +355,21 @@ describe('ButtonGroup dropdown trigger keyboard activation (codex P2 regression)
     expect(wrapper.findComponent({ name: 'FontFamilyCombobox' }).exists()).toBe(true);
   });
 
+  it('does not render the font family combobox when the font options list is empty', () => {
+    const item = {
+      ...createFullDropdownItem('Arial'),
+      command: 'setFontFamily',
+      id: ref('font-family'),
+      name: ref('fontFamily'),
+      label: ref('Arial'),
+      selectedValue: ref('Arial'),
+      nestedOptions: ref([]),
+    };
+    wrapper = mountWithDropdownItem(item);
+
+    expect(wrapper.findComponent({ name: 'FontFamilyCombobox' }).exists()).toBe(false);
+  });
+
   it('opens the font family combobox from roving keyboard activation', async () => {
     const item = {
       ...createFullDropdownItem('Arial'),
@@ -451,11 +468,16 @@ describe('ButtonGroup dropdown trigger keyboard activation (codex P2 regression)
       hasInlineTextInput: ref(true),
       nestedOptions: ref([{ key: '12pt', label: '12', props: { 'data-item': 'btn-fontSize-option' } }]),
     };
-    wrapper = mountWithDropdownItem(item);
-    const editor = document.createElement('div');
-    editor.className = 'ProseMirror';
-    editor.tabIndex = 0;
-    document.body.appendChild(editor);
+    const focusEditor = vi.fn();
+    wrapper = mountWithDropdownItem(item, {
+      mocks: {
+        $toolbar: {
+          activeEditor: {
+            focus: focusEditor,
+          },
+        },
+      },
+    });
 
     const input = wrapper.get('#inlineTextInput-fontSize');
     await input.trigger('focus');
@@ -466,6 +488,6 @@ describe('ButtonGroup dropdown trigger keyboard activation (codex P2 regression)
 
     expect(event.defaultPrevented).toBe(true);
     expect(wrapper.emitted('command')?.[0]?.[0].argument).toBe('18');
-    expect(document.activeElement).toBe(editor);
+    expect(focusEditor).toHaveBeenCalledTimes(1);
   });
 });

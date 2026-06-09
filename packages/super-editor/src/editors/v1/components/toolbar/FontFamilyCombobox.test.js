@@ -205,6 +205,32 @@ describe('FontFamilyCombobox', () => {
     });
   });
 
+  it('normalizes a typed custom font before applying it', async () => {
+    const { input } = mountCombobox();
+
+    await input.trigger('focus');
+    await input.setValue('"Brand Sans", sans-serif');
+    await input.trigger('keydown', { key: 'Enter' });
+
+    expect(wrapper.emitted('command')?.[0]?.[0]).toMatchObject({
+      argument: 'Brand Sans',
+      option: null,
+    });
+  });
+
+  it('keeps the caret position for mid-string custom edits', async () => {
+    const { input } = mountCombobox();
+
+    await input.trigger('focus');
+    input.element.value = 'Brand Sans';
+    input.element.setSelectionRange(5, 5);
+    await input.trigger('input', { inputType: 'insertText' });
+
+    expect(input.element.value).toBe('Brand Sans');
+    expect(input.element.selectionStart).toBe(5);
+    expect(input.element.selectionEnd).toBe(5);
+  });
+
   it('restores the applied label on Escape without applying a command', async () => {
     const { input } = mountCombobox();
 
@@ -213,8 +239,10 @@ describe('FontFamilyCombobox', () => {
     expect(input.element.value).toBe('Brand Sans');
 
     await input.trigger('keydown', { key: 'Escape' });
+    await nextTick();
 
     expect(input.element.value).toBe('Arial');
+    expect(document.activeElement).toBe(input.element);
     expect(wrapper.emitted('command')).toBeUndefined();
   });
 

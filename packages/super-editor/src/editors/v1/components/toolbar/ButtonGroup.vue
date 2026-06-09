@@ -79,6 +79,7 @@ const isDropdown = (item) => item.type === 'dropdown';
 const isFontFamily = (item) => item.type === 'dropdown' && item.name?.value === 'fontFamily';
 const isSeparator = (item) => item.type === 'separator';
 const isOverflow = (item) => item.type === 'overflow';
+const hasNestedOptions = (item) => Boolean(item.nestedOptions?.value?.length);
 
 const getExpanded = (item) => {
   if (!item) return false;
@@ -184,7 +185,7 @@ const waitForFrame = () => new Promise((resolve) => requestAnimationFrame(resolv
 const handleComboboxTabOut = (startIndex, event) => {
   closeDropdowns();
   if (event.shiftKey) {
-    focusAdjacentToolbarControlAfterUpdate(startIndex, -1);
+    focusAdjacentToolbarControlAfterUpdate(startIndex, -1, () => focusPreviousButtonGroup() || focusEditor());
   } else {
     focusAdjacentToolbarControlAfterUpdate(startIndex, 1, true);
   }
@@ -245,9 +246,15 @@ const moveToPreviousButton = (e) => {
 };
 
 const focusEditor = () => {
-  const editor = document.querySelector('.ProseMirror');
-  if (editor instanceof HTMLElement) {
+  const editor = proxy?.$toolbar?.activeEditor;
+  if (editor && typeof editor.focus === 'function') {
     editor.focus();
+    return true;
+  }
+
+  const editorDom = editor?.view?.dom;
+  if (editorDom instanceof HTMLElement) {
+    editorDom.focus();
     return true;
   }
   return false;
@@ -291,10 +298,27 @@ const focusToolbarControlFromIndex = (startIndex, direction) => {
   return false;
 };
 
-const focusAdjacentToolbarControlAfterUpdate = async (startIndex, direction, fallbackToEditor = false) => {
+const focusPreviousButtonGroup = () => {
+  const previousButtonGroup = buttonGroupRef.value?.previousElementSibling;
+  if (previousButtonGroup instanceof HTMLElement) {
+    previousButtonGroup.setAttribute('tabindex', '0');
+    previousButtonGroup.focus();
+    return true;
+  }
+  return false;
+};
+
+const focusAdjacentToolbarControlAfterUpdate = async (startIndex, direction, fallback = false) => {
   await nextTick();
   await waitForFrame();
-  if (!focusToolbarControlFromIndex(startIndex, direction) && fallbackToEditor) {
+  if (focusToolbarControlFromIndex(startIndex, direction)) {
+    return;
+  }
+  if (typeof fallback === 'function') {
+    fallback();
+    return;
+  }
+  if (fallback) {
     focusEditor();
   }
 };
@@ -479,7 +503,7 @@ onBeforeUnmount(() => {
       <ToolbarSeparator v-if="isSeparator(item)" style="width: 20px" />
 
       <SdTooltip
-        v-if="isFontFamily(item)"
+        v-if="isFontFamily(item) && hasNestedOptions(item)"
         trigger="hover"
         :disabled="!item.tooltip?.value"
         :auto-hide-duration="TOOLBAR_TOOLTIP_AUTO_HIDE_MS"
@@ -503,7 +527,7 @@ onBeforeUnmount(() => {
 
       <!-- Toolbar button -->
       <ToolbarDropdown
-        v-else-if="isDropdown(item) && item.nestedOptions?.value?.length"
+        v-else-if="isDropdown(item) && hasNestedOptions(item)"
         :options="dropdownOptions(item)"
         :disabled="item.disabled.value"
         :show="getExpanded(item)"

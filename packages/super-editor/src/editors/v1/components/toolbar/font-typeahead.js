@@ -64,3 +64,20 @@ export const computeTypeahead = (query, labels, { autocomplete = true } = {}) =>
     selectionEnd: typed.length,
   };
 };
+
+const stripWrappingQuotes = (value) => {
+  let result = String(value ?? '').trim();
+  while (
+    result.length >= 2 &&
+    ((result.startsWith('"') && result.endsWith('"')) || (result.startsWith("'") && result.endsWith("'")))
+  ) {
+    result = result.slice(1, -1).trim();
+  }
+  return result;
+};
+
+export const normalizeCustomFontFamily = (value) => {
+  const firstFamily = String(value ?? '').split(',')[0] ?? '';
+  const withoutControls = firstFamily.replace(/[\u0000-\u001f\u007f]/g, '');
+  return stripWrappingQuotes(withoutControls).replace(/\s+/g, ' ').trim();
+};
