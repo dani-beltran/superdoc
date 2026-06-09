@@ -22,7 +22,9 @@ async function selectDropdownOption(superdoc: SuperDocFixture, dataItem: string,
   const trigger =
     dataItem === 'fontFamily'
       ? superdoc.page.locator('[data-item="btn-fontFamily-toggle"]')
-      : superdoc.page.locator(`[data-item="btn-${dataItem}"]`);
+      : dataItem === 'fontSize'
+        ? superdoc.page.locator('[data-item="btn-fontSize"] .sd-dropdown-caret')
+        : superdoc.page.locator(`[data-item="btn-${dataItem}"]`);
   await trigger.click();
   await superdoc.waitForStable();
   await superdoc.page.locator(`[data-item="btn-${dataItem}-option"]`).filter({ hasText: optionText }).click();
