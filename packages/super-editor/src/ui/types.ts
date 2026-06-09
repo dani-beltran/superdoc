@@ -20,6 +20,11 @@ export type SelectorFn<TState, TSlice> = (state: TState) => TSlice;
 
 export type { FontFamilyOption } from '@superdoc/font-system';
 
+export type FontSizeOption = {
+  label: string;
+  value: string;
+};
+
 /**
  * A read-only signal. `get()` is synchronous; `subscribe()` invokes the
  * listener once with the current value, then again whenever the value
@@ -369,6 +374,8 @@ export interface SuperDocUIState {
 export interface FontsSlice {
   /** Final font-family picker rows: bundled defaults plus active document fonts. */
   options: import('@superdoc/font-system').FontFamilyOption[];
+  /** Default font-size picker rows for custom toolbar UIs. */
+  sizeOptions: FontSizeOption[];
 }
 
 /**
@@ -1187,6 +1194,8 @@ export interface FontsHandle {
   observe(listener: (snapshot: FontsSlice) => void): () => void;
   /** Convenience read for `getSnapshot().options`. */
   getOptions(): import('@superdoc/font-system').FontFamilyOption[];
+  /** Convenience read for `getSnapshot().sizeOptions`. */
+  getSizeOptions(): FontSizeOption[];
 }
 
 /**

@@ -1,4 +1,5 @@
 import { createHeadlessToolbar } from '../headless-toolbar/index.js';
+import { DEFAULT_FONT_SIZE_OPTIONS } from '../headless-toolbar/constants.js';
 import { resolveToolbarSources } from '../headless-toolbar/resolve-toolbar-sources.js';
 import { createToolbarRegistry } from '../headless-toolbar/toolbar-registry.js';
 import type {
@@ -45,6 +46,7 @@ import type {
   DocumentSlice,
   DynamicCommandHandle,
   EqualityFn,
+  FontSizeOption,
   FontsHandle,
   MetadataHandle,
   TrackChangesHandle,
@@ -179,6 +181,8 @@ const ALL_TOOLBAR_COMMAND_IDS: PublicToolbarItemId[] = Object.keys(createToolbar
  * `ui.comments.subscribe` even when nothing in the slice changed.
  */
 const EMPTY_ACTIVE_IDS: readonly string[] = Object.freeze<string[]>([]);
+
+const FONT_SIZE_OPTIONS: FontSizeOption[] = DEFAULT_FONT_SIZE_OPTIONS.map(({ label, value }) => ({ label, value }));
 
 /**
  * Recursive structural clone for `ui.selection.capture()` (SD-2821).
@@ -1024,7 +1028,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
       document: documentSlice,
       selection: selectionSlice,
       zoom: computeZoomSlice(),
-      fonts: { options: fontOptionsCache },
+      fonts: { options: fontOptionsCache, sizeOptions: FONT_SIZE_OPTIONS },
       toolbar: { context: toolbarSnapshot.context, commands: builtInCommands } as ToolbarSnapshotSlice,
       comments: {
         total: commentsListCache.total,
@@ -2473,7 +2477,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
   };
 
   const fonts: FontsHandle = {
-    getSnapshot: () => ({ options: fontOptionsCache }),
+    getSnapshot: () => ({ options: fontOptionsCache, sizeOptions: FONT_SIZE_OPTIONS }),
     subscribe(listener) {
       return select((state) => state.fonts, shallowEqual).subscribe((snapshot) => {
         try {
@@ -2493,6 +2497,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
       });
     },
     getOptions: () => fontOptionsCache,
+    getSizeOptions: () => FONT_SIZE_OPTIONS,
   };
 
   // Live scopes created via `ui.createScope()`. The controller's
