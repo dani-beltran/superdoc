@@ -1953,7 +1953,10 @@ export class PresentationEditor extends EventEmitter {
    * @returns The scroll container element, or `null` when the window scrolls
    */
   get scrollContainer(): HTMLElement | null {
-    return this.#scrollContainer instanceof HTMLElement ? this.#scrollContainer : null;
+    const container = this.#scrollContainer;
+    if (!container || !('ownerDocument' in container)) return null;
+    const HTMLElementCtor = container.ownerDocument?.defaultView?.HTMLElement;
+    return HTMLElementCtor && container instanceof HTMLElementCtor ? (container as HTMLElement) : null;
   }
 
   /**
