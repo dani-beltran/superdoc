@@ -128,19 +128,35 @@ const menuStyle = computed(() => ({
   zIndex: 2000,
 }));
 
-const openList = (index) => {
-  if (disabled.value || !options.value.length) return;
+const setItemExpanded = (open) => {
+  if (props.item.expand && typeof props.item.expand === 'object' && 'value' in props.item.expand) {
+    props.item.expand.value = open;
+  }
+};
+
+const openList = (index, { focusInput = false } = {}) => {
+  if (disabled.value || !options.value.length) {
+    setItemExpanded(false);
+    return;
+  }
   isOpen.value = true;
+  setItemExpanded(true);
   activeIndex.value = index ?? -1;
+  if (focusInput) {
+    isEditing.value = true;
+    inputDisplay.value = appliedLabel.value;
+    inputRef.value?.focus();
+  }
   nextTick(() => {
     updatePosition();
     scrollActiveIntoView();
   });
 };
 
-const closeList = () => {
+const closeList = ({ syncItem = true } = {}) => {
   isOpen.value = false;
   activeIndex.value = -1;
+  if (syncItem) setItemExpanded(false);
 };
 
 const resetToApplied = () => {
@@ -193,6 +209,11 @@ const onInput = (event) => {
     activeIndex.value = result.matchIndex;
     nextTick(scrollActiveIntoView);
   }
+};
+
+const onCompositionEnd = (event) => {
+  isComposing.value = false;
+  onInput(event);
 };
 
 const moveActive = (direction) => {
@@ -248,7 +269,8 @@ const onKeydown = (event) => {
     case 'ArrowDown':
       event.preventDefault();
       if (!isOpen.value) {
-        const index = appliedIndex();
+        const typedMatch = findPrefixMatchIndex(query.value, optionLabels.value);
+        const index = typedMatch >= 0 ? typedMatch : appliedIndex();
         openList(index >= 0 ? index : 0);
       } else {
         moveActive(1);
@@ -257,7 +279,8 @@ const onKeydown = (event) => {
     case 'ArrowUp':
       event.preventDefault();
       if (!isOpen.value) {
-        const index = appliedIndex();
+        const typedMatch = findPrefixMatchIndex(query.value, optionLabels.value);
+        const index = typedMatch >= 0 ? typedMatch : appliedIndex();
         openList(index >= 0 ? index : options.value.length - 1);
       } else {
         moveActive(-1);
@@ -362,6 +385,20 @@ watch(appliedLabel, (label) => {
   if (isEditing.value) return;
   inputDisplay.value = label;
 });
+
+watch(
+  () => Boolean(props.item.expand?.value),
+  (expanded) => {
+    if (expanded && !isOpen.value) {
+      const index = appliedIndex();
+      openList(index >= 0 ? index : 0, { focusInput: true });
+      return;
+    }
+    if (!expanded && isOpen.value) {
+      closeList({ syncItem: false });
+    }
+  },
+);
 </script>
 
 <template>
@@ -394,7 +431,7 @@ watch(appliedLabel, (label) => {
       @input="onInput"
       @keydown="onKeydown"
       @compositionstart="isComposing = true"
-      @compositionend="isComposing = false"
+      @compositionend="onCompositionEnd"
     />
     <button
       type="button"

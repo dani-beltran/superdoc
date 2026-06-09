@@ -353,6 +353,33 @@ describe('ButtonGroup dropdown trigger keyboard activation (codex P2 regression)
     expect(wrapper.findComponent({ name: 'FontFamilyCombobox' }).exists()).toBe(true);
   });
 
+  it('opens the font family combobox from roving keyboard activation', async () => {
+    const item = {
+      ...createFullDropdownItem('Arial'),
+      command: 'setFontFamily',
+      id: ref('font-family'),
+      name: ref('fontFamily'),
+      label: ref('Arial'),
+      selectedValue: ref('Arial'),
+      nestedOptions: ref([
+        { key: 'Arial', label: 'Arial', props: { style: { fontFamily: 'Arial' } } },
+        { key: 'Helvetica', label: 'Helvetica', props: { style: { fontFamily: 'Helvetica' } } },
+      ]),
+    };
+    wrapper = mountWithDropdownItem(item);
+
+    const ctn = wrapper.find('.sd-toolbar-item-ctn').element;
+    ctn.focus();
+    ctn.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    await nextTick();
+    await nextTick();
+
+    const input = wrapper.get('[data-item="btn-fontFamily"] input').element;
+    expect(item.expand.value).toBe(true);
+    expect(document.body.querySelector('[role="listbox"]')).not.toBeNull();
+    expect(document.activeElement).toBe(input);
+  });
+
   it('moves from font family to font size on Tab', async () => {
     const fontFamily = {
       ...createFullDropdownItem('Arial'),

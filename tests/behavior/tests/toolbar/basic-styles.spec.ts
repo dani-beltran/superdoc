@@ -106,7 +106,7 @@ test('font size dropdown changes size', async ({ superdoc }) => {
 
   // Open the font size dropdown
   const sizeButton = superdoc.page.locator('[data-item="btn-fontSize"]');
-  await sizeButton.click();
+  await sizeButton.locator('.sd-dropdown-caret').click();
   await superdoc.waitForStable();
   await superdoc.snapshot('font size dropdown open');
 

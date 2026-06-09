@@ -15,6 +15,7 @@ const makeItem = () => ({
   defaultLabel: ref('Arial'),
   selectedValue: ref('Arial'),
   disabled: ref(false),
+  expand: ref(false),
   style: ref({ width: '116px' }),
   attributes: ref({ ariaLabel: 'Font family' }),
   nestedOptions: ref([
@@ -80,6 +81,33 @@ describe('FontFamilyCombobox', () => {
     expect(input.attributes('aria-expanded')).toBe('true');
   });
 
+  it('opens when the toolbar item expand flag is set by roving keyboard activation', async () => {
+    const { item, input } = mountCombobox();
+
+    item.expand.value = true;
+    await nextTick();
+    await nextTick();
+
+    expect(document.body.querySelector('[role="listbox"]')).not.toBeNull();
+    expect(input.attributes('aria-expanded')).toBe('true');
+    expect(document.activeElement).toBe(input.element);
+  });
+
+  it('does not leave the toolbar item expanded when no font options exist', async () => {
+    const item = {
+      ...makeItem(),
+      nestedOptions: ref([]),
+    };
+    mountCombobox(item);
+
+    item.expand.value = true;
+    await nextTick();
+    await nextTick();
+
+    expect(document.body.querySelector('[role="listbox"]')).toBeNull();
+    expect(item.expand.value).toBe(false);
+  });
+
   it('autocompletes while collapsed and applies the logical font name on Enter', async () => {
     const { input } = mountCombobox();
 
@@ -119,7 +147,7 @@ describe('FontFamilyCombobox', () => {
     const { input } = mountCombobox();
 
     await input.trigger('focus');
-    await input.trigger('mousedown');
+    await wrapper.get('[data-item="btn-fontFamily-toggle"]').trigger('mousedown');
     await nextTick();
     await input.setValue('ti');
     await nextTick();
@@ -133,6 +161,35 @@ describe('FontFamilyCombobox', () => {
 
     await input.trigger('keydown', { key: 'Enter' });
     expect(wrapper.emitted('command')?.[0]?.[0].argument).toBe('Times New Roman');
+  });
+
+  it('opens with ArrowDown at the typed match when collapsed', async () => {
+    const { input } = mountCombobox();
+
+    await input.trigger('focus');
+    await input.setValue('ti');
+    await input.trigger('keydown', { key: 'ArrowDown' });
+    await nextTick();
+
+    expect(document.body.querySelector('[role="listbox"]')).not.toBeNull();
+    expect(document.body.querySelector('.sd-active')?.textContent).toContain('Times New Roman');
+  });
+
+  it('syncs autocomplete when an IME composition ends', async () => {
+    const { input } = mountCombobox();
+
+    await input.trigger('focus');
+    await input.trigger('compositionstart');
+    input.element.value = 'hel';
+    await input.trigger('input');
+    expect(input.element.value).toBe('hel');
+
+    await input.trigger('compositionend');
+    await nextTick();
+
+    expect(input.element.value).toBe('Helvetica');
+    expect(input.element.selectionStart).toBe(3);
+    expect(input.element.selectionEnd).toBe('Helvetica'.length);
   });
 
   it('applies a typed custom font as a bare logical family', async () => {

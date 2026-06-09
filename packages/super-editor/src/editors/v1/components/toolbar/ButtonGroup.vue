@@ -145,19 +145,22 @@ const handleSplitButtonMainClick = (item) => {
   emit('command', { item: commandItem, argument: null });
 };
 
-const closeDropdowns = () => {
+const closeDropdowns = (exceptItem = null) => {
   const toolbarItems = proxy?.$toolbar?.toolbarItems || [];
   const overflowItems = proxy?.$toolbar?.overflowItems || [];
   const allItems = [...toolbarItems, ...overflowItems];
 
   const itemsToClose = allItems.length ? allItems : props.toolbarItems;
   itemsToClose.forEach((toolbarItem) => {
+    if (toolbarItem === exceptItem) return;
     const shouldCloseOverflow = isOverflow(toolbarItem) && !props.fromOverflow;
     if (isDropdown(toolbarItem) || shouldCloseOverflow) {
       setExpanded(toolbarItem, false);
     }
   });
-  currentItem.value = null;
+  if (!exceptItem || currentItem.value !== exceptItem) {
+    currentItem.value = null;
+  }
 };
 
 const handleSelect = (item, option) => {
@@ -167,8 +170,8 @@ const handleSelect = (item, option) => {
   item.selectedValue.value = option.key;
 };
 
-const handleComboboxItemClicked = () => {
-  closeDropdowns();
+const handleComboboxItemClicked = (item) => {
+  closeDropdowns(item);
   emit('item-clicked');
 };
 
@@ -422,7 +425,7 @@ const handleDocumentPointerDown = (event) => {
 
   // Dropdown content is teleported outside the toolbar group.
   // Treat menu clicks as "inside" so option clicks do not close before selection.
-  if (target.closest('.sd-toolbar-dropdown-menu')) return;
+  if (target.closest('.sd-toolbar-dropdown-menu, .sd-font-combobox__listbox')) return;
   if (buttonGroupRef.value?.contains(target)) return;
 
   closeDropdowns();
@@ -488,7 +491,7 @@ onBeforeUnmount(() => {
             :ui-font-family="props.uiFontFamily"
             class="sd-toolbar-button sd-editor-toolbar-dropdown"
             @command="handleComboboxCommand"
-            @item-clicked="handleComboboxItemClicked"
+            @item-clicked="handleComboboxItemClicked(item)"
             @tab-out="handleComboboxTabOut(index, $event)"
           />
         </template>
