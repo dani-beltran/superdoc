@@ -153,6 +153,7 @@ describe('createSuperDocUI', () => {
       'Arial',
       'Bangla MN',
       'Calibri',
+      'Cooper Black',
       'Courier New',
       'Helvetica',
       'Times New Roman',
@@ -179,8 +180,16 @@ describe('createSuperDocUI', () => {
     superdoc.fireSuperdoc('fonts-changed');
     await flushMicrotasks();
 
-    expect(observed.at(0)).toEqual(['Arial', 'Calibri', 'Courier New', 'Helvetica', 'Times New Roman']);
-    expect(observed.at(-1)).toEqual(['Aptos', 'Arial', 'Calibri', 'Courier New', 'Helvetica', 'Times New Roman']);
+    expect(observed.at(0)).toEqual(['Arial', 'Calibri', 'Cooper Black', 'Courier New', 'Helvetica', 'Times New Roman']);
+    expect(observed.at(-1)).toEqual([
+      'Aptos',
+      'Arial',
+      'Calibri',
+      'Cooper Black',
+      'Courier New',
+      'Helvetica',
+      'Times New Roman',
+    ]);
   });
 
   it('refreshes ui.fonts for delimiter-colliding font names', async () => {

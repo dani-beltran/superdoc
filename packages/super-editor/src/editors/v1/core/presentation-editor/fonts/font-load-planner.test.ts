@@ -150,10 +150,12 @@ describe('planFontFaces (face-aware single plan)', () => {
       { logicalFamily: 'Georgia', weight: '400', style: 'normal' },
       { logicalFamily: 'Georgia', weight: '700', style: 'normal' },
     ]);
-    // effectiveSignature records each face's resolution (incl. reason), excluding load status, as
-    // collision-safe JSON tuples [logicalLower, weight, style, physicalLower, reason].
-    expect(plan.effectiveSignature).toContain('["georgia","400","normal","gelasio","custom_mapping"]');
-    expect(plan.effectiveSignature).toContain('["georgia","700","normal","georgia","fallback_face_absent"]');
+    // effectiveSignature records each face's resolution (incl. source face + reason), excluding load
+    // status, as collision-safe JSON tuples.
+    expect(plan.effectiveSignature).toContain('["georgia","400","normal","gelasio","400","normal","custom_mapping"]');
+    expect(plan.effectiveSignature).toContain(
+      '["georgia","700","normal","georgia","700","normal","fallback_face_absent"]',
+    );
   });
 
   it('treats a quoted primary family as the same used face as its bare form', () => {
@@ -194,6 +196,28 @@ describe('planFontFaces (face-aware single plan)', () => {
     ];
     expect(keyset(planFontFaces(blocks, resolver, cloneFaces).requiredFaces)).toEqual(
       new Set(['Carlito|400|normal', 'Carlito|700|normal', 'Carlito|400|italic', 'Carlito|700|italic']),
+    );
+  });
+
+  it('DocFonts synthetic face: Cooper Black Bold queues Caprasimo Regular as the source face', () => {
+    const resolver = createFontResolver();
+    const caprasimoRegular = (f: string, w: '400' | '700', s: 'normal' | 'italic') =>
+      f.replace(/^["']|["']$/g, '').toLowerCase() === 'caprasimo' && w === '400' && s === 'normal';
+    const plan = planFontFaces([para('p', [text('Cooper Black', { bold: true })])], resolver, caprasimoRegular);
+    expect(keyset(plan.requiredFaces)).toEqual(new Set(['Caprasimo|400|normal']));
+    expect(plan.effectiveSignature).toContain(
+      '["cooper black","700","normal","caprasimo","400","normal","bundled_substitute"]',
+    );
+  });
+
+  it('DocFonts synthetic face: a real requested substitute face is queued before the synthetic source', () => {
+    const resolver = createFontResolver();
+    const caprasimoRegularAndBold = (f: string, w: '400' | '700', s: 'normal' | 'italic') =>
+      f.replace(/^["']|["']$/g, '').toLowerCase() === 'caprasimo' && (w === '400' || w === '700') && s === 'normal';
+    const plan = planFontFaces([para('p', [text('Cooper Black', { bold: true })])], resolver, caprasimoRegularAndBold);
+    expect(keyset(plan.requiredFaces)).toEqual(new Set(['Caprasimo|700|normal']));
+    expect(plan.effectiveSignature).toContain(
+      '["cooper black","700","normal","caprasimo","700","normal","bundled_substitute"]',
     );
   });
 

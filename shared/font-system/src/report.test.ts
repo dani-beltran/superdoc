@@ -73,13 +73,13 @@ describe('buildFontReport', () => {
     expect(rec.missing).toBe(true); // broadened: a failed substitute renders wrong, so it is missing
   });
 
-  it('covers all five mappings and dedupes', () => {
+  it('covers bundled mappings and dedupes', () => {
     const reg = new FakeRegistry();
-    ['Carlito', 'Caladea', 'Liberation Sans', 'Liberation Serif', 'Liberation Mono'].forEach((f) =>
+    ['Carlito', 'Caladea', 'Liberation Sans', 'Liberation Serif', 'Liberation Mono', 'Caprasimo'].forEach((f) =>
       reg.statuses.set(f, 'loaded'),
     );
     const report = buildFontReport(
-      ['Calibri', 'Cambria', 'Arial', 'Times New Roman', 'Courier New', 'Calibri'],
+      ['Calibri', 'Cambria', 'Arial', 'Times New Roman', 'Courier New', 'Cooper Black', 'Calibri'],
       reg.asRegistry(),
     );
     expect(report.map((r) => r.physicalFamily)).toEqual([
@@ -88,6 +88,7 @@ describe('buildFontReport', () => {
       'Liberation Sans',
       'Liberation Serif',
       'Liberation Mono',
+      'Caprasimo',
     ]);
     expect(report.every((r) => r.reason === 'bundled_substitute' && !r.missing)).toBe(true);
   });
@@ -323,6 +324,50 @@ describe('verdict-aware evidence (rendered substitutes only)', () => {
     expect(row.evidence?.verdict).toBe('visual_only');
     expect(row.evidence?.lineBreakSafe).toBe(false);
     expect(row.evidence?.glyphExceptions).toMatchObject([{ slot: 'boldItalic', codepoint: 0x60 }]);
+  });
+
+  it('Cooper Black Regular face: metric_safe Caprasimo substitute', () => {
+    const reg = new FaceRegistry();
+    reg.setFace('Caprasimo', '400', 'normal', 'loaded');
+    const [row] = buildFaceReport(
+      [{ logicalFamily: 'Cooper Black', weight: '400', style: 'normal' }],
+      reg.asRegistry(),
+    );
+    expect(row).toMatchObject({
+      logicalFamily: 'Cooper Black',
+      physicalFamily: 'Caprasimo',
+      reason: 'bundled_substitute',
+      missing: false,
+    });
+    expect(row.evidence).toEqual({
+      evidenceId: 'cooper-black',
+      policyAction: 'substitute',
+      verdict: 'metric_safe',
+      lineBreakSafe: true,
+    });
+  });
+
+  it('Cooper Black Bold face: loads Caprasimo Regular as a qualified synthetic face', () => {
+    const reg = new FaceRegistry();
+    reg.setFace('Caprasimo', '400', 'normal', 'loaded');
+    const [row] = buildFaceReport(
+      [{ logicalFamily: 'Cooper Black', weight: '700', style: 'normal' }],
+      reg.asRegistry(),
+    );
+    expect(row).toMatchObject({
+      logicalFamily: 'Cooper Black',
+      physicalFamily: 'Caprasimo',
+      reason: 'bundled_substitute',
+      loadStatus: 'loaded',
+      missing: false,
+      face: { weight: '700', style: 'normal' },
+    });
+    expect(row.evidence).toEqual({
+      evidenceId: 'cooper-black',
+      policyAction: 'substitute',
+      verdict: 'visual_only',
+      lineBreakSafe: false,
+    });
   });
 
   it('attaches NO evidence for as_requested / custom_mapping / registered_face / fallback_face_absent', () => {

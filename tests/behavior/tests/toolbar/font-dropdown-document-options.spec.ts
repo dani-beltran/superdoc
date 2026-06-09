@@ -51,7 +51,7 @@ test('font dropdown opens immediately with the clean default list and an enabled
   await openFontFamilyDropdown(superdoc);
 
   const labels = await fontOptionLabels(superdoc);
-  expect(labels).toEqual(['Arial', 'Calibri', 'Courier New', 'Helvetica', 'Times New Roman']);
+  expect(labels).toEqual(['Arial', 'Calibri', 'Cooper Black', 'Courier New', 'Helvetica', 'Times New Roman']);
   for (const absent of ['Aptos', 'Georgia', 'Cambria', 'Calibri Light']) {
     expect(labels).not.toContain(absent);
   }
@@ -95,6 +95,7 @@ test('a document-specific font reaches the live dropdown without status text and
     'Arial',
     'Bangla MN',
     'Calibri',
+    'Cooper Black',
     'Courier New',
     'Helvetica',
     'Times New Roman',

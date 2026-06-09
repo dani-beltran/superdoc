@@ -186,6 +186,7 @@ describe('domain hooks', () => {
       'Aptos',
       'Arial',
       'Calibri',
+      'Cooper Black',
       'Courier New',
       'Helvetica',
       'Times New Roman',

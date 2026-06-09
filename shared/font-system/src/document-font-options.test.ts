@@ -116,7 +116,7 @@ describe('buildDocumentFontOptions (document-specific toolbar fonts)', () => {
 });
 
 describe('buildFontFamilyOptions (custom UI font picker rows)', () => {
-  it('combines bundled defaults and document fonts alphabetically with no status field', () => {
+  it('combines bundled toolbar choices and document fonts alphabetically with no status field', () => {
     const options = buildFontFamilyOptions([
       { logicalFamily: 'Aptos', previewFamily: 'Aptos' },
       { logicalFamily: 'Bangla MN', previewFamily: 'Bangla MN' },
@@ -129,6 +129,7 @@ describe('buildFontFamilyOptions (custom UI font picker rows)', () => {
       'Arial',
       'Bangla MN',
       'Calibri',
+      'Cooper Black',
       'Courier New',
       'Helvetica',
       'Times New Roman',
