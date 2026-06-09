@@ -20,6 +20,17 @@ async function expectFontFamilyDropdownClosed(superdoc: SuperDocFixture): Promis
   await expect(superdoc.page.locator(`${FONT_OPTION}:visible`)).toHaveCount(0);
 }
 
+async function expectEditorFocused(superdoc: SuperDocFixture): Promise<void> {
+  await expect
+    .poll(() =>
+      superdoc.page.evaluate(() => {
+        const active = document.activeElement;
+        return active instanceof HTMLElement && active.classList.contains('ProseMirror');
+      }),
+    )
+    .toBe(true);
+}
+
 async function selectFontOption(superdoc: SuperDocFixture, label: string): Promise<void> {
   await superdoc.page
     .locator(FONT_OPTION)
@@ -91,6 +102,55 @@ test('typing in the font combobox applies to the selected text without opening t
 
   await expect(superdoc.page.locator('[data-item="btn-fontFamily"] .sd-button-label')).toHaveText('Courier New');
   await superdoc.assertTextMarkAttrs('Combobox font sample', 'textStyle', { fontFamily: 'Courier New' });
+});
+
+test('tabbing through font family and size returns to the editor with formatting preserved', async ({ superdoc }) => {
+  await superdoc.type('Keyboard flow sample');
+  await superdoc.waitForStable();
+
+  const pos = await superdoc.findTextPos('Keyboard flow sample');
+  await superdoc.setTextSelection(pos, pos + 'Keyboard flow sample'.length);
+  await superdoc.waitForStable();
+
+  const fontInput = superdoc.page.locator('[data-item="btn-fontFamily"] input');
+  await fontInput.click();
+  await expectFontFamilyDropdownClosed(superdoc);
+
+  await fontInput.fill('co');
+  await fontInput.press('Tab');
+
+  const fontSizeInput = superdoc.page.locator('#inlineTextInput-fontSize');
+  await expect(fontSizeInput).toBeFocused();
+  await fontSizeInput.fill('18');
+  await fontSizeInput.press('Tab');
+  await expectEditorFocused(superdoc);
+
+  await superdoc.page.keyboard.type('Done');
+  await superdoc.waitForStable();
+
+  await superdoc.assertTextContent('Done');
+  await superdoc.assertTextMarkAttrs('Done', 'textStyle', {
+    fontFamily: 'Courier New',
+    fontSize: '18pt',
+  });
+});
+
+test('typing a custom font family preserves the typed logical name', async ({ superdoc }) => {
+  await superdoc.type('Custom font sample');
+  await superdoc.waitForStable();
+
+  const pos = await superdoc.findTextPos('Custom font sample');
+  await superdoc.setTextSelection(pos, pos + 'Custom font sample'.length);
+  await superdoc.waitForStable();
+
+  const fontInput = superdoc.page.locator('[data-item="btn-fontFamily"] input');
+  await fontInput.click();
+  await fontInput.fill('Brand Sans');
+  await fontInput.press('Enter');
+  await superdoc.waitForStable();
+
+  await expect(superdoc.page.locator('[data-item="btn-fontFamily"] .sd-button-label')).toHaveText('Brand Sans');
+  await superdoc.assertTextMarkAttrs('Custom font sample', 'textStyle', { fontFamily: 'Brand Sans' });
 });
 
 test('a document-specific font reaches the live dropdown without status text and applies the logical family', async ({
