@@ -9,7 +9,8 @@ Caprasimo was added from DocFonts' Google Fonts OFL provenance on 2026-06-08.
 Gelasio, Cardo, Comic Relief, Noto Sans, PT Sans, Bacasime Antique, Oregano
 Italic, and Noto Sans Mono were added from DocFonts' Google Fonts provenance on
 2026-06-09. C059 and Liberation Sans Narrow were added from the legal-reviewed
-asset package on 2026-06-09._
+asset package on 2026-06-09. Archivo Black and PT Sans Narrow were added from
+DocFonts' Google Fonts provenance on 2026-06-10._
 
 ## Scope (read first)
 
@@ -48,6 +49,7 @@ Machine-readable asset metadata: `font-assets.manifest.json`.
 | Liberation Serif | Times New Roman | OFL-1.1 | none declared* | 2.1.5 | github.com/liberationfonts/liberation-fonts 2.1.5 |
 | Liberation Mono | Courier New | OFL-1.1 | none declared* | 2.1.5 | github.com/liberationfonts/liberation-fonts 2.1.5 |
 | Caprasimo | Cooper Black | OFL-1.1 | none | 1.001 | google/fonts c89741abbf4eeabce432c3ed2fd7dc28b022701e, ofl/caprasimo |
+| Archivo Black | Arial Black | OFL-1.1 | none | 1.006 | google/fonts c89741abbf4eeabce432c3ed2fd7dc28b022701e, ofl/archivoblack |
 | C059 | Century, Century Schoolbook | AGPL-3.0-only WITH PS-or-PDF-font-exception-20170817 | none | 1.00 | github.com/ArtifexSoftware/urw-base35-fonts (unmodified) |
 | Bacasime Antique | Baskerville Old Face | OFL-1.1 | "Playfair" | 2.000 | google/fonts c89741abbf4eeabce432c3ed2fd7dc28b022701e, ofl/bacasimeantique |
 | Oregano Italic | Brush Script MT | OFL-1.1 | "Oregano Italic" | 1.000 | google/fonts c89741abbf4eeabce432c3ed2fd7dc28b022701e, ofl/oregano |
@@ -57,6 +59,7 @@ Machine-readable asset metadata: `font-assets.manifest.json`.
 | Noto Sans | Tahoma | OFL-1.1 | none | 2.015 | google/fonts c89741abbf4eeabce432c3ed2fd7dc28b022701e, ofl/notosans |
 | Noto Sans Mono | Lucida Console | OFL-1.1 | none | 2.014 | google/fonts c89741abbf4eeabce432c3ed2fd7dc28b022701e, ofl/notosansmono |
 | PT Sans | Trebuchet MS | OFL-1.1 | "PT Sans", "PT Serif", "ParaType" | 2.003W OFL | google/fonts c89741abbf4eeabce432c3ed2fd7dc28b022701e, ofl/ptsans |
+| PT Sans Narrow | Gill Sans MT Condensed | OFL-1.1 | "PT Sans", "PT Serif", "ParaType" | 2.003W OFL | google/fonts c89741abbf4eeabce432c3ed2fd7dc28b022701e, ofl/ptsansnarrow |
 
 \* The Liberation v2.1.5 files carry no OFL Reserved Font Name. "Liberation" is a
 registered Red Hat trademark, which is separate from an OFL RFN. SuperDoc names
@@ -105,6 +108,15 @@ The Narrow faces were contributed by Oracle and are present in the Liberation
 ```text
 Copyright 2023 The Caprasimo Project Authors (https://github.com/docrepair-fonts/caprasimo-fonts).
 License description: This Font Software is licensed under the SIL Open Font License, Version 1.1. This license is available with a FAQ at: https://scripts.sil.org/OFL
+```
+
+No OFL Reserved Font Name is declared in this file.
+
+**Archivo Black** - OFL-1.1
+
+```text
+Copyright 2017 The Archivo Black Project Authors (https://github.com/Omnibus-Type/ArchivoBlack).
+License description: This Font Software is licensed under the SIL Open Font License, Version 1.1. This license is available with a FAQ at: http://scripts.sil.org/OFL
 ```
 
 No OFL Reserved Font Name is declared in this file.
@@ -187,6 +199,14 @@ Copyright (c) 2010, ParaType Ltd. (http://www.paratype.com/public), with Reserve
 License description: This Font Software is licensed under the SIL Open Font License, Version 1.1.
 ```
 
+**PT Sans Narrow** - OFL-1.1
+
+```text
+Copyright (c) 2010, ParaType Ltd. (http://www.paratype.com/public), with Reserved Font Names "PT Sans", "PT Serif" and "ParaType".
+Trademark: PT Sans is a trademark of the ParaType Ltd.
+License description: This Font Software is licensed under the Open Font License, Version 1.1
+```
+
 ## Conversion notice (covers OFL section 1 / FAQ 2.2.1 and Apache-2.0 section 4(b))
 
 The static-source WOFF2 faces in this distribution are **format-only
@@ -217,10 +237,10 @@ OTF/TTF files are the preferred form for modification.
 
 ## Verification evidence (current ship set)
 
-- **40 / 50 WOFF2 faces:** static-source WOFF2 flavor, WOFF2 metadata block
+- **43 / 53 WOFF2 faces:** static-source WOFF2 flavor, WOFF2 metadata block
   omitted, `name` table byte-identical to the source TTF, identical glyph count
   and `cmap`.
-- **10 / 50 WOFF2 faces:** static variable-font instances for Gelasio, Noto
+- **10 / 53 WOFF2 faces:** static variable-font instances for Gelasio, Noto
   Sans, and Noto Sans Mono, generated at regular and bold weights with no
   subsetting.
 - **Metrics:** `unitsPerEm`, `hhea` ascent/descent, selected OS/2 metrics,
@@ -229,10 +249,10 @@ OTF/TTF files are the preferred form for modification.
 
 ## Full license texts
 
-- OFL-1.1 (Carlito, Liberation, Caprasimo, Bacasime Antique, Oregano Italic,
-  Gelasio, Cardo, Comic Relief, Noto Sans, Noto Sans Mono, PT Sans): `OFL.txt`
-  in this directory. The copyright notices above are also stacked at the top of
-  that file.
+- OFL-1.1 (Carlito, Liberation, Caprasimo, Archivo Black, Bacasime Antique,
+  Oregano Italic, Gelasio, Cardo, Comic Relief, Noto Sans, Noto Sans Mono, PT
+  Sans, PT Sans Narrow): `OFL.txt` in this directory. The copyright notices
+  above are also stacked at the top of that file.
 - Apache-2.0 (Caladea): `Apache-2.0.txt` in this directory.
 - AGPL-3.0-only WITH PS-or-PDF-font-exception-20170817 (C059): `AGPL-3.0.txt` in
   this directory.

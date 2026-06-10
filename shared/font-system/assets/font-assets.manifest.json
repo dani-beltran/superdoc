@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "spdxExpression": "OFL-1.1 AND Apache-2.0 AND (AGPL-3.0-only WITH PS-or-PDF-font-exception-20170817) AND (GPL-2.0-only WITH Font-exception-2.0)",
-  "generatedFrom": "Bundled font legal review, 2026-06-03; Caprasimo added from DocFonts Google Fonts OFL provenance, 2026-06-08; OFL fallback batch added from DocFonts Google Fonts provenance, 2026-06-09; Bacasime Antique, Oregano Italic, and Noto Sans Mono added from DocFonts Google Fonts provenance, 2026-06-09; C059 and Liberation Sans Narrow added from legal-reviewed asset package, 2026-06-09",
+  "generatedFrom": "Bundled font legal review, 2026-06-03; Caprasimo added from DocFonts Google Fonts OFL provenance, 2026-06-08; OFL fallback batch added from DocFonts Google Fonts provenance, 2026-06-09; Bacasime Antique, Oregano Italic, and Noto Sans Mono added from DocFonts Google Fonts provenance, 2026-06-09; C059 and Liberation Sans Narrow added from legal-reviewed asset package, 2026-06-09; Arial Black and PT Sans Narrow added from DocFonts Google Fonts provenance, 2026-06-10",
   "families": [
     {
       "family": "Carlito",
@@ -246,6 +246,29 @@
           "weight": "normal",
           "style": "normal",
           "sha256": "66c6d1e052b6553371f29d21bfee798bb3c2238f51b54a89fe50d4234db348b1"
+        }
+      ]
+    },
+    {
+      "family": "Archivo Black",
+      "replaces": ["Arial Black"],
+      "license": "OFL-1.1",
+      "licenseFiles": ["OFL.txt"],
+      "version": "1.006",
+      "upstreamSource": "google/fonts c89741abbf4eeabce432c3ed2fd7dc28b022701e, ofl/archivoblack",
+      "reservedFontName": null,
+      "copyrightNotice": "Copyright 2017 The Archivo Black Project Authors (https://github.com/Omnibus-Type/ArchivoBlack).",
+      "trademarkNotice": null,
+      "sourceFile": {
+        "file": "ArchivoBlack-Regular.ttf",
+        "sha256": "dd9a89a019b4849f66ab75455fe7bdf931311042cbb0f0f97acc061539703180"
+      },
+      "faces": [
+        {
+          "file": "ArchivoBlack-Regular.woff2",
+          "weight": "normal",
+          "style": "normal",
+          "sha256": "a4db2d9e20b4f660e37d512dc63b733c094c8a241f012dee2d54aea8dbb78f54"
         }
       ]
     },
@@ -597,6 +620,41 @@
           "weight": "bold",
           "style": "italic",
           "sha256": "9c2d39693376aee4d0f93f51ba2e720c69441d1b66fdd2f6a77f13600c5f6691"
+        }
+      ]
+    },
+    {
+      "family": "PT Sans Narrow",
+      "replaces": ["Gill Sans MT Condensed"],
+      "license": "OFL-1.1",
+      "licenseFiles": ["OFL.txt"],
+      "version": "2.003W OFL",
+      "upstreamSource": "google/fonts c89741abbf4eeabce432c3ed2fd7dc28b022701e, ofl/ptsansnarrow",
+      "reservedFontName": "PT Sans, PT Serif, ParaType",
+      "copyrightNotice": "Copyright (c) 2010, ParaType Ltd. (http://www.paratype.com/public), with Reserved Font Names \"PT Sans\", \"PT Serif\" and \"ParaType\".",
+      "trademarkNotice": "PT Sans is a trademark of the ParaType Ltd.",
+      "sourceFiles": [
+        {
+          "file": "PT_Sans-Narrow-Web-Regular.ttf",
+          "sha256": "4102edda03059163771869d258df54ac8563c408fa6e9ef75b2ddc85eabea6f4"
+        },
+        {
+          "file": "PT_Sans-Narrow-Web-Bold.ttf",
+          "sha256": "e69d83bcf5bd647892b4e2b22f5098dabd55c989413513197722fc156fb9f00e"
+        }
+      ],
+      "faces": [
+        {
+          "file": "PTSansNarrow-Regular.woff2",
+          "weight": "normal",
+          "style": "normal",
+          "sha256": "f15f7662587d575f0aafa4b987c37f925a897d416b801857f0a2c03dfd2a8d92"
+        },
+        {
+          "file": "PTSansNarrow-Bold.woff2",
+          "weight": "bold",
+          "style": "normal",
+          "sha256": "db2d67222555640591ce4a38ce8483c96ac310b70e195a6c279d99a09de34e8d"
         }
       ]
     }

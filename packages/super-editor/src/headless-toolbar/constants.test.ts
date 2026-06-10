@@ -5,6 +5,7 @@ describe('DEFAULT_FONT_FAMILY_OPTIONS (headless default font options, derived fr
   it('advertises bundled defaults and selected bundled fallback choices (logical name + logical stack)', () => {
     expect(DEFAULT_FONT_FAMILY_OPTIONS).toEqual([
       { label: 'Arial', value: 'Arial, sans-serif' },
+      { label: 'Arial Black', value: 'Arial Black, sans-serif' },
       { label: 'Arial Narrow', value: 'Arial Narrow, sans-serif' },
       { label: 'Baskerville Old Face', value: 'Baskerville Old Face, serif' },
       { label: 'Brush Script MT', value: 'Brush Script MT, serif' },
@@ -15,6 +16,7 @@ describe('DEFAULT_FONT_FAMILY_OPTIONS (headless default font options, derived fr
       { label: 'Courier New', value: 'Courier New, monospace' },
       { label: 'Garamond', value: 'Garamond, serif' },
       { label: 'Georgia', value: 'Georgia, serif' },
+      { label: 'Gill Sans MT Condensed', value: 'Gill Sans MT Condensed, sans-serif' },
       { label: 'Helvetica', value: 'Helvetica, sans-serif' },
       { label: 'Lucida Console', value: 'Lucida Console, monospace' },
       { label: 'Tahoma', value: 'Tahoma, sans-serif' },

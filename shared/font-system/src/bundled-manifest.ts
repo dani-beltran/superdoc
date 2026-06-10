@@ -67,6 +67,9 @@ export const BUNDLED_MANIFEST: readonly BundledFamilyManifest[] = Object.freeze(
   family('Liberation Serif', 'LiberationSerif', 'OFL-1.1'),
   family('Liberation Mono', 'LiberationMono', 'OFL-1.1'),
   familyWithFaces('Caprasimo', 'OFL-1.1', [{ weight: 'normal', style: 'normal', file: 'Caprasimo-Regular.woff2' }]),
+  familyWithFaces('Archivo Black', 'OFL-1.1', [
+    { weight: 'normal', style: 'normal', file: 'ArchivoBlack-Regular.woff2' },
+  ]),
   familyWithFaces('C059', 'AGPL-3.0-only WITH PS-or-PDF-font-exception-20170817', [
     { weight: 'normal', style: 'normal', file: 'C059-Roman.woff2' },
     { weight: 'bold', style: 'normal', file: 'C059-Bold.woff2' },
@@ -95,4 +98,8 @@ export const BUNDLED_MANIFEST: readonly BundledFamilyManifest[] = Object.freeze(
     { weight: 'bold', style: 'normal', file: 'NotoSansMono-Bold.woff2' },
   ]),
   family('PT Sans', 'PTSans', 'OFL-1.1'),
+  familyWithFaces('PT Sans Narrow', 'OFL-1.1', [
+    { weight: 'normal', style: 'normal', file: 'PTSansNarrow-Regular.woff2' },
+    { weight: 'bold', style: 'normal', file: 'PTSansNarrow-Bold.woff2' },
+  ]),
 ]);

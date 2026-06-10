@@ -98,7 +98,7 @@ function sortPairs(pairs: Array<[string, string]>): Array<[string, string]> {
 
 /**
  * Asset gate: a docfonts fallback activates only when SuperDoc actually ships its physical clone. The
- * evidence registry carries more substitutes than the bundled pack covers (e.g. Arial Narrow), so
+ * evidence registry carries more substitutes than the bundled pack covers (e.g. Bookman Old Style), so
  * `canRenderFamily` keeps an un-shipped candidate OUT of the resolver until its `.woff2` lands. The
  * predicate checks the SUBSTITUTE (physical) family against `bundled-manifest`, matching the package's
  * `getRenderableFallback` contract.

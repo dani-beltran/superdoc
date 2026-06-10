@@ -45,6 +45,7 @@ unmodified upstream release pointers recorded in `shared/font-system/assets/LICE
 | Liberation Serif | Times New Roman | OFL-1.1 | none declared | 2.1.5 |
 | Liberation Mono | Courier New | OFL-1.1 | none declared | 2.1.5 |
 | Caprasimo | Cooper Black | OFL-1.1 | none | 1.001 |
+| Archivo Black | Arial Black | OFL-1.1 | none | 1.006 |
 | C059 | Century, Century Schoolbook | AGPL-3.0-only WITH PS-or-PDF-font-exception-20170817 | none | 1.00 |
 | Bacasime Antique | Baskerville Old Face | OFL-1.1 | "Playfair" | 2.000 |
 | Oregano Italic | Brush Script MT | OFL-1.1 | "Oregano Italic" | 1.000 |
@@ -54,6 +55,7 @@ unmodified upstream release pointers recorded in `shared/font-system/assets/LICE
 | Noto Sans | Tahoma | OFL-1.1 | none | 2.015 |
 | Noto Sans Mono | Lucida Console | OFL-1.1 | none | 2.014 |
 | PT Sans | Trebuchet MS | OFL-1.1 | "PT Sans", "PT Serif", "ParaType" | 2.003W OFL |
+| PT Sans Narrow | Gill Sans MT Condensed | OFL-1.1 | "PT Sans", "PT Serif", "ParaType" | 2.003W OFL |
 
 ### Copyright & trademark notices from the font `name` tables
 
@@ -62,6 +64,7 @@ unmodified upstream release pointers recorded in `shared/font-system/assets/LICE
 - **Liberation Sans / Serif / Mono** (OFL-1.1): `Digitized data copyright (c) 2010 Google Corporation.` / `Copyright (c) 2012 Red Hat, Inc.` Liberation is a trademark of Red Hat, Inc. registered in U.S. Patent and Trademark Office and certain other jurisdictions. The v2.1.5 files declare no OFL Reserved Font Name. SuperDoc names the unmodified fonts.
 - **Liberation Sans Narrow** (GPL-2.0-only WITH Font-exception-2.0): `Copyright 2010 Oracle and/or its affiliates`. Liberation is a trademark of Red Hat, Inc. registered in the U.S. and other countries.
 - **Caprasimo** (OFL-1.1): `Copyright 2023 The Caprasimo Project Authors (https://github.com/docrepair-fonts/caprasimo-fonts).` The v1.001 file declares no OFL Reserved Font Name.
+- **Archivo Black** (OFL-1.1): `Copyright 2017 The Archivo Black Project Authors (https://github.com/Omnibus-Type/ArchivoBlack).` The v1.006 file declares no OFL Reserved Font Name.
 - **C059** (AGPL-3.0-only WITH PS-or-PDF-font-exception-20170817): `(URW)++,Copyright 2014 by (URW)++ Design & Development`. These files declare no trademark string and no Reserved Font Name.
 - **Bacasime Antique** (OFL-1.1): `Copyright 2023 The Bacasime Antique Project Authors (https://github.com/docrepair-fonts/bacasime-antique-fonts), with Reserved Font Name "Playfair".` Playfair is a trademark of Claus Eggers Sørensen.
 - **Oregano Italic** (OFL-1.1): `Copyright (c) 2012 by Brian J. Bonislawsky DBA Astigmatic (AOETI) (astigma@astigmatic.com), with Reserved Font Name "Oregano Italic".` Oregano Italic is a trademark of Astigmatic.
@@ -71,6 +74,7 @@ unmodified upstream release pointers recorded in `shared/font-system/assets/LICE
 - **Noto Sans** (OFL-1.1): `Copyright 2022 The Noto Project Authors (https://github.com/notofonts/latin-greek-cyrillic).` Noto is a trademark of Google LLC. The v2.015 files declare no OFL Reserved Font Name.
 - **Noto Sans Mono** (OFL-1.1): `Copyright 2022 The Noto Project Authors (https://github.com/notofonts/latin-greek-cyrillic).` Noto is a trademark of Google LLC. The v2.014 files declare no OFL Reserved Font Name.
 - **PT Sans** (OFL-1.1): `Copyright (c) 2010, ParaType Ltd. (http://www.paratype.com/public), with Reserved Font Names "PT Sans", "PT Serif" and "ParaType".`
+- **PT Sans Narrow** (OFL-1.1): `Copyright (c) 2010, ParaType Ltd. (http://www.paratype.com/public), with Reserved Font Names "PT Sans", "PT Serif" and "ParaType".` PT Sans is a trademark of the ParaType Ltd.
 
 ### Format conversion
 
@@ -81,8 +85,8 @@ and Noto Sans Mono ship as static WOFF2 instances generated from upstream
 variable TrueType sources at the regular and bold weights; Noto Sans and Noto
 Sans Mono are also instanced at normal width.
 
-Verified for this ship set: 40 / 50 faces are static-source conversions with a
-WOFF2 `name` table byte-identical to their source TTF, and 10 / 50 faces are
+Verified for this ship set: 43 / 53 faces are static-source conversions with a
+WOFF2 `name` table byte-identical to their source TTF, and 10 / 53 faces are
 static variable-font instances with no subsetting. All metrics are preserved.
 Under OFL FAQ 2.2.1 the static-source conversions are not Modified Versions and
 retain the original font names. For Caladea, this also serves as the Apache-2.0

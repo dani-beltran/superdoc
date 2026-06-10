@@ -7,6 +7,7 @@ const FONT_TOGGLE = '[data-item="btn-fontFamily-toggle"]';
 const OPTION_LABEL = `${FONT_OPTION} .toolbar-dropdown-option__label`;
 const DEFAULT_FONT_LABELS = [
   'Arial',
+  'Arial Black',
   'Arial Narrow',
   'Baskerville Old Face',
   'Brush Script MT',
@@ -17,12 +18,19 @@ const DEFAULT_FONT_LABELS = [
   'Courier New',
   'Garamond',
   'Georgia',
+  'Gill Sans MT Condensed',
   'Helvetica',
   'Lucida Console',
   'Tahoma',
   'Times New Roman',
   'Trebuchet MS',
 ];
+
+function expectedLabelsWithDocumentFonts(documentLabels: string[]): string[] {
+  return Array.from(new Set([...DEFAULT_FONT_LABELS, ...documentLabels])).sort((left, right) =>
+    left.localeCompare(right),
+  );
+}
 
 async function openFontFamilyDropdown(superdoc: SuperDocFixture): Promise<void> {
   await superdoc.page.locator(FONT_TOGGLE).click();
@@ -249,16 +257,9 @@ test('a document-specific font reaches the live dropdown without status text and
   await superdoc.waitForStable();
 
   await openFontFamilyDropdown(superdoc);
-  expect(await fontOptionLabels(superdoc)).toEqual([
-    'Apple Chancery',
-    'Aptos',
-    'Arial',
-    'Arial Narrow',
-    'Bangla MN',
-    // Arial and Arial Narrow already appear above (Arial Narrow is both a document font and a
-    // built-in), so skip both from the built-in tail to keep the deduped dropdown order.
-    ...DEFAULT_FONT_LABELS.slice(2),
-  ]);
+  expect(await fontOptionLabels(superdoc)).toEqual(
+    expectedLabelsWithDocumentFonts(['Aptos', 'Apple Chancery', 'Bangla MN']),
+  );
 
   const aptosOption = superdoc.page
     .locator(FONT_OPTION)

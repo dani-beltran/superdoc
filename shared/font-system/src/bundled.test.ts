@@ -36,6 +36,7 @@ describe('installBundledSubstitutes URL resolution', () => {
     expect(reg.sourcesFor('Liberation Sans Narrow')).toContain('url(/fonts/LiberationSansNarrow-BoldItalic.woff2)');
     expect(reg.sourcesFor('C059')).toContain('url(/fonts/C059-BdIta.woff2)');
     expect(reg.sourcesFor('Caprasimo')).toEqual(['url(/fonts/Caprasimo-Regular.woff2)']);
+    expect(reg.sourcesFor('Archivo Black')).toEqual(['url(/fonts/ArchivoBlack-Regular.woff2)']);
     expect(reg.sourcesFor('Bacasime Antique')).toEqual(['url(/fonts/BacasimeAntique-Regular.woff2)']);
     expect(reg.sourcesFor('Oregano Italic')).toEqual(['url(/fonts/OreganoItalic-Regular.woff2)']);
     expect(reg.sourcesFor('Gelasio')).toContain('url(/fonts/Gelasio-BoldItalic.woff2)');
@@ -51,6 +52,10 @@ describe('installBundledSubstitutes URL resolution', () => {
     expect(reg.sourcesFor('Noto Sans Mono')).toEqual([
       'url(/fonts/NotoSansMono-Regular.woff2)',
       'url(/fonts/NotoSansMono-Bold.woff2)',
+    ]);
+    expect(reg.sourcesFor('PT Sans Narrow')).toEqual([
+      'url(/fonts/PTSansNarrow-Regular.woff2)',
+      'url(/fonts/PTSansNarrow-Bold.woff2)',
     ]);
   });
 

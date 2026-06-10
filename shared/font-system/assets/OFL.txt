@@ -3,10 +3,10 @@ SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007
 This is the license text covering the OFL-1.1 fonts bundled in this directory
 (Carlito, Liberation Sans, Liberation Serif, Liberation Mono, Caprasimo,
 Bacasime Antique, Oregano Italic, Gelasio, Cardo, Comic Relief, Noto Sans,
-Noto Sans Mono, PT Sans). Copyright notices and any Reserved Font Name statements
-for those fonts are reproduced verbatim below, taken from the fonts' own name
-tables, so they travel with this license text. LICENSES.md restates them for
-convenience.
+Noto Sans Mono, PT Sans, Archivo Black, PT Sans Narrow). Copyright notices and
+any Reserved Font Name statements for those fonts are reproduced verbatim below,
+taken from the fonts' own name tables, so they travel with this license text.
+LICENSES.md restates them for convenience.
 Official OFL text: https://openfontlicense.org/open-font-license-official-text/
 
 -----------------------------------------------------------
@@ -29,6 +29,12 @@ Caprasimo:
     (https://github.com/docrepair-fonts/caprasimo-fonts).
     Licensed under the SIL Open Font License, Version 1.1.
     (This v1.001 file declares no OFL Reserved Font Name.)
+
+Archivo Black:
+    Copyright 2017 The Archivo Black Project Authors
+    (https://github.com/Omnibus-Type/ArchivoBlack).
+    Licensed under the SIL Open Font License, Version 1.1.
+    (This v1.006 file declares no OFL Reserved Font Name.)
 
 Bacasime Antique:
     Copyright 2023 The Bacasime Antique Project Authors
@@ -72,6 +78,12 @@ Noto Sans Mono:
     (These v2.014 files declare no OFL Reserved Font Name.)
 
 PT Sans:
+    Copyright (c) 2010, ParaType Ltd.
+    (http://www.paratype.com/public), with Reserved Font Names "PT Sans",
+    "PT Serif" and "ParaType".
+    Licensed under the SIL Open Font License, Version 1.1.
+
+PT Sans Narrow:
     Copyright (c) 2010, ParaType Ltd.
     (http://www.paratype.com/public), with Reserved Font Names "PT Sans",
     "PT Serif" and "ParaType".

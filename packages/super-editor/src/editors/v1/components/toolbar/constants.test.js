@@ -5,6 +5,7 @@ describe('TOOLBAR_FONTS (built-in font dropdown, derived from the font-offering 
   it('advertises bundled defaults and selected bundled fallback choices, in alphabetical order', () => {
     expect(TOOLBAR_FONTS.map((f) => f.label)).toEqual([
       'Arial',
+      'Arial Black',
       'Arial Narrow',
       'Baskerville Old Face',
       'Brush Script MT',
@@ -15,6 +16,7 @@ describe('TOOLBAR_FONTS (built-in font dropdown, derived from the font-offering 
       'Courier New',
       'Garamond',
       'Georgia',
+      'Gill Sans MT Condensed',
       'Helvetica',
       'Lucida Console',
       'Tahoma',
@@ -75,6 +77,7 @@ describe('composeToolbarFontOptions (document fonts unioned with the bundled def
       'Apple Chancery',
       'Aptos',
       'Arial',
+      'Arial Black',
       'Arial Narrow',
       'Bangla MN',
       'Baskerville Old Face',
@@ -86,6 +89,7 @@ describe('composeToolbarFontOptions (document fonts unioned with the bundled def
       'Courier New',
       'Garamond',
       'Georgia',
+      'Gill Sans MT Condensed',
       'Helvetica',
       'Lucida Console',
       'Tahoma',

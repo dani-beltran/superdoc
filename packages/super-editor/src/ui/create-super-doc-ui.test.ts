@@ -152,6 +152,7 @@ describe('createSuperDocUI', () => {
     expect(options.map((option) => option.label)).toEqual([
       'Aptos',
       'Arial',
+      'Arial Black',
       'Arial Narrow',
       'Bangla MN',
       'Baskerville Old Face',
@@ -163,6 +164,7 @@ describe('createSuperDocUI', () => {
       'Courier New',
       'Garamond',
       'Georgia',
+      'Gill Sans MT Condensed',
       'Helvetica',
       'Lucida Console',
       'Tahoma',
@@ -210,6 +212,7 @@ describe('createSuperDocUI', () => {
 
     expect(observed.at(0)).toEqual([
       'Arial',
+      'Arial Black',
       'Arial Narrow',
       'Baskerville Old Face',
       'Brush Script MT',
@@ -220,6 +223,7 @@ describe('createSuperDocUI', () => {
       'Courier New',
       'Garamond',
       'Georgia',
+      'Gill Sans MT Condensed',
       'Helvetica',
       'Lucida Console',
       'Tahoma',
@@ -229,6 +233,7 @@ describe('createSuperDocUI', () => {
     expect(observed.at(-1)).toEqual([
       'Aptos',
       'Arial',
+      'Arial Black',
       'Arial Narrow',
       'Baskerville Old Face',
       'Brush Script MT',
@@ -239,6 +244,7 @@ describe('createSuperDocUI', () => {
       'Courier New',
       'Garamond',
       'Georgia',
+      'Gill Sans MT Condensed',
       'Helvetica',
       'Lucida Console',
       'Tahoma',

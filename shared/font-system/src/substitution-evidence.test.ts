@@ -11,6 +11,7 @@ const EXPECTED_SUBSTITUTES: ReadonlyArray<readonly [logical: string, physical: s
   ['Calibri', 'Carlito'],
   ['Cambria', 'Caladea'],
   ['Arial', 'Liberation Sans'],
+  ['Arial Black', 'Archivo Black'],
   ['Arial Narrow', 'Liberation Sans Narrow'],
   ['Times New Roman', 'Liberation Serif'],
   ['Courier New', 'Liberation Mono'],
@@ -139,6 +140,15 @@ describe('substitution evidence -> resolver derivation', () => {
   });
 
   it('new reviewed rows preserve their real-vs-synthetic face model', () => {
+    expect(SUBSTITUTION_EVIDENCE.find((r) => r.evidenceId === 'arial-black')).toMatchObject({
+      logicalFamily: 'Arial Black',
+      physicalFamily: 'Archivo Black',
+      policyAction: 'substitute',
+      faces: { regular: true, bold: false, italic: false, boldItalic: false },
+      faceSources: {
+        italic: { kind: 'synthetic', from: 'regular' },
+      },
+    });
     expect(SUBSTITUTION_EVIDENCE.find((r) => r.evidenceId === 'baskerville-old-face')).toMatchObject({
       logicalFamily: 'Baskerville Old Face',
       physicalFamily: 'Bacasime Antique',
@@ -171,8 +181,19 @@ describe('substitution evidence -> resolver derivation', () => {
       },
       advance: { basis: 'monospace_cell', meanDelta: 0.00254, maxDelta: 0.00303 },
     });
+    expect(SUBSTITUTION_EVIDENCE.find((r) => r.evidenceId === 'gill-sans-mt-condensed')).toMatchObject({
+      logicalFamily: 'Gill Sans MT Condensed',
+      physicalFamily: 'PT Sans Narrow',
+      policyAction: 'category_fallback',
+      faces: { regular: true, bold: true, italic: false, boldItalic: false },
+      faceSources: {
+        italic: { kind: 'synthetic', from: 'regular' },
+        boldItalic: { kind: 'synthetic', from: 'bold' },
+      },
+    });
     expect(resolveFontFamily('Baskerville Old Face').reason).toBe('bundled_substitute');
     expect(resolveFontFamily('Brush Script MT').reason).toBe('category_fallback');
     expect(resolveFontFamily('Lucida Console').reason).toBe('category_fallback');
+    expect(resolveFontFamily('Gill Sans MT Condensed').reason).toBe('category_fallback');
   });
 });

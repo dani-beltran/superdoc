@@ -26,7 +26,7 @@ export type OfferingClass =
   | 'default' // metric_safe + bundled: safe to advertise as a normal default toolbar option
   | 'qualified' // bundled and renderable, but with fidelity caveats (visual_only / near_metric), e.g. Georgia
   | 'category_fallback' // a usable family fallback, not a faithful clone, e.g. Calibri Light -> Carlito
-  | 'requires_asset' // a candidate exists, but SuperDoc does not bundle its asset yet, e.g. Arial Narrow
+  | 'requires_asset' // a candidate exists, but SuperDoc does not bundle its asset yet, e.g. Bookman Old Style
   | 'customer_supplied' // no open substitute; the real font must come from the customer, e.g. Aptos
   | 'preserve_only'; // keep the name, never a default option, e.g. Cambria Math
 
@@ -52,6 +52,7 @@ export interface FontOffering {
 
 const BUNDLED_FAMILIES: ReadonlySet<string> = new Set(BUNDLED_MANIFEST.map((f) => f.family));
 const ADVERTISED_BUILT_IN_TOOLBAR_FAMILIES: ReadonlySet<string> = new Set([
+  'Arial Black',
   'Arial Narrow',
   'Baskerville Old Face',
   'Brush Script MT',
@@ -60,6 +61,7 @@ const ADVERTISED_BUILT_IN_TOOLBAR_FAMILIES: ReadonlySet<string> = new Set([
   'Comic Sans MS',
   'Garamond',
   'Georgia',
+  'Gill Sans MT Condensed',
   'Lucida Console',
   'Tahoma',
   'Trebuchet MS',
@@ -105,9 +107,10 @@ function compareLogicalFamily(a: FontOffering, b: FontOffering): number {
 
 /**
  * The metric-safe, bundled-backed offerings safe to treat as clean defaults, sorted by logical family.
- * Excludes qualified rows (Arial Narrow, Cambria, Century, Century Schoolbook, Cooper Black, Georgia,
- * Baskerville Old Face), category fallbacks (Calibri Light, Tahoma, Trebuchet MS, Garamond,
- * Comic Sans MS, Brush Script MT, Lucida Console), and not-yet-bundled candidates.
+ * Excludes qualified rows (Arial Black, Arial Narrow, Cambria, Century, Century Schoolbook,
+ * Cooper Black, Georgia, Baskerville Old Face), category fallbacks (Calibri Light, Tahoma,
+ * Trebuchet MS, Garamond, Comic Sans MS, Brush Script MT, Gill Sans MT Condensed,
+ * Lucida Console), and not-yet-bundled candidates.
  */
 export function getDefaultFontOfferings(): FontOffering[] {
   return FONT_OFFERINGS.filter((o) => o.offering === 'default').sort(compareLogicalFamily);

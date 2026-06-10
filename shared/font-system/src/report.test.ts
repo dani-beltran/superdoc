@@ -82,11 +82,13 @@ describe('buildFontReport', () => {
       'Liberation Serif',
       'Liberation Mono',
       'Caprasimo',
+      'Archivo Black',
       'Bacasime Antique',
       'Oregano Italic',
       'Gelasio',
       'Noto Sans',
       'Noto Sans Mono',
+      'PT Sans Narrow',
     ]) {
       reg.statuses.set(family, 'loaded');
     }
@@ -95,6 +97,7 @@ describe('buildFontReport', () => {
         'Calibri',
         'Cambria',
         'Arial',
+        'Arial Black',
         'Times New Roman',
         'Courier New',
         'Cooper Black',
@@ -103,6 +106,7 @@ describe('buildFontReport', () => {
         'Georgia',
         'Lucida Console',
         'Tahoma',
+        'Gill Sans MT Condensed',
         'Calibri',
       ],
       reg.asRegistry(),
@@ -111,6 +115,7 @@ describe('buildFontReport', () => {
       'Carlito',
       'Caladea',
       'Liberation Sans',
+      'Archivo Black',
       'Liberation Serif',
       'Liberation Mono',
       'Caprasimo',
@@ -119,12 +124,17 @@ describe('buildFontReport', () => {
       'Gelasio',
       'Noto Sans Mono',
       'Noto Sans',
+      'PT Sans Narrow',
     ]);
     expect(report.find((r) => r.logicalFamily === 'Georgia')).toMatchObject({
       reason: 'bundled_substitute',
       missing: false,
     });
     expect(report.find((r) => r.logicalFamily === 'Baskerville Old Face')).toMatchObject({
+      reason: 'bundled_substitute',
+      missing: false,
+    });
+    expect(report.find((r) => r.logicalFamily === 'Arial Black')).toMatchObject({
       reason: 'bundled_substitute',
       missing: false,
     });
@@ -137,6 +147,10 @@ describe('buildFontReport', () => {
       missing: true,
     });
     expect(report.find((r) => r.logicalFamily === 'Tahoma')).toMatchObject({
+      reason: 'category_fallback',
+      missing: true,
+    });
+    expect(report.find((r) => r.logicalFamily === 'Gill Sans MT Condensed')).toMatchObject({
       reason: 'category_fallback',
       missing: true,
     });

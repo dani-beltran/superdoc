@@ -12,6 +12,7 @@ describe('font resolver', () => {
     expect(resolvePhysicalFamily('Calibri')).toBe('Carlito');
     expect(resolvePhysicalFamily('Cambria')).toBe('Caladea');
     expect(resolvePhysicalFamily('Arial')).toBe('Liberation Sans');
+    expect(resolvePhysicalFamily('Arial Black')).toBe('Archivo Black');
     expect(resolvePhysicalFamily('Times New Roman')).toBe('Liberation Serif');
     expect(resolvePhysicalFamily('Courier New')).toBe('Liberation Mono');
     expect(resolvePhysicalFamily('Helvetica')).toBe('Liberation Sans');
@@ -27,6 +28,7 @@ describe('font resolver', () => {
     expect(resolvePhysicalFamily('Lucida Console')).toBe('Noto Sans Mono');
     expect(resolvePhysicalFamily('Tahoma')).toBe('Noto Sans');
     expect(resolvePhysicalFamily('Trebuchet MS')).toBe('PT Sans');
+    expect(resolvePhysicalFamily('Gill Sans MT Condensed')).toBe('PT Sans Narrow');
   });
 
   it('resolves the PRIMARY family of a CSS stack and keeps the fallbacks', () => {
@@ -73,6 +75,11 @@ describe('font resolver', () => {
       physicalFamily: 'Liberation Sans Narrow',
       reason: 'bundled_substitute',
     });
+    expect(resolveFontFamily('Arial Black')).toEqual({
+      logicalFamily: 'Arial Black',
+      physicalFamily: 'Archivo Black',
+      reason: 'bundled_substitute',
+    });
     expect(resolveFontFamily('Century')).toEqual({
       logicalFamily: 'Century',
       physicalFamily: 'C059',
@@ -96,6 +103,11 @@ describe('font resolver', () => {
     expect(resolveFontFamily('Lucida Console')).toEqual({
       logicalFamily: 'Lucida Console',
       physicalFamily: 'Noto Sans Mono',
+      reason: 'category_fallback',
+    });
+    expect(resolveFontFamily('Gill Sans MT Condensed')).toEqual({
+      logicalFamily: 'Gill Sans MT Condensed',
+      physicalFamily: 'PT Sans Narrow',
       reason: 'category_fallback',
     });
     expect(resolveFontFamily('Calibri, sans-serif').logicalFamily).toBe('Calibri, sans-serif');
@@ -448,6 +460,7 @@ describe('face-aware resolution (resolveFace / resolvePhysicalFamilyForFace)', (
       if (norm(f) === 'bacasime antique') return w === '400' && s === 'normal';
       if (norm(f) === 'oregano italic') return w === '400' && s === 'normal';
       if (norm(f) === 'noto sans mono') return s === 'normal' && (w === '400' || w === '700');
+      if (norm(f) === 'pt sans narrow') return s === 'normal' && (w === '400' || w === '700');
       return false;
     };
 
@@ -469,6 +482,31 @@ describe('face-aware resolution (resolveFace / resolvePhysicalFamilyForFace)', (
     });
     expect(r.resolveFace('Lucida Console', { weight: '700', style: 'italic' }, reviewedBatchFaces)).toMatchObject({
       physicalFamily: 'Noto Sans Mono',
+      reason: 'category_fallback',
+      sourceFace: { weight: '700', style: 'normal' },
+    });
+    expect(
+      r.resolveFace('Arial Black', { weight: '400', style: 'italic' }, (f, w, s) => {
+        return norm(f) === 'archivo black' && w === '400' && s === 'normal';
+      }),
+    ).toMatchObject({
+      physicalFamily: 'Archivo Black',
+      reason: 'bundled_substitute',
+      sourceFace: { weight: '400', style: 'normal' },
+    });
+    expect(
+      r.resolveFace('Arial Black', { weight: '700', style: 'normal' }, (f, w, s) => {
+        return norm(f) === 'archivo black' && w === '400' && s === 'normal';
+      }),
+    ).toMatchObject({
+      logicalFamily: 'Arial Black',
+      physicalFamily: 'Arial Black',
+      reason: 'fallback_face_absent',
+    });
+    expect(
+      r.resolveFace('Gill Sans MT Condensed', { weight: '700', style: 'italic' }, reviewedBatchFaces),
+    ).toMatchObject({
+      physicalFamily: 'PT Sans Narrow',
       reason: 'category_fallback',
       sourceFace: { weight: '700', style: 'normal' },
     });
