@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { composeToolbarFontOptions, TOOLBAR_FONTS } from './constants';
 
 describe('TOOLBAR_FONTS (built-in font dropdown, derived from the font-offering registry)', () => {
-  it('advertises bundled defaults and bundled qualified choices, in alphabetical order', () => {
+  it('advertises bundled defaults and selected bundled fallback choices, in alphabetical order', () => {
     expect(TOOLBAR_FONTS.map((f) => f.label)).toEqual([
       'Arial',
+      'Baskerville Old Face',
+      'Brush Script MT',
       'Calibri',
       'Comic Sans MS',
       'Cooper Black',
@@ -12,6 +14,7 @@ describe('TOOLBAR_FONTS (built-in font dropdown, derived from the font-offering 
       'Garamond',
       'Georgia',
       'Helvetica',
+      'Lucida Console',
       'Tahoma',
       'Times New Roman',
       'Trebuchet MS',
@@ -71,6 +74,8 @@ describe('composeToolbarFontOptions (document fonts unioned with the bundled def
       'Aptos',
       'Arial',
       'Bangla MN',
+      'Baskerville Old Face',
+      'Brush Script MT',
       'Calibri',
       'Comic Sans MS',
       'Cooper Black',
@@ -78,6 +83,7 @@ describe('composeToolbarFontOptions (document fonts unioned with the bundled def
       'Garamond',
       'Georgia',
       'Helvetica',
+      'Lucida Console',
       'Tahoma',
       'Times New Roman',
       'Trebuchet MS',

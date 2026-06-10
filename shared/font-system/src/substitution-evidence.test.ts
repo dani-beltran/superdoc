@@ -16,6 +16,7 @@ const EXPECTED_SUBSTITUTES: ReadonlyArray<readonly [logical: string, physical: s
   ['Helvetica', 'Liberation Sans'],
   ['Cooper Black', 'Caprasimo'],
   ['Georgia', 'Gelasio'],
+  ['Baskerville Old Face', 'Bacasime Antique'],
 ];
 
 describe('substitution evidence -> resolver derivation', () => {
@@ -132,5 +133,43 @@ describe('substitution evidence -> resolver derivation', () => {
       physicalFamily: 'Caprasimo',
       reason: 'bundled_substitute',
     });
+  });
+
+  it('new reviewed rows preserve their real-vs-synthetic face model', () => {
+    expect(SUBSTITUTION_EVIDENCE.find((r) => r.evidenceId === 'baskerville-old-face')).toMatchObject({
+      logicalFamily: 'Baskerville Old Face',
+      physicalFamily: 'Bacasime Antique',
+      policyAction: 'substitute',
+      verdict: 'visual_only',
+      faces: { regular: true, bold: false, italic: false, boldItalic: false },
+      faceSources: {
+        bold: { kind: 'synthetic', from: 'regular' },
+        italic: { kind: 'synthetic', from: 'regular' },
+        boldItalic: { kind: 'synthetic', from: 'regular' },
+      },
+    });
+    expect(SUBSTITUTION_EVIDENCE.find((r) => r.evidenceId === 'brush-script-mt')).toMatchObject({
+      logicalFamily: 'Brush Script MT',
+      physicalFamily: 'Oregano Italic',
+      policyAction: 'category_fallback',
+      faces: { regular: true, bold: false, italic: false, boldItalic: false },
+      faceSources: {
+        bold: { kind: 'synthetic', from: 'regular' },
+      },
+    });
+    expect(SUBSTITUTION_EVIDENCE.find((r) => r.evidenceId === 'lucida-console')).toMatchObject({
+      logicalFamily: 'Lucida Console',
+      physicalFamily: 'Noto Sans Mono',
+      policyAction: 'category_fallback',
+      faces: { regular: true, bold: true, italic: false, boldItalic: false },
+      faceSources: {
+        italic: { kind: 'synthetic', from: 'regular' },
+        boldItalic: { kind: 'synthetic', from: 'bold' },
+      },
+      advance: { basis: 'monospace_cell', meanDelta: 0.00254, maxDelta: 0.00303 },
+    });
+    expect(resolveFontFamily('Baskerville Old Face').reason).toBe('bundled_substitute');
+    expect(resolveFontFamily('Brush Script MT').reason).toBe('category_fallback');
+    expect(resolveFontFamily('Lucida Console').reason).toBe('category_fallback');
   });
 });

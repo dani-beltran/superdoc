@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "spdxExpression": "OFL-1.1 AND Apache-2.0",
-  "generatedFrom": "Bundled font legal review, 2026-06-03; Caprasimo added from DocFonts Google Fonts OFL provenance, 2026-06-08; OFL fallback batch added from DocFonts Google Fonts provenance, 2026-06-09",
+  "generatedFrom": "Bundled font legal review, 2026-06-03; Caprasimo added from DocFonts Google Fonts OFL provenance, 2026-06-08; OFL fallback batch added from DocFonts Google Fonts provenance, 2026-06-09; Bacasime Antique, Oregano Italic, and Noto Sans Mono added from DocFonts Google Fonts provenance, 2026-06-09",
   "families": [
     {
       "family": "Carlito",
@@ -213,6 +213,52 @@
       ]
     },
     {
+      "family": "Bacasime Antique",
+      "replaces": ["Baskerville Old Face"],
+      "license": "OFL-1.1",
+      "licenseFiles": ["OFL.txt"],
+      "version": "2.000",
+      "upstreamSource": "google/fonts c89741abbf4eeabce432c3ed2fd7dc28b022701e, ofl/bacasimeantique",
+      "reservedFontName": "Playfair",
+      "copyrightNotice": "Copyright 2023 The Bacasime Antique Project Authors (https://github.com/docrepair-fonts/bacasime-antique-fonts), with Reserved Font Name \"Playfair\".",
+      "trademarkNotice": "Playfair is a trademark of Claus Eggers Sørensen.",
+      "sourceFile": {
+        "file": "BacasimeAntique-Regular.ttf",
+        "sha256": "7dac1e5f979df3deb933453ed8584a39099a38889d109c1384db1b8bab5f7d28"
+      },
+      "faces": [
+        {
+          "file": "BacasimeAntique-Regular.woff2",
+          "weight": "normal",
+          "style": "normal",
+          "sha256": "c202b418883518fb9200de4ff3eac96bf4345b3102d30a92a188496ffff7e9f7"
+        }
+      ]
+    },
+    {
+      "family": "Oregano Italic",
+      "replaces": ["Brush Script MT"],
+      "license": "OFL-1.1",
+      "licenseFiles": ["OFL.txt"],
+      "version": "1.000",
+      "upstreamSource": "google/fonts c89741abbf4eeabce432c3ed2fd7dc28b022701e, ofl/oregano",
+      "reservedFontName": "Oregano Italic",
+      "copyrightNotice": "Copyright (c) 2012 by Brian J. Bonislawsky DBA Astigmatic (AOETI) (astigma@astigmatic.com), with Reserved Font Name \"Oregano Italic\".",
+      "trademarkNotice": "Oregano Italic is a trademark of Astigmatic.",
+      "sourceFile": {
+        "file": "Oregano-Italic.ttf",
+        "sha256": "5e4df67997869d4e68dba1a38463a70c8679d29cb7ac678779631db9382f5538"
+      },
+      "faces": [
+        {
+          "file": "OreganoItalic-Regular.woff2",
+          "weight": "normal",
+          "style": "normal",
+          "sha256": "39354af83710a3a491311379839e024484e2fd3c2df087411ed7beeeed0694ae"
+        }
+      ]
+    },
+    {
       "family": "Gelasio",
       "replaces": ["Georgia"],
       "license": "OFL-1.1",
@@ -350,7 +396,7 @@
       "upstreamSource": "google/fonts c89741abbf4eeabce432c3ed2fd7dc28b022701e, ofl/notosans",
       "reservedFontName": null,
       "copyrightNotice": "Copyright 2022 The Noto Project Authors (https://github.com/notofonts/latin-greek-cyrillic)",
-      "trademarkNotice": null,
+      "trademarkNotice": "Noto is a trademark of Google LLC.",
       "sourceFiles": [
         {
           "file": "NotoSans[wdth,wght].ttf",
@@ -389,6 +435,39 @@
           "weight": "bold",
           "style": "italic",
           "sha256": "081e841bfe1ebfcf3687499ecda39f0a10ea40e0a5d131d74e1f375d1d18a9f1"
+        }
+      ]
+    },
+    {
+      "family": "Noto Sans Mono",
+      "replaces": ["Lucida Console"],
+      "license": "OFL-1.1",
+      "licenseFiles": ["OFL.txt"],
+      "version": "2.014",
+      "upstreamSource": "google/fonts c89741abbf4eeabce432c3ed2fd7dc28b022701e, ofl/notosansmono",
+      "reservedFontName": null,
+      "copyrightNotice": "Copyright 2022 The Noto Project Authors (https://github.com/notofonts/latin-greek-cyrillic)",
+      "trademarkNotice": "Noto is a trademark of Google LLC.",
+      "sourceFiles": [
+        {
+          "file": "NotoSansMono[wdth,wght].ttf",
+          "sha256": "2cb2adb378a8f574213e23df697050b83c54c27df465a2015552740b2769a081",
+          "instanceWeights": [400, 700],
+          "instanceWidth": 100
+        }
+      ],
+      "faces": [
+        {
+          "file": "NotoSansMono-Regular.woff2",
+          "weight": "normal",
+          "style": "normal",
+          "sha256": "eb85e50750f8a0dec1d7d0e0b1c0b7367fd127b814b9cea0262c230ec16450c4"
+        },
+        {
+          "file": "NotoSansMono-Bold.woff2",
+          "weight": "bold",
+          "style": "normal",
+          "sha256": "2f1dd33ccc68b2c455479ef2f09920b9d7728b3abacc591c8481f9c7472664b4"
         }
       ]
     },

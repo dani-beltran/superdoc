@@ -223,6 +223,9 @@ if (errors.length === 0) {
     if (family.trademarkNotice && !includesNormalized(licensesText, family.trademarkNotice)) {
       fail(`LICENSES.md missing trademark notice for ${family.family}`);
     }
+    if (family.trademarkNotice && !includesNormalized(thirdPartyText, family.trademarkNotice)) {
+      fail(`THIRD_PARTY_LICENSES.md missing trademark notice for ${family.family}`);
+    }
     if (family.license === 'OFL-1.1') {
       if (!oflText.includes(family.family)) fail(`OFL.txt missing family ${family.family}`);
       for (const fragment of oflNoticeFragments(family)) {

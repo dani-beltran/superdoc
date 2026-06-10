@@ -16,9 +16,12 @@ describe('font resolver', () => {
     expect(resolvePhysicalFamily('Courier New')).toBe('Liberation Mono');
     expect(resolvePhysicalFamily('Helvetica')).toBe('Liberation Sans');
     expect(resolvePhysicalFamily('Cooper Black')).toBe('Caprasimo');
+    expect(resolvePhysicalFamily('Baskerville Old Face')).toBe('Bacasime Antique');
+    expect(resolvePhysicalFamily('Brush Script MT')).toBe('Oregano Italic');
     expect(resolvePhysicalFamily('Georgia')).toBe('Gelasio');
     expect(resolvePhysicalFamily('Garamond')).toBe('Cardo');
     expect(resolvePhysicalFamily('Comic Sans MS')).toBe('Comic Relief');
+    expect(resolvePhysicalFamily('Lucida Console')).toBe('Noto Sans Mono');
     expect(resolvePhysicalFamily('Tahoma')).toBe('Noto Sans');
     expect(resolvePhysicalFamily('Trebuchet MS')).toBe('PT Sans');
   });
@@ -58,9 +61,24 @@ describe('font resolver', () => {
       physicalFamily: 'Gelasio',
       reason: 'bundled_substitute',
     });
+    expect(resolveFontFamily('Baskerville Old Face')).toEqual({
+      logicalFamily: 'Baskerville Old Face',
+      physicalFamily: 'Bacasime Antique',
+      reason: 'bundled_substitute',
+    });
     expect(resolveFontFamily('Tahoma')).toEqual({
       logicalFamily: 'Tahoma',
       physicalFamily: 'Noto Sans',
+      reason: 'category_fallback',
+    });
+    expect(resolveFontFamily('Brush Script MT')).toEqual({
+      logicalFamily: 'Brush Script MT',
+      physicalFamily: 'Oregano Italic',
+      reason: 'category_fallback',
+    });
+    expect(resolveFontFamily('Lucida Console')).toEqual({
+      logicalFamily: 'Lucida Console',
+      physicalFamily: 'Noto Sans Mono',
       reason: 'category_fallback',
     });
     expect(resolveFontFamily('Calibri, sans-serif').logicalFamily).toBe('Calibri, sans-serif');
@@ -405,6 +423,38 @@ describe('face-aware resolution (resolveFace / resolvePhysicalFamilyForFace)', (
       });
       expect(r.resolvePhysicalFamilyForFace('Cooper Black, serif', face, caprasimoRegular)).toBe('Caprasimo, serif');
     }
+  });
+
+  it('new reviewed rows use their DocFonts face sources without inventing missing files', () => {
+    const r = createFontResolver();
+    const reviewedBatchFaces = (f: string, w: '400' | '700', s: 'normal' | 'italic') => {
+      if (norm(f) === 'bacasime antique') return w === '400' && s === 'normal';
+      if (norm(f) === 'oregano italic') return w === '400' && s === 'normal';
+      if (norm(f) === 'noto sans mono') return s === 'normal' && (w === '400' || w === '700');
+      return false;
+    };
+
+    expect(r.resolveFace('Baskerville Old Face', { weight: '700', style: 'italic' }, reviewedBatchFaces)).toMatchObject(
+      {
+        physicalFamily: 'Bacasime Antique',
+        reason: 'bundled_substitute',
+        sourceFace: { weight: '400', style: 'normal' },
+      },
+    );
+    expect(r.resolveFace('Brush Script MT', { weight: '700', style: 'normal' }, reviewedBatchFaces)).toMatchObject({
+      physicalFamily: 'Oregano Italic',
+      reason: 'category_fallback',
+      sourceFace: { weight: '400', style: 'normal' },
+    });
+    expect(r.resolveFace('Lucida Console', { weight: '700', style: 'normal' }, reviewedBatchFaces)).toMatchObject({
+      physicalFamily: 'Noto Sans Mono',
+      reason: 'category_fallback',
+    });
+    expect(r.resolveFace('Lucida Console', { weight: '700', style: 'italic' }, reviewedBatchFaces)).toMatchObject({
+      physicalFamily: 'Noto Sans Mono',
+      reason: 'category_fallback',
+      sourceFace: { weight: '700', style: 'normal' },
+    });
   });
 
   it('single-face bundled substitute: a real requested substitute face beats a synthetic source face', () => {

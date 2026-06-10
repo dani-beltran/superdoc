@@ -186,6 +186,8 @@ describe('domain hooks', () => {
     expect(options?.map((option) => option.label)).toEqual([
       'Aptos',
       'Arial',
+      'Baskerville Old Face',
+      'Brush Script MT',
       'Calibri',
       'Comic Sans MS',
       'Cooper Black',
@@ -193,6 +195,7 @@ describe('domain hooks', () => {
       'Garamond',
       'Georgia',
       'Helvetica',
+      'Lucida Console',
       'Tahoma',
       'Times New Roman',
       'Trebuchet MS',

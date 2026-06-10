@@ -2,10 +2,11 @@ SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007
 
 This is the license text covering the OFL-1.1 fonts bundled in this directory
 (Carlito, Liberation Sans, Liberation Serif, Liberation Mono, Caprasimo,
-Gelasio, Cardo, Comic Relief, Noto Sans, PT Sans). Copyright notices and any
-Reserved Font Name statements for those fonts are reproduced verbatim below,
-taken from the fonts' own name tables, so they travel with this license text.
-LICENSES.md restates them for convenience.
+Bacasime Antique, Oregano Italic, Gelasio, Cardo, Comic Relief, Noto Sans,
+Noto Sans Mono, PT Sans). Copyright notices and any Reserved Font Name statements
+for those fonts are reproduced verbatim below, taken from the fonts' own name
+tables, so they travel with this license text. LICENSES.md restates them for
+convenience.
 Official OFL text: https://openfontlicense.org/open-font-license-official-text/
 
 -----------------------------------------------------------
@@ -28,6 +29,17 @@ Caprasimo:
     (https://github.com/docrepair-fonts/caprasimo-fonts).
     Licensed under the SIL Open Font License, Version 1.1.
     (This v1.001 file declares no OFL Reserved Font Name.)
+
+Bacasime Antique:
+    Copyright 2023 The Bacasime Antique Project Authors
+    (https://github.com/docrepair-fonts/bacasime-antique-fonts), with Reserved
+    Font Name "Playfair".
+    Licensed under the SIL Open Font License, Version 1.1.
+
+Oregano Italic:
+    Copyright (c) 2012 by Brian J. Bonislawsky DBA Astigmatic (AOETI)
+    (astigma@astigmatic.com), with Reserved Font Name "Oregano Italic".
+    Licensed under the SIL Open Font License, Version 1.1.
 
 Gelasio:
     Copyright 2022 The Gelasio Project Authors
@@ -52,6 +64,12 @@ Noto Sans:
     (https://github.com/notofonts/latin-greek-cyrillic)
     Licensed under the SIL Open Font License, Version 1.1.
     (These v2.015 files declare no OFL Reserved Font Name.)
+
+Noto Sans Mono:
+    Copyright 2022 The Noto Project Authors
+    (https://github.com/notofonts/latin-greek-cyrillic)
+    Licensed under the SIL Open Font License, Version 1.1.
+    (These v2.014 files declare no OFL Reserved Font Name.)
 
 PT Sans:
     Copyright (c) 2010, ParaType Ltd.

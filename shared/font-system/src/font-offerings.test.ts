@@ -12,6 +12,8 @@ import { SUBSTITUTION_EVIDENCE } from './substitution-evidence';
 const EXPECTED_DEFAULTS = ['Arial', 'Calibri', 'Courier New', 'Helvetica', 'Times New Roman'];
 const EXPECTED_BUILT_IN_TOOLBAR = [
   'Arial',
+  'Baskerville Old Face',
+  'Brush Script MT',
   'Calibri',
   'Comic Sans MS',
   'Cooper Black',
@@ -19,6 +21,7 @@ const EXPECTED_BUILT_IN_TOOLBAR = [
   'Garamond',
   'Georgia',
   'Helvetica',
+  'Lucida Console',
   'Tahoma',
   'Times New Roman',
   'Trebuchet MS',
@@ -26,9 +29,10 @@ const EXPECTED_BUILT_IN_TOOLBAR = [
 
 /**
  * Must NOT appear as DEFAULT options yet. Aptos has no clone, Arial Narrow still requires an asset,
- * Cambria/Georgia/Cooper Black are qualified, and Calibri Light/Tahoma/Trebuchet MS/Garamond/Comic
- * Sans MS are category fallbacks. Some may be explicit built-in picker choices, but none should become
- * silent strict defaults.
+ * Cambria/Georgia/Cooper Black/Baskerville Old Face are qualified, and Calibri
+ * Light/Tahoma/Trebuchet MS/Garamond/Comic Sans MS/Brush Script MT/Lucida Console are category
+ * fallbacks. Some may be explicit built-in picker choices, but none should become silent strict
+ * defaults.
  */
 const NOT_DEFAULT_YET = [
   'Aptos',
@@ -36,12 +40,14 @@ const NOT_DEFAULT_YET = [
   'Cambria',
   'Cooper Black',
   'Calibri Light',
-  'Baskerville',
+  'Baskerville Old Face',
   'Arial Narrow',
   'Tahoma',
   'Trebuchet MS',
   'Garamond',
   'Comic Sans MS',
+  'Brush Script MT',
+  'Lucida Console',
 ];
 
 describe('font offerings', () => {
@@ -71,6 +77,12 @@ describe('font offerings', () => {
     expect(byName('Cambria')).toMatchObject({ offering: 'qualified', verdict: 'visual_only', bundled: true });
     expect(byName('Cooper Black')).toMatchObject({ offering: 'qualified', verdict: 'visual_only', bundled: true });
     expect(byName('Georgia')).toMatchObject({ offering: 'qualified', verdict: 'near_metric', bundled: true });
+    expect(byName('Baskerville Old Face')).toMatchObject({
+      offering: 'qualified',
+      verdict: 'visual_only',
+      bundled: true,
+      physicalFamily: 'Bacasime Antique',
+    });
     expect(byName('Calibri Light')).toMatchObject({ offering: 'category_fallback', bundled: true });
     expect(byName('Tahoma')).toMatchObject({
       offering: 'category_fallback',
@@ -88,11 +100,23 @@ describe('font offerings', () => {
       bundled: true,
       physicalFamily: 'Comic Relief',
     });
+    expect(byName('Brush Script MT')).toMatchObject({
+      offering: 'category_fallback',
+      bundled: true,
+      physicalFamily: 'Oregano Italic',
+    });
+    expect(byName('Lucida Console')).toMatchObject({
+      offering: 'category_fallback',
+      bundled: true,
+      physicalFamily: 'Noto Sans Mono',
+    });
   });
 
   it('getDefaultFontFamilyOptions returns logical label + logical stack', () => {
     expect(getDefaultFontFamilyOptions()).toEqual([
       { label: 'Arial', value: 'Arial, sans-serif' },
+      { label: 'Baskerville Old Face', value: 'Baskerville Old Face, serif' },
+      { label: 'Brush Script MT', value: 'Brush Script MT, serif' },
       { label: 'Calibri', value: 'Calibri, sans-serif' },
       { label: 'Comic Sans MS', value: 'Comic Sans MS, sans-serif' },
       { label: 'Cooper Black', value: 'Cooper Black, serif' },
@@ -100,6 +124,7 @@ describe('font offerings', () => {
       { label: 'Garamond', value: 'Garamond, serif' },
       { label: 'Georgia', value: 'Georgia, serif' },
       { label: 'Helvetica', value: 'Helvetica, sans-serif' },
+      { label: 'Lucida Console', value: 'Lucida Console, monospace' },
       { label: 'Tahoma', value: 'Tahoma, sans-serif' },
       { label: 'Times New Roman', value: 'Times New Roman, serif' },
       { label: 'Trebuchet MS', value: 'Trebuchet MS, sans-serif' },

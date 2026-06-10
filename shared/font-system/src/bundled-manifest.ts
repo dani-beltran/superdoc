@@ -62,6 +62,12 @@ export const BUNDLED_MANIFEST: readonly BundledFamilyManifest[] = Object.freeze(
   family('Liberation Serif', 'LiberationSerif', 'OFL-1.1'),
   family('Liberation Mono', 'LiberationMono', 'OFL-1.1'),
   familyWithFaces('Caprasimo', 'OFL-1.1', [{ weight: 'normal', style: 'normal', file: 'Caprasimo-Regular.woff2' }]),
+  familyWithFaces('Bacasime Antique', 'OFL-1.1', [
+    { weight: 'normal', style: 'normal', file: 'BacasimeAntique-Regular.woff2' },
+  ]),
+  familyWithFaces('Oregano Italic', 'OFL-1.1', [
+    { weight: 'normal', style: 'normal', file: 'OreganoItalic-Regular.woff2' },
+  ]),
   family('Gelasio', 'Gelasio', 'OFL-1.1'),
   familyWithFaces('Cardo', 'OFL-1.1', [
     { weight: 'normal', style: 'normal', file: 'Cardo-Regular.woff2' },
@@ -73,5 +79,9 @@ export const BUNDLED_MANIFEST: readonly BundledFamilyManifest[] = Object.freeze(
     { weight: 'bold', style: 'normal', file: 'ComicRelief-Bold.woff2' },
   ]),
   family('Noto Sans', 'NotoSans', 'OFL-1.1'),
+  familyWithFaces('Noto Sans Mono', 'OFL-1.1', [
+    { weight: 'normal', style: 'normal', file: 'NotoSansMono-Regular.woff2' },
+    { weight: 'bold', style: 'normal', file: 'NotoSansMono-Bold.woff2' },
+  ]),
   family('PT Sans', 'PTSans', 'OFL-1.1'),
 ]);

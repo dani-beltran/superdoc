@@ -7,6 +7,8 @@ const FONT_TOGGLE = '[data-item="btn-fontFamily-toggle"]';
 const OPTION_LABEL = `${FONT_OPTION} .toolbar-dropdown-option__label`;
 const DEFAULT_FONT_LABELS = [
   'Arial',
+  'Baskerville Old Face',
+  'Brush Script MT',
   'Calibri',
   'Comic Sans MS',
   'Cooper Black',
@@ -14,6 +16,7 @@ const DEFAULT_FONT_LABELS = [
   'Garamond',
   'Georgia',
   'Helvetica',
+  'Lucida Console',
   'Tahoma',
   'Times New Roman',
   'Trebuchet MS',
@@ -249,16 +252,7 @@ test('a document-specific font reaches the live dropdown without status text and
     'Aptos',
     'Arial',
     'Bangla MN',
-    'Calibri',
-    'Comic Sans MS',
-    'Cooper Black',
-    'Courier New',
-    'Garamond',
-    'Georgia',
-    'Helvetica',
-    'Tahoma',
-    'Times New Roman',
-    'Trebuchet MS',
+    ...DEFAULT_FONT_LABELS.slice(1),
   ]);
 
   const aptosOption = superdoc.page
