@@ -292,10 +292,12 @@ describe('Editable extension insertText beforeinput handling', () => {
       content: '<p>seed text after</p>',
     }));
 
-    const selectedRange = findTextRange(editor.state.doc, 'seed text');
-    const afterRange = findTextRange(editor.state.doc, 'after');
-    expect(selectedRange).not.toBeNull();
-    expect(afterRange).not.toBeNull();
+    // The paragraph is one text node and findTextRange matches whole nodes,
+    // so derive the sub-ranges by offset within the full node.
+    const fullRange = findTextRange(editor.state.doc, 'seed text after');
+    expect(fullRange).not.toBeNull();
+    const selectedRange = { from: fullRange.from, to: fullRange.from + 'seed text'.length };
+    const afterRange = { from: fullRange.to - 'after'.length, to: fullRange.to };
 
     const preservedSelection = TextSelection.create(editor.state.doc, selectedRange.from, selectedRange.to);
     editor.view.dispatch(

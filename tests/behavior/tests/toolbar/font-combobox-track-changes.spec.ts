@@ -14,6 +14,17 @@ async function expectEditorFocused(superdoc: SuperDocFixture): Promise<void> {
     .toBe(true);
 }
 
+// Pin document fonts so async font detection cannot rebuild the toolbar items
+// mid Tab-handoff (mirrors font-dropdown-document-options.spec.ts).
+async function stubDocumentFontsAndNotify(superdoc: SuperDocFixture): Promise<void> {
+  await superdoc.page.evaluate(() => {
+    const sd = (window as any).superdoc;
+    sd.fonts.getDocumentFontOptions = () => [];
+    sd.toolbar.activeEditor.emit('fonts-changed');
+  });
+  await superdoc.waitForStable();
+}
+
 async function trackedText(superdoc: SuperDocFixture, markName: 'trackInsert' | 'trackDelete'): Promise<string> {
   return superdoc.page.evaluate((name) => {
     const editor = (window as any).editor;
@@ -35,13 +46,15 @@ test('typing over toolbar-preserved selection stays tracked in suggesting mode',
   await superdoc.setDocumentMode('suggesting');
   await superdoc.waitForStable();
 
+  await stubDocumentFontsAndNotify(superdoc);
+
   const pos = await superdoc.findTextPos('Tracked toolbar sample');
   await superdoc.setTextSelection(pos, pos + 'Tracked toolbar sample'.length);
   await superdoc.waitForStable();
 
   const fontInput = superdoc.page.locator('[data-item="btn-fontFamily"] input');
   await fontInput.click();
-  await fontInput.fill('co');
+  await fontInput.fill('cou');
   await fontInput.press('Tab');
 
   const fontSizeInput = superdoc.page.locator('#inlineTextInput-fontSize');

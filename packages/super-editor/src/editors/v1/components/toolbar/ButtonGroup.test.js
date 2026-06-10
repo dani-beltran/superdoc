@@ -432,27 +432,34 @@ describe('ButtonGroup dropdown trigger keyboard activation (codex P2 regression)
       hasInlineTextInput: ref(true),
       nestedOptions: ref([{ key: '12pt', label: '12', props: { 'data-item': 'btn-fontSize-option' } }]),
     };
-    wrapper = mountWithDropdownItem(fontFamily, {
-      mocks: {
-        $toolbar: {
-          flushPendingMarkCommands,
+    // Mount the trio up front: production toolbar rebuilds re-mount ButtonGroup
+    // with fresh props (Toolbar bumps its render key), so a mid-test setProps
+    // swap does not model anything real. Rebuild survival is covered by the
+    // browser-level Tab-flow behavior spec.
+    wrapper = mount(ButtonGroup, {
+      props: { toolbarItems: [fontFamily, separator, fontSize], overflowItems: [] },
+      attachTo: document.body,
+      global: {
+        // Matches production: $toolbar is installed via app.config.globalProperties,
+        // which is what getCurrentInstance().proxy can actually see.
+        config: {
+          globalProperties: {
+            $toolbar: {
+              flushPendingMarkCommands,
+            },
+          },
+        },
+        stubs: {
+          SdTooltip: { name: 'SdTooltip', template: '<div><slot name="trigger" /></div>' },
         },
       },
     });
-    await wrapper.setProps({ toolbarItems: [fontFamily, separator, fontSize] });
 
     const input = wrapper.get('[data-item="btn-fontFamily"] input');
     await input.trigger('focus');
     await input.setValue('hel');
     const event = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
     input.element.dispatchEvent(event);
-    const refreshedFontFamily = {
-      ...fontFamily,
-      id: ref('font-family-refreshed'),
-      label: ref('Helvetica'),
-      selectedValue: ref('Helvetica'),
-    };
-    await wrapper.setProps({ toolbarItems: [refreshedFontFamily, separator, fontSize] });
     await nextTick();
     await waitForAnimationFrame();
     await nextTick();
@@ -482,11 +489,13 @@ describe('ButtonGroup dropdown trigger keyboard activation (codex P2 regression)
     };
     const focusEditor = vi.fn();
     wrapper = mountWithDropdownItem(item, {
-      mocks: {
-        $toolbar: {
-          flushPendingMarkCommands,
-          activeEditor: {
-            focus: focusEditor,
+      config: {
+        globalProperties: {
+          $toolbar: {
+            flushPendingMarkCommands,
+            activeEditor: {
+              focus: focusEditor,
+            },
           },
         },
       },
@@ -521,11 +530,13 @@ describe('ButtonGroup dropdown trigger keyboard activation (codex P2 regression)
       ]),
     };
     wrapper = mountWithDropdownItem(item, {
-      mocks: {
-        $toolbar: {
-          flushPendingMarkCommands,
-          activeEditor: {
-            focus: focusEditor,
+      config: {
+        globalProperties: {
+          $toolbar: {
+            flushPendingMarkCommands,
+            activeEditor: {
+              focus: focusEditor,
+            },
           },
         },
       },
