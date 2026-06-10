@@ -33,6 +33,7 @@ import { scrollRangeIntoView } from './scroll-into-view.js';
 import { getSelectionAnchorRect, getSelectionRects } from './selection-rects.js';
 import { restoreSelection } from './selection-restore.js';
 import { createCustomCommandsRegistry } from './custom-commands.js';
+import { resolveTextTarget } from '../editors/v1/document-api-adapters/helpers/adapter-utils.js';
 import { createScope } from './scope.js';
 import type {
   CommandHandle,
@@ -2096,6 +2097,71 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     pageIndex: rect.pageIndex,
   });
 
+  // Text-target branch for `ui.viewport.getRect` (SD-3329). Resolves a
+  // Document API `TextAddress` (one block) or `TextTarget` (segments) to
+  // PM positions via `resolveTextTarget`, then to painted body rects via
+  // `getBodyRangeRects`. Body story only: a non-body `story` returns
+  // `unresolved` (valid target, story-aware text rects are a follow-up)
+  // rather than `invalid-target` (a caller-shape error). Multi-segment
+  // targets produce per-segment rects concatenated in document order, not
+  // a collapsed first→last range, so discontinuous / imported spans paint
+  // correctly.
+  const resolveTextTargetRects = (
+    hostEditor: SuperDocEditorLike,
+    presentation: NonNullable<SuperDocEditorLike['presentationEditor']>,
+    target: { story?: unknown; blockId?: unknown; range?: unknown; segments?: unknown },
+  ): ViewportRectResult => {
+    const story = target.story as { storyType?: unknown } | undefined;
+    if (story && story.storyType !== undefined && story.storyType !== 'body') {
+      return { success: false, reason: 'unresolved' };
+    }
+    if (typeof presentation.getBodyRangeRects !== 'function') {
+      return { success: false, reason: 'not-ready' };
+    }
+    const segments = Array.isArray(target.segments)
+      ? (target.segments as Array<{ blockId?: unknown; range?: unknown }>)
+      : [{ blockId: target.blockId, range: target.range }];
+    if (segments.length === 0) return { success: false, reason: 'invalid-target' };
+
+    const rects: ViewportRect[] = [];
+    for (const seg of segments) {
+      const blockId = seg?.blockId;
+      const range = seg?.range as { start?: unknown; end?: unknown } | undefined;
+      if (
+        typeof blockId !== 'string' ||
+        !blockId ||
+        !range ||
+        typeof range.start !== 'number' ||
+        typeof range.end !== 'number'
+      ) {
+        return { success: false, reason: 'invalid-target' };
+      }
+      let resolved: { from: number; to: number } | null;
+      try {
+        resolved = resolveTextTarget(hostEditor as unknown as Parameters<typeof resolveTextTarget>[0], {
+          kind: 'text',
+          blockId,
+          range: { start: range.start, end: range.end },
+        });
+      } catch {
+        // `resolveTextTarget` throws on ambiguous block ids (and other
+        // adapter/target errors). A public geometry read must never throw
+        // out — surface it as a structured failure. The target shape is
+        // valid; it just can't be resolved to a unique range.
+        return { success: false, reason: 'unresolved' };
+      }
+      if (!resolved) return { success: false, reason: 'unresolved' };
+      for (const r of presentation.getBodyRangeRects(resolved.from, resolved.to)) {
+        rects.push(toViewportRect(r));
+      }
+    }
+    // All segments resolved to model positions but nothing is painted —
+    // the page/story is virtualized or offscreen (same posture as the
+    // entity path's `not-mounted`).
+    if (rects.length === 0) return { success: false, reason: 'not-mounted' };
+    return { success: true, rect: rects[0], rects, pageIndex: rects[0].pageIndex };
+  };
+
   const viewport: ViewportHandle = {
     getRect(input: ViewportGetRectInput): ViewportRectResult {
       const target = input?.target;
@@ -2117,12 +2183,19 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
         return { success: false, reason: 'not-ready' };
       }
 
-      // Entity-anchored path. Text-anchored paths are deferred — the
-      // resolver needs story-aware routing through the active routed
-      // editor (header/footer/note vs body) to avoid silently reading
-      // body coords for a non-body target. Until that lands, surface
-      // an explicit `invalid-target` so consumers don't quietly get
-      // wrong rects.
+      // Text-anchored path (SD-3329): a `TextAddress` / `TextTarget`
+      // resolves to painted body rects. Body story only for now; non-body
+      // text targets return `unresolved` (story-aware text rects are a
+      // follow-up). Entity targets stay story-aware below.
+      if ('kind' in target && (target as { kind?: unknown }).kind === 'text') {
+        return resolveTextTargetRects(
+          editor,
+          presentation,
+          target as { story?: unknown; blockId?: unknown; range?: unknown; segments?: unknown },
+        );
+      }
+
+      // Entity-anchored path. Any other `kind` is a caller-shape error.
       if (!('kind' in target) || (target as { kind?: unknown }).kind !== 'entity') {
         return { success: false, reason: 'invalid-target' };
       }
