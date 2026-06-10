@@ -67,6 +67,9 @@ const {
 } = props.toolbarItem;
 
 const isSplit = computed(() => Boolean(splitButton?.value) && Boolean(hasCaret?.value));
+const isInlineSplitField = computed(
+  () => name?.value === 'fontSize' && Boolean(hasInlineTextInput?.value) && Boolean(hasCaret?.value),
+);
 
 const inlineTextInput = ref(label);
 const inlineInput = ref(null);
@@ -163,6 +166,8 @@ const caretIcon = computed(() => {
         narrow: isNarrow,
         wide: isWide,
         split: isSplit,
+        'split-field': isInlineSplitField,
+        'sd-toolbar-split-field': isInlineSplitField,
         'has-inline-text-input': hasInlineTextInput,
         'high-contrast': isHighContrastMode,
       }"
@@ -198,7 +203,7 @@ const caretIcon = computed(() => {
           {{ label }}
         </div>
 
-        <span v-if="inlineTextInputVisible">
+        <span v-if="inlineTextInputVisible" class="sd-toolbar-button__field sd-toolbar-split-field__main">
           <input
             v-if="name === 'fontSize'"
             v-model="inlineTextInput"
@@ -226,8 +231,21 @@ const caretIcon = computed(() => {
           />
         </span>
 
+        <button
+          v-if="isInlineSplitField"
+          type="button"
+          class="sd-toolbar-button__field-caret sd-toolbar-split-field__caret"
+          :data-item="`btn-${name || ''}-caret`"
+          :aria-label="`${attributes.ariaLabel} options`"
+          :disabled="disabled"
+          tabindex="-1"
+          @mousedown.prevent
+        >
+          <span class="sd-dropdown-caret" v-html="caretIcon" :style="{ opacity: disabled ? 0.6 : 1 }"></span>
+        </button>
+
         <div
-          v-if="hasCaret"
+          v-else-if="hasCaret"
           class="sd-dropdown-caret"
           v-html="caretIcon"
           :style="{ opacity: disabled ? 0.6 : 1 }"
@@ -310,6 +328,11 @@ const caretIcon = computed(() => {
 }
 
 .sd-toolbar-button.split {
+  padding: 0;
+  gap: 0;
+}
+
+.sd-toolbar-button.split-field {
   padding: 0;
   gap: 0;
 }
@@ -432,7 +455,7 @@ const caretIcon = computed(() => {
 
 .button-text-input--font-size {
   width: 34px;
-  margin-right: 2px;
+  margin-right: 0;
   padding: 0;
   border-color: transparent;
   background-color: transparent;

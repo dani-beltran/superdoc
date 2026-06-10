@@ -332,7 +332,10 @@ describe('ButtonGroup dropdown trigger keyboard activation (codex P2 regression)
     await wrapper.get('#inlineTextInput-fontSize').trigger('click');
     expect(item.expand.value).toBe(false);
 
-    await wrapper.get('[data-item="btn-fontSize"] .sd-dropdown-caret').trigger('click');
+    const caret = wrapper.get('[data-item="btn-fontSize-caret"]');
+    expect(caret.attributes('aria-label')).toBe('Test dropdown options');
+
+    await caret.trigger('click');
     expect(item.expand.value).toBe(true);
   });
 

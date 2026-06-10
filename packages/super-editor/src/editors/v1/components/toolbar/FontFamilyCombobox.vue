@@ -412,38 +412,39 @@ watch(
 <template>
   <div
     ref="rootRef"
-    class="sd-font-combobox"
+    class="sd-font-combobox sd-toolbar-split-field"
     :class="{ 'sd-disabled': disabled, 'high-contrast': isHighContrastMode }"
     :style="props.item.style?.value"
     data-item="btn-fontFamily"
   >
-    <input
-      ref="inputRef"
-      class="button-text-input sd-font-combobox__input"
-      type="text"
-      role="combobox"
-      autocomplete="off"
-      spellcheck="false"
-      :value="boundValue"
-      :style="inputStyle"
-      :disabled="disabled"
-      :aria-label="ariaLabel"
-      :aria-expanded="isOpen ? 'true' : 'false'"
-      :aria-controls="listboxId"
-      :aria-activedescendant="activeDescendant"
-      aria-haspopup="listbox"
-      aria-autocomplete="both"
-      @focus="onFocus"
-      @mousedown="onInputMousedown"
-      @blur="onBlur"
-      @input="onInput"
-      @keydown="onKeydown"
-      @compositionstart="isComposing = true"
-      @compositionend="onCompositionEnd"
-    />
+    <span class="sd-font-combobox__field sd-toolbar-split-field__main" @mousedown="onInputMousedown">
+      <input
+        ref="inputRef"
+        class="button-text-input sd-font-combobox__input"
+        type="text"
+        role="combobox"
+        autocomplete="off"
+        spellcheck="false"
+        :value="boundValue"
+        :style="inputStyle"
+        :disabled="disabled"
+        :aria-label="ariaLabel"
+        :aria-expanded="isOpen ? 'true' : 'false'"
+        :aria-controls="listboxId"
+        :aria-activedescendant="activeDescendant"
+        aria-haspopup="listbox"
+        aria-autocomplete="both"
+        @focus="onFocus"
+        @blur="onBlur"
+        @input="onInput"
+        @keydown="onKeydown"
+        @compositionstart="isComposing = true"
+        @compositionend="onCompositionEnd"
+      />
+    </span>
     <button
       type="button"
-      class="sd-font-combobox__caret"
+      class="sd-font-combobox__caret sd-toolbar-split-field__caret"
       data-item="btn-fontFamily-toggle"
       tabindex="-1"
       :aria-label="`${ariaLabel} options`"
@@ -492,7 +493,7 @@ watch(
   align-items: center;
   height: var(--sd-ui-toolbar-height, 32px);
   max-height: var(--sd-ui-toolbar-height, 32px);
-  padding: 0 2px 0 var(--sd-ui-toolbar-item-padding, 5px);
+  padding: 0;
   border-radius: var(--sd-ui-radius, 6px);
   box-sizing: border-box;
   cursor: text;
@@ -501,16 +502,11 @@ watch(
   position: relative;
 }
 
-.sd-font-combobox:hover {
-  background-color: var(--sd-ui-toolbar-button-hover-bg, var(--sd-ui-hover-bg, #dbdbdb));
-}
-
 .sd-font-combobox:focus-within {
   background-color: var(--sd-ui-toolbar-button-active-bg, var(--sd-ui-active-bg, #c8d0d8));
 }
 
-.sd-font-combobox.high-contrast:focus-within,
-.sd-font-combobox.high-contrast:hover {
+.sd-font-combobox.high-contrast:focus-within {
   background-color: #000;
   color: #fff;
 }
@@ -520,10 +516,15 @@ watch(
   opacity: 0.35;
 }
 
-.sd-font-combobox__input {
+.sd-font-combobox__field {
   flex: 1 1 auto;
   min-width: 0;
+}
+
+.sd-font-combobox__input {
   width: 100%;
+  min-width: 0;
+  height: 100%;
   border: none;
   outline: none;
   background: transparent;
@@ -531,7 +532,6 @@ watch(
   font-size: var(--sd-ui-font-size-500, 15px);
   font-weight: 400;
   text-overflow: ellipsis;
-  padding: 0;
 }
 
 .sd-font-combobox__legacy-label {
@@ -544,22 +544,8 @@ watch(
 }
 
 .sd-font-combobox__caret {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   flex-shrink: 0;
-  width: 16px;
-  height: 16px;
-  margin-left: 2px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-}
-
-.sd-font-combobox.sd-disabled .sd-font-combobox__caret {
-  cursor: default;
+  margin: 0;
 }
 
 .sd-dropdown-caret {
