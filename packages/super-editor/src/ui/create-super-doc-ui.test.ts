@@ -148,6 +148,7 @@ describe('createSuperDocUI', () => {
     teardown.push(() => ui.destroy());
 
     const options = ui.fonts.getOptions();
+    const sizeOptions = ui.fonts.getSizeOptions();
     expect(options.map((option) => option.label)).toEqual([
       'Aptos',
       'Arial',
@@ -172,6 +173,23 @@ describe('createSuperDocUI', () => {
       previewFamily: 'Aptos',
     });
     expect(options.every((option) => !('status' in option))).toBe(true);
+    expect(sizeOptions.map((option) => option.value)).toEqual([
+      '8pt',
+      '9pt',
+      '10pt',
+      '11pt',
+      '12pt',
+      '14pt',
+      '18pt',
+      '24pt',
+      '30pt',
+      '36pt',
+      '48pt',
+      '60pt',
+      '72pt',
+      '96pt',
+    ]);
+    expect(ui.fonts.getSnapshot().sizeOptions).toBe(sizeOptions);
   });
 
   it('refreshes ui.fonts when fonts-changed fires', async () => {
