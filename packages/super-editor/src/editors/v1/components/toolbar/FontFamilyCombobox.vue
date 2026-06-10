@@ -15,7 +15,7 @@ const props = defineProps({
   },
 });
 
-const emit = defineEmits(['command', 'item-clicked', 'tab-out']);
+const emit = defineEmits(['command', 'item-clicked', 'tab-out', 'editor-handoff']);
 
 const { isHighContrastMode } = useHighContrastMode();
 
@@ -295,7 +295,7 @@ const onKeydown = (event) => {
       break;
     case 'Enter':
       event.preventDefault();
-      applySelection();
+      if (applySelection()) emit('editor-handoff');
       inputRef.value?.blur();
       break;
     case 'Tab':
@@ -339,6 +339,7 @@ const onOptionMousedown = (event, option) => {
   // then settle focus so the field returns to its non-editing applied state.
   event.preventDefault();
   applyOption(option);
+  emit('editor-handoff');
   inputRef.value?.blur();
 };
 

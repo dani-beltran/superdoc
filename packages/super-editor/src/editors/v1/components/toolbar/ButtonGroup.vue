@@ -7,6 +7,7 @@ import ToolbarDropdown from './ToolbarDropdown.vue';
 import FontFamilyCombobox from './FontFamilyCombobox.vue';
 import SdTooltip from './SdTooltip.vue';
 import { useHighContrastMode } from '../../composables/use-high-contrast-mode';
+import { prepareSelectionForTextInputHandoff } from '@core/selection-state.js';
 
 const emit = defineEmits(['command', 'item-clicked', 'dropdown-update-show']);
 const { proxy } = getCurrentInstance();
@@ -182,8 +183,17 @@ const handleComboboxCommand = (payload) => {
 
 const waitForFrame = () => new Promise((resolve) => requestAnimationFrame(resolve));
 
+const flushPendingToolbarMarks = () => Boolean(proxy?.$toolbar?.flushPendingMarkCommands?.());
+
+const handleEditorTextInputHandoff = () => {
+  flushPendingToolbarMarks();
+  prepareSelectionForTextInputHandoff(proxy?.$toolbar?.activeEditor);
+  focusEditor();
+};
+
 const handleComboboxTabOut = (startIndex, event) => {
   closeDropdowns();
+  flushPendingToolbarMarks();
   if (event.shiftKey) {
     focusAdjacentToolbarControlAfterUpdate(startIndex, -1, () => focusPreviousButtonGroup() || focusEditor());
   } else {
@@ -194,7 +204,7 @@ const handleComboboxTabOut = (startIndex, event) => {
 const handleToolbarButtonTabOut = (item, event) => {
   closeDropdowns();
   if (item.name.value === 'fontSize' && !event.shiftKey) {
-    focusEditor();
+    handleEditorTextInputHandoff();
     return;
   }
   if (event.shiftKey) {
@@ -517,6 +527,7 @@ onBeforeUnmount(() => {
             @command="handleComboboxCommand"
             @item-clicked="handleComboboxItemClicked(item)"
             @tab-out="handleComboboxTabOut(index, $event)"
+            @editor-handoff="handleEditorTextInputHandoff"
           />
         </template>
         <div>

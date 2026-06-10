@@ -398,6 +398,7 @@ describe('ButtonGroup dropdown trigger keyboard activation (codex P2 regression)
   });
 
   it('moves from font family to font size on Tab', async () => {
+    const flushPendingMarkCommands = vi.fn(() => true);
     const fontFamily = {
       ...createFullDropdownItem('Arial'),
       command: 'setFontFamily',
@@ -428,7 +429,13 @@ describe('ButtonGroup dropdown trigger keyboard activation (codex P2 regression)
       hasInlineTextInput: ref(true),
       nestedOptions: ref([{ key: '12pt', label: '12', props: { 'data-item': 'btn-fontSize-option' } }]),
     };
-    wrapper = mountWithDropdownItem(fontFamily);
+    wrapper = mountWithDropdownItem(fontFamily, {
+      mocks: {
+        $toolbar: {
+          flushPendingMarkCommands,
+        },
+      },
+    });
     await wrapper.setProps({ toolbarItems: [fontFamily, separator, fontSize] });
 
     const input = wrapper.get('[data-item="btn-fontFamily"] input');
@@ -448,6 +455,7 @@ describe('ButtonGroup dropdown trigger keyboard activation (codex P2 regression)
     await nextTick();
 
     expect(event.defaultPrevented).toBe(true);
+    expect(flushPendingMarkCommands).toHaveBeenCalledTimes(1);
     expect(wrapper.emitted('command')?.[0]?.[0].argument).toBe('Helvetica');
     const fontSizeInput = wrapper.get('#inlineTextInput-fontSize').element;
     expect(document.activeElement).toBe(fontSizeInput);
@@ -457,6 +465,7 @@ describe('ButtonGroup dropdown trigger keyboard activation (codex P2 regression)
   });
 
   it('moves from font size to the editor on Tab', async () => {
+    const flushPendingMarkCommands = vi.fn(() => true);
     const item = {
       ...createFullDropdownItem('12pt'),
       command: 'setFontSize',
@@ -472,6 +481,7 @@ describe('ButtonGroup dropdown trigger keyboard activation (codex P2 regression)
     wrapper = mountWithDropdownItem(item, {
       mocks: {
         $toolbar: {
+          flushPendingMarkCommands,
           activeEditor: {
             focus: focusEditor,
           },
@@ -488,6 +498,40 @@ describe('ButtonGroup dropdown trigger keyboard activation (codex P2 regression)
 
     expect(event.defaultPrevented).toBe(true);
     expect(wrapper.emitted('command')?.[0]?.[0].argument).toBe('18');
+    expect(flushPendingMarkCommands).toHaveBeenCalledTimes(1);
+    expect(focusEditor).toHaveBeenCalledTimes(1);
+  });
+
+  it('flushes pending font marks when the font family combobox hands focus back to the editor', async () => {
+    const flushPendingMarkCommands = vi.fn(() => true);
+    const focusEditor = vi.fn();
+    const item = {
+      ...createFullDropdownItem('Arial'),
+      command: 'setFontFamily',
+      id: ref('font-family'),
+      name: ref('fontFamily'),
+      label: ref('Arial'),
+      selectedValue: ref('Arial'),
+      nestedOptions: ref([
+        { key: 'Arial', label: 'Arial', props: { style: { fontFamily: 'Arial' } } },
+        { key: 'Helvetica', label: 'Helvetica', props: { style: { fontFamily: 'Helvetica' } } },
+      ]),
+    };
+    wrapper = mountWithDropdownItem(item, {
+      mocks: {
+        $toolbar: {
+          flushPendingMarkCommands,
+          activeEditor: {
+            focus: focusEditor,
+          },
+        },
+      },
+    });
+
+    wrapper.findComponent({ name: 'FontFamilyCombobox' }).vm.$emit('editor-handoff');
+    await nextTick();
+
+    expect(flushPendingMarkCommands).toHaveBeenCalledTimes(1);
     expect(focusEditor).toHaveBeenCalledTimes(1);
   });
 });

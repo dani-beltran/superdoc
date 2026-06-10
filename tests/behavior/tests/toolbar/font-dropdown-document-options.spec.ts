@@ -5,6 +5,19 @@ test.use({ config: { toolbar: 'full', showSelection: true } });
 const FONT_OPTION = '[data-item="btn-fontFamily-option"]';
 const FONT_TOGGLE = '[data-item="btn-fontFamily-toggle"]';
 const OPTION_LABEL = `${FONT_OPTION} .toolbar-dropdown-option__label`;
+const DEFAULT_FONT_LABELS = [
+  'Arial',
+  'Calibri',
+  'Comic Sans MS',
+  'Cooper Black',
+  'Courier New',
+  'Garamond',
+  'Georgia',
+  'Helvetica',
+  'Tahoma',
+  'Times New Roman',
+  'Trebuchet MS',
+];
 
 async function openFontFamilyDropdown(superdoc: SuperDocFixture): Promise<void> {
   await superdoc.page.locator(FONT_TOGGLE).click();
@@ -16,19 +29,15 @@ async function fontOptionLabels(superdoc: SuperDocFixture): Promise<string[]> {
   return (await superdoc.page.locator(OPTION_LABEL).allInnerTexts()).map((label) => label.trim());
 }
 
-async function expectFontFamilyDropdownClosed(superdoc: SuperDocFixture): Promise<void> {
-  await expect(superdoc.page.locator(`${FONT_OPTION}:visible`)).toHaveCount(0);
+async function expectDefaultFontOptions(superdoc: SuperDocFixture): Promise<void> {
+  await openFontFamilyDropdown(superdoc);
+  expect(await fontOptionLabels(superdoc)).toEqual(DEFAULT_FONT_LABELS);
+  await superdoc.page.keyboard.press('Escape');
+  await expectFontFamilyDropdownClosed(superdoc);
 }
 
-async function expectEditorFocused(superdoc: SuperDocFixture): Promise<void> {
-  await expect
-    .poll(() =>
-      superdoc.page.evaluate(() => {
-        const active = document.activeElement;
-        return active instanceof HTMLElement && active.classList.contains('ProseMirror');
-      }),
-    )
-    .toBe(true);
+async function expectFontFamilyDropdownClosed(superdoc: SuperDocFixture): Promise<void> {
+  await expect(superdoc.page.locator(`${FONT_OPTION}:visible`)).toHaveCount(0);
 }
 
 async function selectFontOption(superdoc: SuperDocFixture, label: string): Promise<void> {
@@ -56,6 +65,26 @@ async function stubDocumentFontsAndNotify(
   await superdoc.waitForStable();
 }
 
+async function replaceSelectionThroughFontInputs(
+  superdoc: SuperDocFixture,
+  options: { fontPrefix: string; fontSize: string; replacement: string },
+): Promise<void> {
+  const fontInput = superdoc.page.locator('[data-item="btn-fontFamily"] input');
+  await fontInput.click();
+  await expectFontFamilyDropdownClosed(superdoc);
+
+  await superdoc.page.keyboard.type(options.fontPrefix);
+  await superdoc.page.keyboard.press('Tab');
+
+  const fontSizeInput = superdoc.page.locator('#inlineTextInput-fontSize');
+  await expect(fontSizeInput).toBeFocused();
+  await superdoc.page.keyboard.type(options.fontSize);
+  await superdoc.page.keyboard.press('Tab');
+
+  await superdoc.page.keyboard.type(options.replacement);
+  await superdoc.waitForStable();
+}
+
 test('font dropdown opens immediately with the built-in font list and an enabled control', async ({ superdoc }) => {
   const fontFamily = superdoc.page.locator('[data-item="btn-fontFamily"]');
   await expect(fontFamily).not.toHaveClass(/sd-disabled/);
@@ -63,19 +92,7 @@ test('font dropdown opens immediately with the built-in font list and an enabled
   await openFontFamilyDropdown(superdoc);
 
   const labels = await fontOptionLabels(superdoc);
-  expect(labels).toEqual([
-    'Arial',
-    'Calibri',
-    'Comic Sans MS',
-    'Cooper Black',
-    'Courier New',
-    'Garamond',
-    'Georgia',
-    'Helvetica',
-    'Tahoma',
-    'Times New Roman',
-    'Trebuchet MS',
-  ]);
+  expect(labels).toEqual(DEFAULT_FONT_LABELS);
   for (const absent of ['Aptos', 'Cambria', 'Calibri Light', 'Arial Narrow']) {
     expect(labels).not.toContain(absent);
   }
@@ -112,7 +129,7 @@ test('typing in the font combobox applies to the selected text without opening t
   await fontInput.click();
   await expectFontFamilyDropdownClosed(superdoc);
 
-  await fontInput.fill('co');
+  await fontInput.fill('cou');
   await fontInput.press('Enter');
   await superdoc.waitForStable();
 
@@ -124,49 +141,71 @@ test('tabbing through font family and size returns to the editor with formatting
   await superdoc.type('Keyboard flow sample');
   await superdoc.waitForStable();
 
-  // Pin document fonts so the typed prefix matches deterministically (see test above).
   await stubDocumentFontsAndNotify(superdoc, []);
+  await expectDefaultFontOptions(superdoc);
 
   const pos = await superdoc.findTextPos('Keyboard flow sample');
   await superdoc.setTextSelection(pos, pos + 'Keyboard flow sample'.length);
+  await superdoc.waitForStable();
+
+  await replaceSelectionThroughFontInputs(superdoc, {
+    fontPrefix: 'cou',
+    fontSize: '18',
+    replacement: 'done',
+  });
+
+  await superdoc.assertTextContent('done');
+  await superdoc.assertTextMarkAttrs('done', 'textStyle', {
+    fontFamily: 'Courier New',
+    fontSize: '18pt',
+  });
+});
+
+test('tabbing through font family and size preserves formatting when all text is selected', async ({ superdoc }) => {
+  await superdoc.type('Select all keyboard flow');
+  await superdoc.waitForStable();
+
+  await stubDocumentFontsAndNotify(superdoc, []);
+  await expectDefaultFontOptions(superdoc);
+
+  await superdoc.selectAll();
+  await superdoc.waitForStable();
+
+  await replaceSelectionThroughFontInputs(superdoc, {
+    fontPrefix: 'cal',
+    fontSize: '20',
+    replacement: 'done',
+  });
+
+  await superdoc.assertTextContent('done');
+  await superdoc.assertTextMarkAttrs('done', 'textStyle', {
+    fontFamily: 'Calibri',
+    fontSize: '20pt',
+  });
+});
+
+test('pressing Enter in the font combobox preserves formatting when all text is selected', async ({ superdoc }) => {
+  await superdoc.type('Select all enter flow');
+  await superdoc.waitForStable();
+
+  await stubDocumentFontsAndNotify(superdoc, []);
+  await expectDefaultFontOptions(superdoc);
+
+  await superdoc.selectAll();
   await superdoc.waitForStable();
 
   const fontInput = superdoc.page.locator('[data-item="btn-fontFamily"] input');
   await fontInput.click();
   await expectFontFamilyDropdownClosed(superdoc);
 
-  await fontInput.fill('co');
-  await fontInput.press('Tab');
-
-  const fontSizeInput = superdoc.page.locator('#inlineTextInput-fontSize');
-  await expect(fontSizeInput).toBeFocused();
-  await fontSizeInput.fill('18');
-  await fontSizeInput.press('Tab');
-  await expectEditorFocused(superdoc);
-
-  // Off-focus font commands are queued and replayed on the next selection update;
-  // wait for them to land on the selected text before typing the continuation.
-  await expect
-    .poll(async () => {
-      try {
-        await superdoc.assertTextMarkAttrs('Keyboard flow sample', 'textStyle', {
-          fontFamily: 'Courier New',
-          fontSize: '18pt',
-        });
-        return true;
-      } catch {
-        return false;
-      }
-    })
-    .toBe(true);
-
-  await superdoc.page.keyboard.type('Done');
+  await superdoc.page.keyboard.type('cal');
+  await superdoc.page.keyboard.press('Enter');
+  await superdoc.page.keyboard.type('done');
   await superdoc.waitForStable();
 
-  await superdoc.assertTextContent('Done');
-  await superdoc.assertTextMarkAttrs('Done', 'textStyle', {
-    fontFamily: 'Courier New',
-    fontSize: '18pt',
+  await superdoc.assertTextContent('done');
+  await superdoc.assertTextMarkAttrs('done', 'textStyle', {
+    fontFamily: 'Calibri',
   });
 });
 
