@@ -2,48 +2,35 @@ import { describe, expect, it } from 'vitest';
 import { composeToolbarFontOptions, TOOLBAR_FONTS } from './constants';
 
 describe('TOOLBAR_FONTS (built-in font dropdown, derived from the font-offering registry)', () => {
-  it('advertises bundled defaults and selected bundled fallback choices, in alphabetical order', () => {
-    expect(TOOLBAR_FONTS.map((f) => f.label)).toEqual([
-      'Arial',
-      'Arial Black',
-      'Arial Narrow',
-      'Baskerville Old Face',
-      'Bookman Old Style',
-      'Brush Script MT',
-      'Calibri',
-      'Century',
-      'Century Gothic',
-      'Comic Sans MS',
-      'Cooper Black',
-      'Courier New',
-      'Garamond',
-      'Georgia',
-      'Gill Sans MT Condensed',
-      'Helvetica',
-      'Lucida Console',
-      'Segoe UI',
-      'Tahoma',
-      'Times New Roman',
-      'Trebuchet MS',
-      'Verdana',
-    ]);
+  it('advertises the conservative no-package baseline, in alphabetical order', () => {
+    expect(TOOLBAR_FONTS.map((f) => f.label)).toEqual(['Arial', 'Courier New', 'Georgia', 'Times New Roman']);
   });
 
   it('does not leak non-advertised fonts into the default dropdown', () => {
     const labels = new Set(TOOLBAR_FONTS.map((f) => f.label));
-    for (const name of ['Aptos', 'Cambria', 'Calibri Light', 'Century Schoolbook', 'Arial MT', 'Courier', 'Times']) {
+    for (const name of [
+      'Aptos',
+      'Calibri',
+      'Cambria',
+      'Calibri Light',
+      'Century Schoolbook',
+      'Helvetica',
+      'Arial MT',
+      'Courier',
+      'Times',
+    ]) {
       expect(labels.has(name)).toBe(false);
     }
   });
 
   it('builds a FontConfig: logical label + logical key + physical-clone preview', () => {
-    const calibri = TOOLBAR_FONTS.find((f) => f.label === 'Calibri');
-    expect(calibri).toMatchObject({
-      label: 'Calibri', // applied to the selection + active-state match (Word-facing name)
-      key: 'Calibri, sans-serif', // logical CSS stack (option identity)
+    const arial = TOOLBAR_FONTS.find((f) => f.label === 'Arial');
+    expect(arial).toMatchObject({
+      label: 'Arial', // applied to the selection + active-state match (Word-facing name)
+      key: 'Arial, sans-serif', // logical CSS stack (option identity)
       fontWeight: 400,
       props: {
-        style: { fontFamily: 'Carlito, sans-serif' }, // preview renders in the bundled clone that paints
+        style: { fontFamily: 'Liberation Sans, sans-serif' }, // preview renders in the bundled clone that paints
         'data-item': 'btn-fontFamily-option',
       },
     });
@@ -81,28 +68,11 @@ describe('composeToolbarFontOptions (document fonts unioned with the bundled def
       'Apple Chancery',
       'Aptos',
       'Arial',
-      'Arial Black',
-      'Arial Narrow',
       'Bangla MN',
-      'Baskerville Old Face',
-      'Bookman Old Style',
-      'Brush Script MT',
       'Calibri',
-      'Century',
-      'Century Gothic',
-      'Comic Sans MS',
-      'Cooper Black',
       'Courier New',
-      'Garamond',
       'Georgia',
-      'Gill Sans MT Condensed',
-      'Helvetica',
-      'Lucida Console',
-      'Segoe UI',
-      'Tahoma',
       'Times New Roman',
-      'Trebuchet MS',
-      'Verdana',
     ]);
     expect(options.filter((o) => o.label === 'Calibri')).toHaveLength(1);
   });

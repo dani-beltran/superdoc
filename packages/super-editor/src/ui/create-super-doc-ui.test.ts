@@ -152,28 +152,11 @@ describe('createSuperDocUI', () => {
     expect(options.map((option) => option.label)).toEqual([
       'Aptos',
       'Arial',
-      'Arial Black',
-      'Arial Narrow',
       'Bangla MN',
-      'Baskerville Old Face',
-      'Bookman Old Style',
-      'Brush Script MT',
       'Calibri',
-      'Century',
-      'Century Gothic',
-      'Comic Sans MS',
-      'Cooper Black',
       'Courier New',
-      'Garamond',
       'Georgia',
-      'Gill Sans MT Condensed',
-      'Helvetica',
-      'Lucida Console',
-      'Segoe UI',
-      'Tahoma',
       'Times New Roman',
-      'Trebuchet MS',
-      'Verdana',
     ]);
     expect(options.find((option) => option.label === 'Aptos')).toEqual({
       label: 'Aptos',
@@ -214,55 +197,8 @@ describe('createSuperDocUI', () => {
     superdoc.fireSuperdoc('fonts-changed');
     await flushMicrotasks();
 
-    expect(observed.at(0)).toEqual([
-      'Arial',
-      'Arial Black',
-      'Arial Narrow',
-      'Baskerville Old Face',
-      'Bookman Old Style',
-      'Brush Script MT',
-      'Calibri',
-      'Century',
-      'Century Gothic',
-      'Comic Sans MS',
-      'Cooper Black',
-      'Courier New',
-      'Garamond',
-      'Georgia',
-      'Gill Sans MT Condensed',
-      'Helvetica',
-      'Lucida Console',
-      'Segoe UI',
-      'Tahoma',
-      'Times New Roman',
-      'Trebuchet MS',
-      'Verdana',
-    ]);
-    expect(observed.at(-1)).toEqual([
-      'Aptos',
-      'Arial',
-      'Arial Black',
-      'Arial Narrow',
-      'Baskerville Old Face',
-      'Bookman Old Style',
-      'Brush Script MT',
-      'Calibri',
-      'Century',
-      'Century Gothic',
-      'Comic Sans MS',
-      'Cooper Black',
-      'Courier New',
-      'Garamond',
-      'Georgia',
-      'Gill Sans MT Condensed',
-      'Helvetica',
-      'Lucida Console',
-      'Segoe UI',
-      'Tahoma',
-      'Times New Roman',
-      'Trebuchet MS',
-      'Verdana',
-    ]);
+    expect(observed.at(0)).toEqual(['Arial', 'Courier New', 'Georgia', 'Times New Roman']);
+    expect(observed.at(-1)).toEqual(['Aptos', 'Arial', 'Courier New', 'Georgia', 'Times New Roman']);
   });
 
   it('refreshes ui.fonts for delimiter-colliding font names', async () => {

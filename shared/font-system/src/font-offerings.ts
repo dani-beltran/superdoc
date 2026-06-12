@@ -53,24 +53,11 @@ export interface FontOffering {
 
 const BUNDLED_FAMILIES: ReadonlySet<string> = new Set(BUNDLED_MANIFEST.map((f) => f.family));
 const SUPPORTED_ALIAS_FAMILIES: ReadonlySet<string> = new Set(['Arial MT', 'Courier', 'Times']);
-const ADVERTISED_BUILT_IN_TOOLBAR_FAMILIES: ReadonlySet<string> = new Set([
-  'Arial Black',
-  'Arial Narrow',
-  'Baskerville Old Face',
-  'Bookman Old Style',
-  'Brush Script MT',
-  'Century',
-  'Century Gothic',
-  'Cooper Black',
-  'Comic Sans MS',
-  'Garamond',
+const BUILT_IN_TOOLBAR_BASELINE_FAMILIES: ReadonlySet<string> = new Set([
+  'Arial',
+  'Courier New',
   'Georgia',
-  'Gill Sans MT Condensed',
-  'Lucida Console',
-  'Segoe UI',
-  'Tahoma',
-  'Trebuchet MS',
-  'Verdana',
+  'Times New Roman',
 ]);
 
 /** Classify one evidence row by its policy action, verdict, and whether its target is bundled. */
@@ -128,18 +115,16 @@ export function getDefaultFontOfferings(): FontOffering[] {
 }
 
 /**
- * Built-in font picker options SuperDoc can render from its bundled assets. Includes clean defaults plus
- * explicitly advertised qualified/category fallbacks. Consumers that need strict metric-safe choices
- * should use {@link getDefaultFontOfferings}.
+ * Built-in font picker options shown without any customer font configuration.
+ *
+ * AIDEV-NOTE: Keep this SD-3441 toolbar baseline conservative while the optional
+ * font-pack selection UX is settled. Documents still resolve the full reviewed
+ * substitute table through the resolver.
  */
 export function getBuiltInToolbarFontOfferings(): FontOffering[] {
-  return FONT_OFFERINGS.filter(
-    (o) =>
-      o.offering === 'default' ||
-      (o.bundled &&
-        ADVERTISED_BUILT_IN_TOOLBAR_FAMILIES.has(o.logicalFamily) &&
-        (o.offering === 'qualified' || o.offering === 'category_fallback')),
-  ).sort(compareLogicalFamily);
+  return FONT_OFFERINGS.filter((o) => o.bundled && BUILT_IN_TOOLBAR_BASELINE_FAMILIES.has(o.logicalFamily)).sort(
+    compareLogicalFamily,
+  );
 }
 
 /** The logical CSS stack stored/applied when an offering is chosen, e.g. "Calibri, sans-serif". */

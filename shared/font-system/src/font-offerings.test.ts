@@ -10,30 +10,7 @@ import {
 import { SUBSTITUTION_EVIDENCE } from './substitution-evidence';
 
 const EXPECTED_DEFAULTS = ['Arial', 'Calibri', 'Courier New', 'Helvetica', 'Times New Roman'];
-const EXPECTED_BUILT_IN_TOOLBAR = [
-  'Arial',
-  'Arial Black',
-  'Arial Narrow',
-  'Baskerville Old Face',
-  'Bookman Old Style',
-  'Brush Script MT',
-  'Calibri',
-  'Century',
-  'Century Gothic',
-  'Comic Sans MS',
-  'Cooper Black',
-  'Courier New',
-  'Garamond',
-  'Georgia',
-  'Gill Sans MT Condensed',
-  'Helvetica',
-  'Lucida Console',
-  'Segoe UI',
-  'Tahoma',
-  'Times New Roman',
-  'Trebuchet MS',
-  'Verdana',
-];
+const EXPECTED_BUILT_IN_TOOLBAR = ['Arial', 'Courier New', 'Georgia', 'Times New Roman'];
 
 /**
  * Must NOT appear as DEFAULT options yet. Aptos has no clone, Cambria/Georgia/Cooper Black/
@@ -85,13 +62,15 @@ describe('font offerings', () => {
     }
   });
 
-  it('built-in toolbar offerings include advertised bundled rows without reclassifying them as defaults', () => {
+  it('built-in toolbar offerings use the conservative no-package baseline', () => {
     expect(getBuiltInToolbarFontOfferings().map((o) => o.logicalFamily)).toEqual(EXPECTED_BUILT_IN_TOOLBAR);
-    expect(getBuiltInToolbarFontOfferings().find((o) => o.logicalFamily === 'Cooper Black')).toMatchObject({
+    expect(getBuiltInToolbarFontOfferings().find((o) => o.logicalFamily === 'Georgia')).toMatchObject({
       offering: 'qualified',
-      verdict: 'visual_only',
+      verdict: 'near_metric',
       bundled: true,
     });
+    expect(getBuiltInToolbarFontOfferings().some((o) => o.logicalFamily === 'Calibri')).toBe(false);
+    expect(getBuiltInToolbarFontOfferings().some((o) => o.logicalFamily === 'Helvetica')).toBe(false);
   });
 
   it('classifies the qualified and category rows distinctly (carried for the later fidelity layer)', () => {
@@ -214,27 +193,9 @@ describe('font offerings', () => {
   it('getDefaultFontFamilyOptions returns logical label + logical stack', () => {
     expect(getDefaultFontFamilyOptions()).toEqual([
       { label: 'Arial', value: 'Arial, sans-serif' },
-      { label: 'Arial Black', value: 'Arial Black, sans-serif' },
-      { label: 'Arial Narrow', value: 'Arial Narrow, sans-serif' },
-      { label: 'Baskerville Old Face', value: 'Baskerville Old Face, serif' },
-      { label: 'Bookman Old Style', value: 'Bookman Old Style, serif' },
-      { label: 'Brush Script MT', value: 'Brush Script MT, serif' },
-      { label: 'Calibri', value: 'Calibri, sans-serif' },
-      { label: 'Century', value: 'Century, serif' },
-      { label: 'Century Gothic', value: 'Century Gothic, sans-serif' },
-      { label: 'Comic Sans MS', value: 'Comic Sans MS, sans-serif' },
-      { label: 'Cooper Black', value: 'Cooper Black, serif' },
       { label: 'Courier New', value: 'Courier New, monospace' },
-      { label: 'Garamond', value: 'Garamond, serif' },
       { label: 'Georgia', value: 'Georgia, serif' },
-      { label: 'Gill Sans MT Condensed', value: 'Gill Sans MT Condensed, sans-serif' },
-      { label: 'Helvetica', value: 'Helvetica, sans-serif' },
-      { label: 'Lucida Console', value: 'Lucida Console, monospace' },
-      { label: 'Segoe UI', value: 'Segoe UI, sans-serif' },
-      { label: 'Tahoma', value: 'Tahoma, sans-serif' },
       { label: 'Times New Roman', value: 'Times New Roman, serif' },
-      { label: 'Trebuchet MS', value: 'Trebuchet MS, sans-serif' },
-      { label: 'Verdana', value: 'Verdana, sans-serif' },
     ]);
   });
 
