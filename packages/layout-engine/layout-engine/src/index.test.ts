@@ -15,6 +15,7 @@ import type {
   ColumnBreakBlock,
   PageBreakBlock,
   TableBlock,
+  TableFragment,
   TableMeasure,
 } from '@superdoc/contracts';
 import { layoutDocument, layoutHeaderFooter, type LayoutOptions } from './index.js';
@@ -987,6 +988,47 @@ describe('layoutDocument', () => {
     expect(fragment).toBeTruthy();
     expect(fragment?.x).toBe(120);
     expect(fragment?.y).toBe(DEFAULT_OPTIONS.margins!.top + 15);
+  });
+
+  it('renders paragraphless anchored drawings and floating tables on the same fallback page', () => {
+    const imageBlock: ImageBlock = {
+      kind: 'image',
+      id: 'paragraphless-floating-image',
+      src: 'data:image/png;base64,xxx',
+      anchor: {
+        isAnchored: true,
+        hRelativeFrom: 'column',
+        vRelativeFrom: 'paragraph',
+        offsetH: 24,
+        offsetV: 36,
+      },
+      wrap: { type: 'Square' },
+    };
+    const imageMeasure: ImageMeasure = {
+      kind: 'image',
+      width: 80,
+      height: 40,
+    };
+    const floatingTable = makeParagraphlessFloatingTable('paragraphless-floating-table');
+    const floatingTableMeasure = makeTableMeasure([220], [60]);
+
+    const layout = layoutDocument([floatingTable, imageBlock], [floatingTableMeasure, imageMeasure], DEFAULT_OPTIONS);
+
+    expect(layout.pages).toHaveLength(1);
+
+    const imageFragment = layout.pages[0].fragments.find(
+      (candidate) => candidate.kind === 'image' && candidate.blockId === 'paragraphless-floating-image',
+    ) as ImageFragment | undefined;
+    const tableFragment = layout.pages[0].fragments.find(
+      (candidate) => candidate.kind === 'table' && candidate.blockId === 'paragraphless-floating-table',
+    ) as TableFragment | undefined;
+
+    expect(imageFragment).toBeTruthy();
+    expect(tableFragment).toBeTruthy();
+    expect(imageFragment?.x).toBe(DEFAULT_OPTIONS.margins!.left + 24);
+    expect(imageFragment?.y).toBe(DEFAULT_OPTIONS.margins!.top + 36);
+    expect(tableFragment?.x).toBe(120);
+    expect(tableFragment?.y).toBe(DEFAULT_OPTIONS.margins!.top + 15);
   });
 
   it('renders a floating table after pruning a leading empty page', () => {
@@ -2431,6 +2473,214 @@ describe('layoutDocument', () => {
       expect(pageContainsBlock(layout.pages[2], 'p2')).toBe(true);
       expect(layout.pages[1].fragments).toHaveLength(0);
     });
+
+    // SD-3366: Word collapses a style/direct pageBreakBefore when the paragraph
+    // directly follows an explicit page break. Shapes A-E below are Word-verified
+    // (see the SD-3366 fixture matrix): A and E suppress; B, C and D fire.
+    describe('pageBreakBefore after an explicit page break (SD-3366)', () => {
+      const explicitBreak = (id: string): PageBreakBlock =>
+        ({ kind: 'pageBreak', id, attrs: { lineBreakType: 'page' } }) as PageBreakBlock;
+      const styleBreak = (id: string): PageBreakBlock =>
+        ({ kind: 'pageBreak', id, attrs: { source: 'pageBreakBefore' } }) as PageBreakBlock;
+      const emptyParagraph = (id: string): FlowBlock => ({
+        kind: 'paragraph',
+        id,
+        runs: [{ text: '', fontFamily: 'Arial', fontSize: 16 }],
+      });
+      const textParagraph = (id: string): FlowBlock => ({
+        kind: 'paragraph',
+        id,
+        runs: [{ text: 'content', fontFamily: 'Arial', fontSize: 16 }],
+      });
+
+      it('suppresses pageBreakBefore directly after an explicit page break (shape E)', () => {
+        const blocks: FlowBlock[] = [
+          textParagraph('p1'),
+          explicitBreak('pb-explicit'),
+          styleBreak('pb-style'),
+          textParagraph('p2'),
+        ];
+        const measures: Measure[] = [
+          makeMeasure([40]),
+          { kind: 'pageBreak' },
+          { kind: 'pageBreak' },
+          makeMeasure([40]),
+        ];
+
+        const layout = layoutDocument(blocks, measures, pageBreakBoundaryOptions);
+
+        expect(layout.pages).toHaveLength(2);
+        expect(pageContainsBlock(layout.pages[1], 'p2')).toBe(true);
+      });
+
+      it('suppresses pageBreakBefore after an explicit break and its empty remnant paragraph (shape A)', () => {
+        const blocks: FlowBlock[] = [
+          textParagraph('p1'),
+          explicitBreak('pb-explicit'),
+          emptyParagraph('remnant'),
+          styleBreak('pb-style'),
+          textParagraph('p2'),
+        ];
+        const measures: Measure[] = [
+          makeMeasure([40]),
+          { kind: 'pageBreak' },
+          makeMeasure([20]),
+          { kind: 'pageBreak' },
+          makeMeasure([40]),
+        ];
+
+        const layout = layoutDocument(blocks, measures, pageBreakBoundaryOptions);
+
+        expect(layout.pages).toHaveLength(2);
+        expect(pageContainsBlock(layout.pages[1], 'remnant')).toBe(true);
+        expect(pageContainsBlock(layout.pages[1], 'p2')).toBe(true);
+      });
+
+      it('still fires pageBreakBefore after a plain empty paragraph with no explicit break (shape B)', () => {
+        const blocks: FlowBlock[] = [
+          textParagraph('p1'),
+          emptyParagraph('plain-empty'),
+          styleBreak('pb-style'),
+          textParagraph('p2'),
+        ];
+        const measures: Measure[] = [makeMeasure([40]), makeMeasure([20]), { kind: 'pageBreak' }, makeMeasure([40])];
+
+        const layout = layoutDocument(blocks, measures, pageBreakBoundaryOptions);
+
+        expect(layout.pages).toHaveLength(2);
+        expect(pageContainsBlock(layout.pages[0], 'p1')).toBe(true);
+        expect(pageContainsBlock(layout.pages[0], 'plain-empty')).toBe(true);
+        expect(pageContainsBlock(layout.pages[1], 'p2')).toBe(true);
+      });
+
+      it('still fires pageBreakBefore when text follows the explicit break on the fresh page (shape C)', () => {
+        const blocks: FlowBlock[] = [
+          textParagraph('p1'),
+          explicitBreak('pb-explicit'),
+          textParagraph('after-break'),
+          styleBreak('pb-style'),
+          textParagraph('p2'),
+        ];
+        const measures: Measure[] = [
+          makeMeasure([40]),
+          { kind: 'pageBreak' },
+          makeMeasure([40]),
+          { kind: 'pageBreak' },
+          makeMeasure([40]),
+        ];
+
+        const layout = layoutDocument(blocks, measures, pageBreakBoundaryOptions);
+
+        expect(layout.pages).toHaveLength(3);
+        expect(pageContainsBlock(layout.pages[1], 'after-break')).toBe(true);
+        expect(pageContainsBlock(layout.pages[2], 'p2')).toBe(true);
+      });
+
+      it('still fires pageBreakBefore when an extra empty paragraph follows the break remnant (shape D)', () => {
+        const blocks: FlowBlock[] = [
+          textParagraph('p1'),
+          explicitBreak('pb-explicit'),
+          emptyParagraph('remnant'),
+          emptyParagraph('extra-empty'),
+          styleBreak('pb-style'),
+          textParagraph('p2'),
+        ];
+        const measures: Measure[] = [
+          makeMeasure([40]),
+          { kind: 'pageBreak' },
+          makeMeasure([20]),
+          makeMeasure([20]),
+          { kind: 'pageBreak' },
+          makeMeasure([40]),
+        ];
+
+        const layout = layoutDocument(blocks, measures, pageBreakBoundaryOptions);
+
+        expect(layout.pages).toHaveLength(3);
+        expect(pageContainsBlock(layout.pages[1], 'remnant')).toBe(true);
+        expect(pageContainsBlock(layout.pages[1], 'extra-empty')).toBe(true);
+        expect(pageContainsBlock(layout.pages[2], 'p2')).toBe(true);
+      });
+
+      it('still fires pageBreakBefore when the remnant paragraph carries a list marker (numberingProperties)', () => {
+        // An empty list item renders a visible marker ("1.", "•") painted from
+        // paragraph attrs, not runs — that is page content, so the break re-arms.
+        const blocks: FlowBlock[] = [
+          textParagraph('p1'),
+          explicitBreak('pb-explicit'),
+          {
+            kind: 'paragraph',
+            id: 'list-remnant',
+            runs: [{ text: '', fontFamily: 'Arial', fontSize: 16 }],
+            attrs: { numberingProperties: { numId: 1, ilvl: 0 } },
+          },
+          styleBreak('pb-style'),
+          textParagraph('p2'),
+        ];
+        const measures: Measure[] = [
+          makeMeasure([40]),
+          { kind: 'pageBreak' },
+          makeMeasure([20]),
+          { kind: 'pageBreak' },
+          makeMeasure([40]),
+        ];
+
+        const layout = layoutDocument(blocks, measures, pageBreakBoundaryOptions);
+
+        expect(layout.pages).toHaveLength(3);
+        expect(pageContainsBlock(layout.pages[1], 'list-remnant')).toBe(true);
+        expect(pageContainsBlock(layout.pages[2], 'p2')).toBe(true);
+      });
+
+      it('still fires pageBreakBefore when the remnant paragraph carries a wordLayout marker', () => {
+        const blocks: FlowBlock[] = [
+          textParagraph('p1'),
+          explicitBreak('pb-explicit'),
+          {
+            kind: 'paragraph',
+            id: 'marker-remnant',
+            runs: [{ text: '', fontFamily: 'Arial', fontSize: 16 }],
+            attrs: { wordLayout: { marker: { markerText: '1.' } } },
+          } as FlowBlock,
+          styleBreak('pb-style'),
+          textParagraph('p2'),
+        ];
+        const measures: Measure[] = [
+          makeMeasure([40]),
+          { kind: 'pageBreak' },
+          makeMeasure([20]),
+          { kind: 'pageBreak' },
+          makeMeasure([40]),
+        ];
+
+        const layout = layoutDocument(blocks, measures, pageBreakBoundaryOptions);
+
+        expect(layout.pages).toHaveLength(3);
+        expect(pageContainsBlock(layout.pages[1], 'marker-remnant')).toBe(true);
+        expect(pageContainsBlock(layout.pages[2], 'p2')).toBe(true);
+      });
+
+      it('does not suppress an explicit page break that follows another explicit page break', () => {
+        // Two manual breaks in a row intentionally produce a blank page.
+        const blocks: FlowBlock[] = [
+          textParagraph('p1'),
+          explicitBreak('pb-1'),
+          explicitBreak('pb-2'),
+          textParagraph('p2'),
+        ];
+        const measures: Measure[] = [
+          makeMeasure([40]),
+          { kind: 'pageBreak' },
+          { kind: 'pageBreak' },
+          makeMeasure([40]),
+        ];
+
+        const layout = layoutDocument(blocks, measures, pageBreakBoundaryOptions);
+
+        expect(layout.pages).toHaveLength(3);
+        expect(pageContainsBlock(layout.pages[2], 'p2')).toBe(true);
+      });
+    });
   });
 
   describe('Phase 4: Column Breaks', () => {
@@ -3038,7 +3288,7 @@ describe('layoutDocument', () => {
     const TWO_COL_RIGHT_X = LEFT_MARGIN + TWO_COL_WIDTH + COLUMN_GAP; // 330
 
     /** Build a 2-col section ending with a section break, surrounded by single-column context. */
-    function buildTwoColumnSection(paragraphCount: number, lineHeight = 20) {
+    function buildTwoColumnSection(paragraphCount: number, lineHeight = 20, endBreakType = 'continuous') {
       const blocks: FlowBlock[] = [
         {
           kind: 'sectionBreak',
@@ -3059,7 +3309,7 @@ describe('layoutDocument', () => {
       blocks.push({
         kind: 'sectionBreak',
         id: 'sb-end',
-        type: 'continuous',
+        type: endBreakType,
         columns: { count: 1, gap: 0 },
         margins: {},
         attrs: { source: 'sectPr', sectionIndex: 1 },
@@ -3110,6 +3360,88 @@ describe('layoutDocument', () => {
       // p-after's Y reflects a balanced 3-row column (3 × 20px) above it.
       const expectedBalancedBottom = firstSectionPara!.y + 3 * 20;
       expect(afterSectionPara!.y).toBe(expectedBalancedBottom);
+    });
+
+    it('splits a paragraph straddling the column boundary so the section balances (SD-3359)', () => {
+      // IT-1150 / SD-3359 repro shape: two 1-line paragraphs plus one 14-line
+      // paragraph (280px) in a 2-col continuous section followed by continuous
+      // single-column content. Atomic assignment can only reach 40 | 280;
+      // Word flows line-by-line, splitting the long paragraph at the boundary
+      // so both columns reach the minimum section height (§17.18.77):
+      // col0 = 20 + 20 + 6 lines (160), col1 = 8 lines (160).
+      const blocks: FlowBlock[] = [
+        {
+          kind: 'sectionBreak',
+          id: 'sb-start',
+          type: 'continuous',
+          columns: { count: 2, gap: COLUMN_GAP },
+          margins: {},
+          attrs: { source: 'sectPr', sectionIndex: 0, isFirstSection: true },
+        } as FlowBlock,
+        { kind: 'paragraph', id: 'p0', runs: [], attrs: { sectionIndex: 0 } } as FlowBlock,
+        { kind: 'paragraph', id: 'p1', runs: [], attrs: { sectionIndex: 0 } } as FlowBlock,
+        { kind: 'paragraph', id: 'p-long', runs: [], attrs: { sectionIndex: 0 } } as FlowBlock,
+        {
+          kind: 'sectionBreak',
+          id: 'sb-end',
+          type: 'continuous',
+          columns: { count: 1, gap: 0 },
+          margins: {},
+          attrs: { source: 'sectPr', sectionIndex: 1 },
+        } as FlowBlock,
+        { kind: 'paragraph', id: 'p-after', runs: [], attrs: { sectionIndex: 1 } } as FlowBlock,
+      ];
+      const measures: Measure[] = [
+        { kind: 'sectionBreak' },
+        makeMeasure([20]),
+        makeMeasure([20]),
+        makeMeasure(Array(14).fill(20)),
+        { kind: 'sectionBreak' },
+        makeMeasure([20]),
+      ];
+
+      const layout = layoutDocument(blocks, measures, PAGE);
+
+      const longFrags = layout.pages[0].fragments
+        .filter((f): f is ParaFragment => f.kind === 'para' && f.blockId === 'p-long')
+        .sort((a, b) => a.fromLine - b.fromLine);
+      // The straddling paragraph split into two fragments partitioning its lines.
+      expect(longFrags).toHaveLength(2);
+      expect(longFrags[0].toLine).toBe(longFrags[1].fromLine);
+      expect(longFrags[1].toLine).toBe(14);
+      expect(longFrags[0].x).toBe(LEFT_MARGIN);
+      expect(longFrags[1].x).toBe(TWO_COL_RIGHT_X);
+      // Both columns reach the same minimum height (320 / 2 = 160).
+      const pAfter = layout.pages[0].fragments.find(
+        (f): f is ParaFragment => f.kind === 'para' && f.blockId === 'p-after',
+      );
+      expect(pAfter).toBeDefined();
+      expect(pAfter!.y).toBe(72 + 160);
+    });
+
+    it('does NOT balance a 2-col section whose END break is nextPage (§17.18.77, SD-3359)', () => {
+      // Per the §17.18.77 note only a CONTINUOUS break balances the previous
+      // section. A 2-col section that merely STARTS continuous but is ended by
+      // a nextPage break fills column-by-column instead (Word behavior), and
+      // the following section starts on a fresh page. Regression for the
+      // post-layout gate that previously keyed off the section's own begin
+      // type instead of the break that ends it.
+      const { blocks, measures } = buildTwoColumnSection(6, 20, 'nextPage');
+
+      const layout = layoutDocument(blocks, measures, PAGE);
+
+      const sectionFragments = layout.pages[0].fragments.filter(
+        (f): f is ParaFragment => f.kind === 'para' && f.blockId.startsWith('p') && f.blockId !== 'p-after',
+      );
+      // Unbalanced column-by-column fill: all 6 short paragraphs stay in col 0.
+      expect(sectionFragments.filter((f) => f.x === LEFT_MARGIN)).toHaveLength(6);
+      expect(sectionFragments.filter((f) => f.x === TWO_COL_RIGHT_X)).toHaveLength(0);
+      // The nextPage break pushes the following section to page 2.
+      expect(layout.pages.length).toBe(2);
+      const pAfter = layout.pages[1].fragments.find(
+        (f): f is ParaFragment => f.kind === 'para' && f.blockId === 'p-after',
+      );
+      expect(pAfter).toBeDefined();
     });
 
     it('fills BOTH columns on every page of a multi-page 2-col continuous section', () => {
@@ -4309,6 +4641,145 @@ describe('layoutHeaderFooter', () => {
     expect(paragraphFragment.x).toBe(0);
     expect(paragraphFragment.width).toBe(200);
   });
+
+  it('computes contentMeasures for textboxShape blocks when remeasureParagraph is provided', () => {
+    const textboxBlock: FlowBlock = {
+      kind: 'drawing',
+      id: 'footer-textbox-1',
+      drawingKind: 'textboxShape',
+      geometry: { width: 120, height: 40, rotation: 0, flipH: false, flipV: false },
+      contentBlocks: [
+        {
+          kind: 'paragraph',
+          id: 'footer-textbox-para-1',
+          runs: [{ text: 'Footer text', pmStart: 1, pmEnd: 12 }],
+        },
+      ],
+      textInsets: { top: 4, right: 8, bottom: 4, left: 8 },
+    };
+    const textboxMeasure: DrawingMeasure = {
+      kind: 'drawing',
+      drawingKind: 'textboxShape',
+      width: 120,
+      height: 40,
+      scale: 1,
+      naturalWidth: 120,
+      naturalHeight: 40,
+      geometry: { width: 120, height: 40, rotation: 0, flipH: false, flipV: false },
+    };
+
+    const layout = layoutHeaderFooter(
+      [textboxBlock],
+      [textboxMeasure],
+      { width: 400, height: 80 },
+      'footer',
+      (_block, _maxWidth) => makeMeasure([16]),
+    );
+
+    const fragment = layout.pages[0].fragments[0] as DrawingFragment;
+    expect(fragment.kind).toBe('drawing');
+    expect(fragment.drawingKind).toBe('textboxShape');
+    expect(Array.isArray(fragment.contentMeasures)).toBe(true);
+    expect(fragment.contentMeasures).toHaveLength(1);
+  });
+
+  it('places paragraphless anchored textboxShape blocks in header/footer layout', () => {
+    const textboxBlock: FlowBlock = {
+      kind: 'drawing',
+      id: 'header-textbox-1',
+      drawingKind: 'textboxShape',
+      geometry: { width: 120, height: 40, rotation: 0, flipH: false, flipV: false },
+      anchor: {
+        isAnchored: true,
+        hRelativeFrom: 'column',
+        vRelativeFrom: 'paragraph',
+        offsetH: -10,
+        offsetV: -6,
+      },
+      contentBlocks: [
+        {
+          kind: 'paragraph',
+          id: 'header-textbox-para-1',
+          runs: [{ text: 'Header text', pmStart: 1, pmEnd: 12 }],
+        },
+      ],
+      textInsets: { top: 4, right: 8, bottom: 4, left: 8 },
+    };
+    const textboxMeasure: DrawingMeasure = {
+      kind: 'drawing',
+      drawingKind: 'textboxShape',
+      width: 120,
+      height: 40,
+      scale: 1,
+      naturalWidth: 120,
+      naturalHeight: 40,
+      geometry: { width: 120, height: 40, rotation: 0, flipH: false, flipV: false },
+    };
+
+    const layout = layoutHeaderFooter(
+      [textboxBlock],
+      [textboxMeasure],
+      { width: 400, height: 80 },
+      'header',
+      (_block, _maxWidth) => makeMeasure([16]),
+    );
+
+    expect(layout.pages).toHaveLength(1);
+    const fragment = layout.pages[0].fragments[0] as DrawingFragment;
+    expect(fragment.kind).toBe('drawing');
+    expect(fragment.blockId).toBe('header-textbox-1');
+    expect(fragment.isAnchored).toBe(true);
+    expect(fragment.x).toBe(-10);
+    expect(fragment.y).toBe(-6);
+    expect(fragment.contentMeasures).toHaveLength(1);
+  });
+
+  it('places paragraphless page-relative behindDoc header images at page offsets', () => {
+    const imageBlock: FlowBlock = {
+      kind: 'image',
+      id: 'header-bg-image',
+      src: 'data:image/png;base64,xxx',
+      anchor: {
+        isAnchored: true,
+        hRelativeFrom: 'page',
+        vRelativeFrom: 'page',
+        offsetH: 1387 * (96 / 914400),
+        offsetV: 254000 * (96 / 914400),
+        behindDoc: true,
+      },
+      wrap: { type: 'None', behindDoc: true },
+    };
+    const imageMeasure: ImageMeasure = {
+      kind: 'image',
+      width: 7557463 * (96 / 914400),
+      height: 10723880 * (96 / 914400),
+    };
+
+    const layout = layoutHeaderFooter(
+      [imageBlock],
+      [imageMeasure],
+      {
+        width: 602,
+        height: 648,
+        pageWidth: 816,
+        pageHeight: 1056,
+        margins: { left: 107, right: 107, top: 72, bottom: 72, header: 36 },
+      },
+      'header',
+    );
+
+    expect(layout.pages).toHaveLength(1);
+    const fragment = layout.pages[0].fragments[0] as ImageFragment;
+    expect(fragment.kind).toBe('image');
+    expect(fragment.blockId).toBe('header-bg-image');
+    expect(fragment.isAnchored).toBe(true);
+    expect(fragment.behindDoc).toBe(true);
+    expect(fragment.zIndex).toBe(0);
+    expect(fragment.x).toBeCloseTo(0.15, 2);
+    expect(fragment.y).toBeCloseTo(26.67, 2);
+    expect(layout.height).toBe(0);
+    expect(layout.renderHeight).toBeGreaterThan(1000);
+  });
 });
 
 describe('requirePageBoundary edge cases', () => {
@@ -4628,9 +5099,7 @@ describe('requirePageBoundary edge cases', () => {
 
       const layout = layoutDocument(blocks, measures, options);
       const page = layout.pages[0];
-      const contentWidth = options.pageSize!.w - options.margins!.left - options.margins!.right;
-      const totalGap = 48 * 2;
-      const expectedSecondColumnX = 50 + (100 * (contentWidth - totalGap)) / (100 + 100 + 300) + 48;
+      const expectedSecondColumnX = 50 + 100 + 48;
 
       const p2 = page.fragments.find((f) => f.blockId === 'p2') as ParaFragment;
       const p3 = page.fragments.find((f) => f.blockId === 'p3') as ParaFragment;
@@ -5050,6 +5519,126 @@ describe('requirePageBoundary edge cases', () => {
 
       expect(imageOnPage1).toBeUndefined();
       expect(imageOnPage2).toBeTruthy();
+    });
+  });
+
+  describe('textbox content measures', () => {
+    it('stores contentMeasures for inline textbox drawings when remeasureParagraph is available', () => {
+      const drawingBlock: FlowBlock = {
+        kind: 'drawing',
+        id: 'textbox-inline',
+        drawingKind: 'textboxShape',
+        geometry: { width: 120, height: 80, rotation: 0, flipH: false, flipV: false },
+        contentBlocks: [
+          {
+            kind: 'paragraph',
+            id: 'textbox-para-1',
+            runs: [{ text: 'Textbox text', pmStart: 10, pmEnd: 22 }],
+          },
+        ],
+        textInsets: { top: 4, right: 8, bottom: 4, left: 12 },
+      };
+      const drawingMeasure: DrawingMeasure = {
+        kind: 'drawing',
+        drawingKind: 'textboxShape',
+        width: 120,
+        height: 80,
+        scale: 1,
+        naturalWidth: 120,
+        naturalHeight: 80,
+        geometry: { width: 120, height: 80, rotation: 0, flipH: false, flipV: false },
+      };
+
+      const remeasureParagraph: NonNullable<LayoutOptions['remeasureParagraph']> = (_block, maxWidth) => {
+        expect(maxWidth).toBe(100);
+        return makeMeasure([18]);
+      };
+
+      const layout = layoutDocument([drawingBlock], [drawingMeasure], {
+        ...DEFAULT_OPTIONS,
+        remeasureParagraph,
+      });
+
+      const fragment = layout.pages[0].fragments[0] as DrawingFragment;
+      expect(fragment.kind).toBe('drawing');
+      expect(fragment.drawingKind).toBe('textboxShape');
+      expect(fragment.contentMeasures).toHaveLength(1);
+      expect(fragment.contentMeasures?.[0]?.totalHeight).toBe(18);
+    });
+
+    it('stores contentMeasures for anchored textbox drawings on pre-registered pages', () => {
+      const firstPageParagraph: FlowBlock = {
+        kind: 'paragraph',
+        id: 'para-page-1',
+        runs: [],
+      };
+      const forcedBreak: FlowBlock = {
+        kind: 'pageBreak',
+        id: 'pb-before-textbox',
+      };
+      const textboxBlock: FlowBlock = {
+        kind: 'drawing',
+        id: 'textbox-pre-reg-page',
+        drawingKind: 'textboxShape',
+        geometry: { width: 120, height: 80, rotation: 0, flipH: false, flipV: false },
+        contentBlocks: [
+          {
+            kind: 'paragraph',
+            id: 'textbox-para-anchored',
+            runs: [{ text: 'Anchored textbox', pmStart: 30, pmEnd: 45 }],
+          },
+        ],
+        textInsets: { top: 0, right: 10, bottom: 0, left: 10 },
+        anchor: {
+          isAnchored: true,
+          hRelativeFrom: 'column',
+          vRelativeFrom: 'page',
+          alignH: 'left',
+          alignV: 'top',
+          offsetH: 0,
+          offsetV: 0,
+        },
+        wrap: {
+          type: 'Square',
+          wrapText: 'right',
+          distLeft: 0,
+          distRight: 10,
+        },
+      };
+      const paragraphMeasure = makeMeasure([20]);
+      const drawingMeasure: DrawingMeasure = {
+        kind: 'drawing',
+        drawingKind: 'textboxShape',
+        width: 120,
+        height: 80,
+        scale: 1,
+        naturalWidth: 120,
+        naturalHeight: 80,
+        geometry: { width: 120, height: 80, rotation: 0, flipH: false, flipV: false },
+      };
+
+      const remeasureWidths: number[] = [];
+      const remeasureParagraph: NonNullable<LayoutOptions['remeasureParagraph']> = (_block, maxWidth) => {
+        remeasureWidths.push(maxWidth);
+        return makeMeasure([16, 16]);
+      };
+
+      const layout = layoutDocument(
+        [firstPageParagraph, forcedBreak, textboxBlock],
+        [paragraphMeasure, { kind: 'pageBreak' }, drawingMeasure],
+        {
+          ...DEFAULT_OPTIONS,
+          remeasureParagraph,
+        },
+      );
+
+      const page2 = layout.pages[1];
+      const fragment = page2.fragments.find((frag) => frag.blockId === 'textbox-pre-reg-page') as DrawingFragment;
+      expect(fragment).toBeTruthy();
+      expect(fragment.drawingKind).toBe('textboxShape');
+      expect(fragment.contentMeasures).toHaveLength(1);
+      expect(fragment.contentMeasures?.[0]?.lines).toHaveLength(2);
+      expect(remeasureWidths).toContain(100);
     });
   });
 
