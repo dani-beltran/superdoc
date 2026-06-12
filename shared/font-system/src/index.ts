@@ -71,8 +71,12 @@ export {
 export type { FontOffering, OfferingClass, FontGeneric } from './font-offerings';
 export {
   FONT_OFFERINGS,
+  getBuiltInToolbarFontOfferings,
   getDefaultFontOfferings,
   getDefaultFontFamilyOptions,
   fontOfferingStack,
   fontOfferingRenderStack,
 } from './font-offerings';
+
+export type { DocumentFontOption, FontFamilyOption } from './document-font-options';
+export { buildDocumentFontOptions, buildFontFamilyOptions } from './document-font-options';

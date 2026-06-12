@@ -510,7 +510,7 @@ test('stable recovery tracks PyPI gaps when SDK PyPI publishing is enabled', asy
   );
 });
 
-test('release configs suppress per-PR comment spam on prereleases', async () => {
+test('release configs keep GitHub prerelease comments gated while Linear uses the dedicated release-comment policy', async () => {
   const releasercPaths = [
     'packages/superdoc/.releaserc.cjs',
     'packages/react/.releaserc.cjs',
@@ -527,9 +527,15 @@ test('release configs suppress per-PR comment spam on prereleases', async () => 
     const content = await readRepoFile(releasercPath);
 
     const usesGithubPlugin = content.includes("'@semantic-release/github'");
-    const usesLinearPlugin = content.includes("'semantic-release-linear-app'");
+    const usesLinearPlugin = content.includes("'../../scripts/semantic-release/linear-commit-sync.cjs'");
 
     if (!usesGithubPlugin && !usesLinearPlugin) continue;
+
+    assert.equal(
+      content.includes("'semantic-release-linear-app'"),
+      false,
+      `${releasercPath}: must use the commit-message Linear sync plugin, not the PR-branch-based external plugin`,
+    );
 
     assert.ok(
       content.includes('const shouldCommentOnRelease = !isPrerelease'),
@@ -545,13 +551,17 @@ test('release configs suppress per-PR comment spam on prereleases', async () => 
 
     if (usesLinearPlugin) {
       assert.ok(
-        content.includes('addComment: shouldCommentOnRelease'),
-        `${releasercPath}: semantic-release-linear-app addComment must be gated through shouldCommentOnRelease so prereleases don't post duplicate Linear comments after a stable -> main sync`,
+        content.includes('const shouldCommentOnLinearRelease = true'),
+        `${releasercPath}: Linear comment policy must be explicit and consistent across configs`,
+      );
+      assert.ok(
+        content.includes('addComment: shouldCommentOnLinearRelease'),
+        `${releasercPath}: Linear addComment must use the dedicated Linear comment gate so prerelease Linear breadcrumbs stay on while GitHub PR comments remain gated`,
       );
       assert.equal(
         content.includes('addComment: true'),
         false,
-        `${releasercPath}: semantic-release-linear-app must not hardcode addComment: true`,
+        `${releasercPath}: Linear plugin must not hardcode addComment: true`,
       );
     }
   }
