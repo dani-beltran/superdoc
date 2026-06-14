@@ -5,7 +5,30 @@ test.use({ config: { toolbar: 'full', showSelection: true } });
 const FONT_OPTION = '[data-item="btn-fontFamily-option"]';
 const FONT_TOGGLE = '[data-item="btn-fontFamily-toggle"]';
 const OPTION_LABEL = `${FONT_OPTION} .toolbar-dropdown-option__label`;
-const DEFAULT_FONT_LABELS = ['Arial', 'Courier New', 'Georgia', 'Times New Roman'];
+const DEFAULT_FONT_LABELS = [
+  'Arial',
+  'Arial Black',
+  'Arial Narrow',
+  'Baskerville Old Face',
+  'Bookman Old Style',
+  'Brush Script MT',
+  'Calibri',
+  'Century',
+  'Century Gothic',
+  'Comic Sans MS',
+  'Cooper Black',
+  'Courier New',
+  'Garamond',
+  'Georgia',
+  'Gill Sans MT Condensed',
+  'Helvetica',
+  'Lucida Console',
+  'Segoe UI',
+  'Tahoma',
+  'Times New Roman',
+  'Trebuchet MS',
+  'Verdana',
+];
 
 function expectedLabelsWithDocumentFonts(documentLabels: string[]): string[] {
   return Array.from(new Set([...DEFAULT_FONT_LABELS, ...documentLabels])).sort((left, right) =>
@@ -87,17 +110,7 @@ test('font dropdown opens immediately with the built-in font list and an enabled
 
   const labels = await fontOptionLabels(superdoc);
   expect(labels).toEqual(DEFAULT_FONT_LABELS);
-  for (const absent of [
-    'Aptos',
-    'Calibri',
-    'Cambria',
-    'Calibri Light',
-    'Century Schoolbook',
-    'Helvetica',
-    'Arial MT',
-    'Courier',
-    'Times',
-  ]) {
+  for (const absent of ['Aptos', 'Cambria', 'Calibri Light', 'Century Schoolbook', 'Arial MT', 'Courier', 'Times']) {
     expect(labels).not.toContain(absent);
   }
 });
@@ -111,10 +124,10 @@ test('selecting a default font applies its logical Word-facing family to the sel
   await superdoc.waitForStable();
 
   await openFontFamilyDropdown(superdoc);
-  await selectFontOption(superdoc, 'Georgia');
+  await selectFontOption(superdoc, 'Helvetica');
 
-  await expect(superdoc.page.locator('[data-item="btn-fontFamily"] .sd-button-label')).toHaveText('Georgia');
-  await superdoc.assertTextMarkAttrs('Default font sample', 'textStyle', { fontFamily: 'Georgia' });
+  await expect(superdoc.page.locator('[data-item="btn-fontFamily"] .sd-button-label')).toHaveText('Helvetica');
+  await superdoc.assertTextMarkAttrs('Default font sample', 'textStyle', { fontFamily: 'Helvetica' });
 });
 
 test('typing in the font combobox applies to the selected text without opening the list', async ({ superdoc }) => {
@@ -176,14 +189,14 @@ test('tabbing through font family and size preserves formatting when all text is
   await superdoc.waitForStable();
 
   await replaceSelectionThroughFontInputs(superdoc, {
-    fontPrefix: 'geo',
+    fontPrefix: 'cal',
     fontSize: '20',
     replacement: 'done',
   });
 
   await superdoc.assertTextContent('done');
   await superdoc.assertTextMarkAttrs('done', 'textStyle', {
-    fontFamily: 'Georgia',
+    fontFamily: 'Calibri',
     fontSize: '20pt',
   });
 });
@@ -202,14 +215,14 @@ test('pressing Enter in the font combobox preserves formatting when all text is 
   await fontInput.click();
   await expectFontFamilyDropdownClosed(superdoc);
 
-  await superdoc.page.keyboard.type('geo');
+  await superdoc.page.keyboard.type('cal');
   await superdoc.page.keyboard.press('Enter');
   await superdoc.page.keyboard.type('done');
   await superdoc.waitForStable();
 
   await superdoc.assertTextContent('done');
   await superdoc.assertTextMarkAttrs('done', 'textStyle', {
-    fontFamily: 'Georgia',
+    fontFamily: 'Calibri',
   });
 });
 
