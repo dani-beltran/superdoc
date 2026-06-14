@@ -2,11 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { FULLY_ACTIVE_BUNDLED } from '@superdoc/font-system';
 import { composeToolbarFontOptions, TOOLBAR_FONTS, toolbarFontOptionsFor } from './constants';
 
-<<<<<<< HEAD
-describe('TOOLBAR_FONTS (built-in font dropdown, derived from the font-offering registry)', () => {
-  it('advertises the conservative no-package baseline, in alphabetical order', () => {
-    expect(TOOLBAR_FONTS.map((f) => f.label)).toEqual(['Arial', 'Courier New', 'Georgia', 'Times New Roman']);
-=======
 const RICH_LABELS = [
   'Arial',
   'Arial Black',
@@ -35,23 +30,10 @@ const RICH_LABELS = [
 describe('TOOLBAR_FONTS (static built-in font dropdown)', () => {
   it('is the conservative no-pack baseline: one Word font per CSS generic', () => {
     expect(TOOLBAR_FONTS.map((f) => f.label)).toEqual(['Arial', 'Courier New', 'Times New Roman']);
->>>>>>> origin/main
   });
 
   it('does not advertise the rich pack or unsupported fonts in the static default', () => {
     const labels = new Set(TOOLBAR_FONTS.map((f) => f.label));
-<<<<<<< HEAD
-    for (const name of [
-      'Aptos',
-      'Calibri',
-      'Cambria',
-      'Calibri Light',
-      'Century Schoolbook',
-      'Helvetica',
-      'Arial MT',
-      'Courier',
-      'Times',
-=======
     // Georgia is a second serif: a pack-enabled rich option, not part of the one-per-generic baseline.
     for (const name of [
       'Calibri',
@@ -62,7 +44,6 @@ describe('TOOLBAR_FONTS (static built-in font dropdown)', () => {
       'Cambria',
       'Calibri Light',
       'Arial MT',
->>>>>>> origin/main
     ]) {
       expect(labels.has(name)).toBe(false);
     }
@@ -81,20 +62,13 @@ describe('toolbarFontOptionsFor (the configured rich set)', () => {
   });
 
   it('builds a FontConfig: logical label + logical key + physical-clone preview', () => {
-<<<<<<< HEAD
-    const arial = TOOLBAR_FONTS.find((f) => f.label === 'Arial');
-    expect(arial).toMatchObject({
-      label: 'Arial', // applied to the selection + active-state match (Word-facing name)
-      key: 'Arial, sans-serif', // logical CSS stack (option identity)
-=======
     const calibri = toolbarFontOptionsFor(FULLY_ACTIVE_BUNDLED).find((f) => f.label === 'Calibri');
     expect(calibri).toMatchObject({
       label: 'Calibri', // applied to the selection + active-state match (Word-facing name)
       key: 'Calibri, sans-serif', // logical CSS stack (option identity)
->>>>>>> origin/main
       fontWeight: 400,
       props: {
-        style: { fontFamily: 'Liberation Sans, sans-serif' }, // preview renders in the bundled clone that paints
+        style: { fontFamily: 'Carlito, sans-serif' }, // preview renders in the bundled clone that paints
         'data-item': 'btn-fontFamily-option',
       },
     });
@@ -126,8 +100,6 @@ describe('composeToolbarFontOptions (document fonts unioned with the built-in se
       'Apple Chancery',
       'Aptos',
       'Arial',
-<<<<<<< HEAD
-=======
       'Bangla MN',
       'Calibri',
       'Courier New',
@@ -148,12 +120,26 @@ describe('composeToolbarFontOptions (document fonts unioned with the built-in se
       'Arial',
       'Arial Black',
       'Arial Narrow',
->>>>>>> origin/main
       'Bangla MN',
+      'Baskerville Old Face',
+      'Bookman Old Style',
+      'Brush Script MT',
       'Calibri',
+      'Century',
+      'Century Gothic',
+      'Comic Sans MS',
+      'Cooper Black',
       'Courier New',
+      'Garamond',
       'Georgia',
+      'Gill Sans MT Condensed',
+      'Helvetica',
+      'Lucida Console',
+      'Segoe UI',
+      'Tahoma',
       'Times New Roman',
+      'Trebuchet MS',
+      'Verdana',
     ]);
     expect(options.filter((o) => o.label === 'Calibri')).toHaveLength(1);
   });

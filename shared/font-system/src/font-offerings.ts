@@ -54,11 +54,6 @@ export interface FontOffering {
 
 const BUNDLED_FAMILIES: ReadonlySet<string> = new Set(BUNDLED_MANIFEST.map((f) => f.family));
 const SUPPORTED_ALIAS_FAMILIES: ReadonlySet<string> = new Set(['Arial MT', 'Courier', 'Times']);
-<<<<<<< HEAD
-const BUILT_IN_TOOLBAR_BASELINE_FAMILIES: ReadonlySet<string> = new Set([
-  'Arial',
-  'Courier New',
-=======
 
 /**
  * The conservative toolbar baseline shown when the bundled pack is NOT configured: one common
@@ -85,9 +80,13 @@ const ADVERTISED_BUILT_IN_TOOLBAR_FAMILIES: ReadonlySet<string> = new Set([
   'Cooper Black',
   'Comic Sans MS',
   'Garamond',
->>>>>>> origin/main
   'Georgia',
-  'Times New Roman',
+  'Gill Sans MT Condensed',
+  'Lucida Console',
+  'Segoe UI',
+  'Tahoma',
+  'Trebuchet MS',
+  'Verdana',
 ]);
 
 /** Classify one evidence row by its policy action, verdict, and whether its target is bundled. */
@@ -145,18 +144,6 @@ export function getDefaultFontOfferings(): FontOffering[] {
 }
 
 /**
-<<<<<<< HEAD
- * Built-in font picker options shown without any customer font configuration.
- *
- * AIDEV-NOTE: Keep this SD-3441 toolbar baseline conservative while the optional
- * font-pack selection UX is settled. Documents still resolve the full reviewed
- * substitute table through the resolver.
- */
-export function getBuiltInToolbarFontOfferings(): FontOffering[] {
-  return FONT_OFFERINGS.filter((o) => o.bundled && BUILT_IN_TOOLBAR_BASELINE_FAMILIES.has(o.logicalFamily)).sort(
-    compareLogicalFamily,
-  );
-=======
  * Built-in font picker options for a document, gated on its bundled-font {@link BundledActivation}:
  *
  *  - pack NOT configured (the default): the conservative {@link BUILT_IN_TOOLBAR_BASELINE_FAMILIES}
@@ -183,7 +170,6 @@ export function getBuiltInToolbarFontOfferings(activation: BundledActivation = B
           (o.offering === 'qualified' || o.offering === 'category_fallback'))) &&
       activation.isActive(o.logicalFamily),
   ).sort(compareLogicalFamily);
->>>>>>> origin/main
 }
 
 /** The logical CSS stack stored/applied when an offering is chosen, e.g. "Calibri, sans-serif". */

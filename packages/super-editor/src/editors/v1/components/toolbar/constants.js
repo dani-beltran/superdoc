@@ -6,15 +6,9 @@ import {
 } from '@superdoc/font-system';
 
 /**
-<<<<<<< HEAD
- * Built-in toolbar font dropdown options, derived from the shared font-offering registry
- * (`@superdoc/font-system`) instead of a hand-maintained list. The registry owns the conservative
- * no-package toolbar baseline.
-=======
  * Build the built-in toolbar font dropdown options for a bundled-font activation, DERIVED from the
  * shared font-offering registry (`@superdoc/font-system`). Without a configured pack this is the
  * conservative baseline; with one it is the curated rich set.
->>>>>>> origin/main
  *
  * Per `FontConfig`: `label` is the Word-facing logical name (stored on the selection + active-state
  * match), `key` is the logical CSS stack, and the row preview renders in the physical clone that

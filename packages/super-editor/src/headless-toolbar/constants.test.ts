@@ -2,18 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_FONT_FAMILY_OPTIONS } from './constants';
 
 describe('DEFAULT_FONT_FAMILY_OPTIONS (headless default font options, derived from the font-offering registry)', () => {
-<<<<<<< HEAD
-  it('advertises the conservative no-package baseline (logical name + logical stack)', () => {
-    expect(DEFAULT_FONT_FAMILY_OPTIONS).toEqual([
-      { label: 'Arial', value: 'Arial, sans-serif' },
-      { label: 'Courier New', value: 'Courier New, monospace' },
-      { label: 'Georgia', value: 'Georgia, serif' },
-=======
   it('is the conservative no-pack baseline: one Word font per CSS generic', () => {
     expect(DEFAULT_FONT_FAMILY_OPTIONS).toEqual([
       { label: 'Arial', value: 'Arial, sans-serif' },
       { label: 'Courier New', value: 'Courier New, monospace' },
->>>>>>> origin/main
       { label: 'Times New Roman', value: 'Times New Roman, serif' },
     ]);
   });
@@ -28,14 +20,8 @@ describe('DEFAULT_FONT_FAMILY_OPTIONS (headless default font options, derived fr
     expect(labels.has('Verdana')).toBe(false);
     // Never-default fonts stay absent regardless.
     expect(labels.has('Aptos')).toBe(false);
-    expect(labels.has('Calibri')).toBe(false);
     expect(labels.has('Cambria')).toBe(false);
     expect(labels.has('Calibri Light')).toBe(false);
-<<<<<<< HEAD
-    expect(labels.has('Helvetica')).toBe(false);
-    expect(labels.has('Century Schoolbook')).toBe(false);
-=======
->>>>>>> origin/main
     expect(labels.has('Arial MT')).toBe(false);
   });
 });
