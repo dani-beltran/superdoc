@@ -94,12 +94,12 @@ describe('installBundledSubstitutes URL resolution', () => {
     });
   });
 
-  it('setBundledFontAssetBase overrides the default base (CDN script-relative)', () => {
-    setBundledFontAssetBase('https://cdn.jsdelivr.net/npm/superdoc@1/dist/fonts/');
+  it('setBundledFontAssetBase overrides the default base', () => {
+    setBundledFontAssetBase('https://cdn.jsdelivr.net/npm/@superdoc-dev/fonts@1/assets/');
     const reg = new CaptureRegistry();
     installBundledSubstitutes(reg.asRegistry());
     expect(reg.sourcesFor('Caladea')).toContain(
-      'url(https://cdn.jsdelivr.net/npm/superdoc@1/dist/fonts/Caladea-Regular.woff2)',
+      'url(https://cdn.jsdelivr.net/npm/@superdoc-dev/fonts@1/assets/Caladea-Regular.woff2)',
     );
   });
 

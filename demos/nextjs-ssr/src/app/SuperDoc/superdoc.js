@@ -19,6 +19,8 @@ export default function SuperDocEditor() {
     const { SuperDoc } = await import('superdoc');
     const config = {
       selector: superdocContainerRef.current,
+      // Self-hosted bundled fallback fonts (copied to public/fonts/ by copy-fonts.mjs).
+      fonts: { assetBaseUrl: '/fonts/' },
       modules: { 
         toolbar: { 
           selector: '#toolbar', 

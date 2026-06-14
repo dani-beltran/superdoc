@@ -182,6 +182,7 @@ import type {
 import { measureBlock } from '@superdoc/measuring-dom';
 import {
   createFontResolver,
+  deriveBundledActivation,
   type FontResolutionRecord,
   type DocumentFontOption,
   type FontLoadSummary,
@@ -1049,13 +1050,18 @@ export class PresentationEditor extends EventEmitter {
         // content-paint paths resolve through this same instance, so load, measure, paint, and
         // diagnostics stay consistent.
         fontResolver: this.#fontResolver,
-        // Register the bundled fallback pack into the document's registry the first time it resolves,
-        // so reviewed fallback faces are available with no manual setup.
-        onRegistryResolved: (registry) =>
+        // Register the bundled fallback pack into the document's registry the first time it resolves -
+        // but ONLY when the pack is actually configured (a base URL / resolver, or a page-global pack).
+        // Baseline (no config) must NOT register substitute faces: that would map e.g. Calibri to a
+        // now-nonexistent default `/fonts/` URL and, via first-config-wins on the shared per-document
+        // registry, block a later configured instance on the same page from registering correctly.
+        onRegistryResolved: (registry) => {
+          if (!deriveBundledActivation(this.#options.fontAssets).packConfigured) return;
           installBundledSubstitutes(registry, {
             assetBaseUrl: this.#options.fontAssets?.assetBaseUrl,
             resolveAssetUrl: this.#options.fontAssets?.resolveAssetUrl,
-          }),
+          });
+        },
         getFontEnvironment: () => {
           // Bind the registry and the watched font set to THIS editor's document, so an
           // editor inside an iframe awaits and listens on the same FontFaceSet.

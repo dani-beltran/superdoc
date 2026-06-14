@@ -2061,10 +2061,12 @@ export interface Config {
   /** Proofing / spellcheck configuration. */
   proofing?: ProofingConfig;
   /**
-   * Font system configuration. Currently the served location of the bundled reviewed fallback
-   * pack: set `fonts.assetBaseUrl` (e.g. `/fonts/` or a CDN URL) for npm/SSR/framework deploys,
-   * or `fonts.resolveAssetUrl` for signed/versioned hosting. The CDN `<script>` build
-   * auto-detects a script-relative default.
+   * Font system configuration. The reviewed fallback pack ships in the optional
+   * `@superdoc-dev/fonts` package: pass `superdocFonts` (bundler) or the `SuperDocFonts`
+   * global from its `superdoc-fonts.min.js` browser build (CDN). To self-host, set
+   * `fonts.assetBaseUrl` (e.g. `/fonts/` or a CDN URL) or `fonts.resolveAssetUrl` for
+   * signed/versioned hosting. SuperDoc core ships no fonts; with none configured the
+   * toolbar shows the baseline and documents render with system fonts.
    */
   fonts?: FontsConfig;
   /**

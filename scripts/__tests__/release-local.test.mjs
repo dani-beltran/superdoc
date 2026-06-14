@@ -131,6 +131,10 @@ test('release-local helper prunes local-only tags across all release namespaces'
     'scripts/release-local.mjs: superdoc tag matching must not also match vscode release tags',
   );
   assert.ok(
+    content.includes("'fonts-v*'"),
+    'scripts/release-local.mjs: fonts release tags must be pruned before local previews',
+  );
+  assert.ok(
     content.includes('pruneLocalOnlyReleaseTags({ allowRemoteFailure: isDryRunEnabled(semanticReleaseArgs) })'),
     'scripts/release-local.mjs: dry-run previews must treat remote tag pruning as best-effort',
   );
@@ -177,12 +181,17 @@ test('stable orchestrator prunes before snapshot and reports would-release previ
   );
 });
 
-test('stable orchestrator releases tools chain (CLI, SDK, MCP) and core chain (superdoc, react, vscode-ext) in order', async () => {
+test('stable orchestrator releases tools chain (CLI, SDK, MCP) and core chain (fonts, superdoc, react, vscode-ext) in order', async () => {
   const content = await readRepoFile('scripts/release-local-stable.mjs');
   assertOrder(content, "name: 'cli'", "name: 'sdk'", 'scripts/release-local-stable.mjs (cli before sdk)');
   assertOrder(content, "name: 'sdk'", "name: 'mcp'", 'scripts/release-local-stable.mjs (sdk before mcp)');
+  assertOrder(content, "name: 'fonts'", "name: 'superdoc'", 'scripts/release-local-stable.mjs (fonts before superdoc)');
   assertOrder(content, "name: 'superdoc'", "name: 'react'", 'scripts/release-local-stable.mjs (superdoc before react)');
   assertOrder(content, "name: 'react'", "name: 'vscode-ext'", 'scripts/release-local-stable.mjs (react before vscode-ext)');
+  assert.ok(
+    content.includes("name: 'fonts'") && content.includes('npmPackages: FONTS_NPM_PACKAGES'),
+    'scripts/release-local-stable.mjs: orchestrator must release @superdoc-dev/fonts before superdoc points users at it',
+  );
   assert.ok(
     content.includes("name: 'superdoc'"),
     'scripts/release-local-stable.mjs: orchestrator must release superdoc so the v* tag drives docs-stable promotion in the same workflow',
@@ -199,6 +208,24 @@ test('stable orchestrator releases tools chain (CLI, SDK, MCP) and core chain (s
     content.includes("name: 'esign'") || content.includes("name: 'template-builder'"),
     false,
     'scripts/release-local-stable.mjs: esign and template-builder are not yet brought into the orchestrator',
+  );
+});
+
+test('fonts release workflow refuses automated releases before the 0.1.0 bootstrap exists', async () => {
+  const workflow = await readRepoFile('.github/workflows/release-fonts.yml');
+  assert.ok(
+    workflow.includes('git ls-remote --exit-code --tags origin "fonts-v0.1.0"'),
+    '.github/workflows/release-fonts.yml: must require the 0.1.0 git tag before semantic-release runs',
+  );
+  assert.ok(
+    workflow.includes('npm view @superdoc-dev/fonts@0.1.0 version'),
+    '.github/workflows/release-fonts.yml: must require the 0.1.0 npm package before semantic-release runs',
+  );
+  assertOrder(
+    workflow,
+    'Verify 0.1.0 bootstrap',
+    'pnpx semantic-release',
+    '.github/workflows/release-fonts.yml',
   );
 });
 
@@ -233,6 +260,7 @@ test('stable release workflows serialize on the shared release-stable concurrenc
   const stableWorkflows = [
     '.github/workflows/release-stable.yml',
     '.github/workflows/release-superdoc.yml',
+    '.github/workflows/release-fonts.yml',
     '.github/workflows/release-react.yml',
     '.github/workflows/release-esign.yml',
     '.github/workflows/release-template-builder.yml',
@@ -288,6 +316,7 @@ test('stable release workflows serialize on the shared release-stable concurrenc
   // their single stable release path.
   const orchestratorOnlyOnStable = [
     '.github/workflows/release-superdoc.yml',
+    '.github/workflows/release-fonts.yml',
     '.github/workflows/release-react.yml',
     '.github/workflows/release-vscode-ext.yml',
   ];
@@ -315,6 +344,7 @@ test('release workflows queue (do not cancel) and use queue: max so multi-packag
     '.github/workflows/release-create.yml',
     '.github/workflows/release-esign.yml',
     '.github/workflows/release-mcp.yml',
+    '.github/workflows/release-fonts.yml',
     '.github/workflows/release-react.yml',
     '.github/workflows/release-sdk.yml',
     '.github/workflows/release-stable.yml',
@@ -513,6 +543,7 @@ test('stable recovery tracks PyPI gaps when SDK PyPI publishing is enabled', asy
 test('release configs keep GitHub prerelease comments gated while Linear uses the dedicated release-comment policy', async () => {
   const releasercPaths = [
     'packages/superdoc/.releaserc.cjs',
+    'packages/fonts/.releaserc.cjs',
     'packages/react/.releaserc.cjs',
     'packages/sdk/.releaserc.cjs',
     'packages/template-builder/.releaserc.cjs',
@@ -689,6 +720,7 @@ test('docs promotion supports manual workflow_dispatch with optional sha input',
 test('stable release workflows and commit filters include shared workspace coverage', async () => {
   const workflowFiles = [
     '.github/workflows/release-superdoc.yml',
+    '.github/workflows/release-fonts.yml',
     '.github/workflows/release-esign.yml',
     '.github/workflows/release-react.yml',
     '.github/workflows/release-template-builder.yml',
@@ -704,6 +736,7 @@ test('stable release workflows and commit filters include shared workspace cover
 
   const releasercFiles = [
     'packages/superdoc/.releaserc.cjs',
+    'packages/fonts/.releaserc.cjs',
     'packages/esign/.releaserc.cjs',
     'packages/react/.releaserc.cjs',
     'packages/template-builder/.releaserc.cjs',

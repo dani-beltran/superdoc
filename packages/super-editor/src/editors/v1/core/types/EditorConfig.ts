@@ -13,7 +13,7 @@ import type {
   CommentLocationsPayload,
   ListDefinitionsPayload,
 } from './EditorEvents.js';
-import type { FontAssetUrlResolver } from '@superdoc/font-system';
+import type { BundledFontSelection, FontAssetUrlResolver } from '@superdoc/font-system';
 
 /**
  * One physical font face to register from a URL source.
@@ -47,9 +47,9 @@ export interface FontsConfig {
   map?: Record<string, string>;
   /**
    * Base URL the bundled font `.woff2` are served from, e.g. `/fonts/` or
-   * `https://cdn.example.com/superdoc-fonts/v1/`. Required for npm/SSR/framework deploys
-   * that serve the assets from a non-root path; the CDN `<script>` build auto-detects a
-   * script-relative `./fonts/` default.
+   * `https://cdn.example.com/superdoc-fonts/v1/`, when you self-host the
+   * `@superdoc-dev/fonts` faces. Prefer `@superdoc-dev/fonts` (bundler) or its
+   * `superdoc-fonts.min.js` browser build (CDN), which resolve these URLs for you.
    */
   assetBaseUrl?: string;
   /**
@@ -57,6 +57,14 @@ export interface FontsConfig {
    * Synchronous (font resolution stays deterministic). Takes precedence over `assetBaseUrl`.
    */
   resolveAssetUrl?: FontAssetUrlResolver;
+  /**
+   * Curate which bundled families this document advertises and substitutes to, by LOGICAL Word name
+   * (e.g. `"Calibri"`). Applies only when the pack is configured; it narrows the rich set, it does
+   * not enable it. Prefer setting this with `createSuperDocFonts({ include / exclude })` from
+   * `@superdoc-dev/fonts` rather than by hand. Does not affect customer fonts ({@link families} /
+   * {@link map}), which are always honored.
+   */
+  bundled?: BundledFontSelection;
 }
 import type { ProseMirrorJSON } from './EditorTypes.js';
 

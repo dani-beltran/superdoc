@@ -155,7 +155,7 @@ describe('FontReadinessGate', () => {
     });
 
     gate.resolveRegistry();
-    expect(onRegistryResolved).toHaveBeenCalledTimes(1); // installed despite no font set
+    expect(onRegistryResolved).toHaveBeenCalledTimes(1); // callback invoked despite no font set
     gate.resolveRegistry();
     expect(onRegistryResolved).toHaveBeenCalledTimes(1); // idempotent per registry instance
   });

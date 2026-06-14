@@ -1,6 +1,7 @@
 import 'superdoc/style.css';
 import { SuperDoc } from 'superdoc';
 import { createSuperDocUI } from 'superdoc/ui';
+import { superdocFonts } from '@superdoc-dev/fonts';
 
 type SuperDocUIInstance = ReturnType<typeof createSuperDocUI>;
 
@@ -75,6 +76,9 @@ const contentOverride = params.get('contentOverride') ?? undefined;
 const overrideType = (params.get('overrideType') as OverrideType | null) ?? undefined;
 const previewScroll = params.get('previewScroll') === '1';
 const blockPreviewScrollEvents = params.get('blockPreviewScrollEvents') === '1';
+// Bundled-font mode for the font-availability specs. Unset = the rich pack (back-compat: existing
+// specs assert the rich toolbar), see resolveHarnessFontsConfig.
+const fontsMode = params.get('fonts');
 
 if (!showCaret) {
   document.documentElement.style.setProperty('caret-color', 'transparent', 'important');
@@ -176,6 +180,47 @@ function applyContentOverride(config: SuperDocConfig, input?: ContentOverrideInp
   }
 }
 
+/**
+ * Bundled-font config for the harness, chosen by the `fonts` query param so the font-availability
+ * specs can drive each mode from one harness. `null` (no param) keeps the rich pack so existing
+ * behavior specs are unaffected. Curation goes through the RAW `fonts.bundled` path - what a CDN or
+ * plain-JS consumer hand-writes, and what `createSuperDocFonts` feeds underneath.
+ */
+function resolveHarnessFontsConfig(mode: string | null): SuperDocConfig['fonts'] | undefined {
+  switch (mode) {
+    case 'no-pack':
+      // No pack configured: conservative baseline toolbar, logical names render with system fonts,
+      // and nothing fetches a bundled substitute.
+      return undefined;
+    case 'include-calibri':
+      return { assetBaseUrl: '/fonts/', bundled: { include: ['Calibri'] } };
+    case 'exclude-cooper':
+      return { assetBaseUrl: '/fonts/', bundled: { exclude: ['Cooper Black'] } };
+    case 'bad-raw':
+      // Malformed raw config: a bare string where an array is required. Must warn once and fall back
+      // to the full pack, never crash init (guards the fonts.bundled coercion).
+      return { assetBaseUrl: '/fonts/', bundled: { include: 'Calibri' as unknown as string[] } };
+    case 'bad-url':
+      // Pack configured but the assets are not served there: faces 404 on use, with a clear warning.
+      return { assetBaseUrl: '/__missing-fonts__/' };
+    case 'package':
+      // The real `@superdoc-dev/fonts` DX: no assetBaseUrl, the package resolves each face to a
+      // bundler-emitted asset URL. Proves the import-and-go path users copy from the docs.
+      return superdocFonts as SuperDocConfig['fonts'];
+    case 'pack':
+      // A configured pack whose assets are actually SERVED (see the /bundled-fonts middleware), so
+      // face-load specs can assert a real 200. Distinct from the default base on purpose.
+      return { assetBaseUrl: '/bundled-fonts/' };
+    default:
+      // The rich pack advertised but NOT served: substitutes appear in the toolbar but are never
+      // fetched, so rendered text keeps logical names. This is the default every non-font spec runs
+      // under, so it must stay served-nowhere (see harness/vite.config.ts).
+      return { assetBaseUrl: '/fonts/' };
+  }
+}
+
+const harnessFonts = resolveHarnessFontsConfig(fontsMode);
+
 function init(file?: File, content?: ContentOverrideInput) {
   if (instance) {
     instance.destroy();
@@ -188,6 +233,9 @@ function init(file?: File, content?: ContentOverrideInput) {
     selector: '#editor',
     useLayoutEngine: layout,
     telemetry: { enabled: false },
+    // Bundled-font config, selected by the `fonts` query param (default keeps the rich pack so
+    // existing specs are unaffected). See resolveHarnessFontsConfig.
+    ...(harnessFonts !== undefined ? { fonts: harnessFonts } : {}),
     onReady: ({ superdoc }: SuperDocReadyPayload) => {
       harnessWindow.superdoc = superdoc;
       if (comments === 'panel' && commentsPanel) {

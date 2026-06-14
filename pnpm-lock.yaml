@@ -1041,7 +1041,7 @@ importers:
     dependencies:
       '@hocuspocus/provider':
         specifier: latest
-        version: 4.1.1(y-protocols@1.0.7(yjs@13.6.31))(yjs@13.6.31)
+        version: 4.2.0(y-protocols@1.0.7(yjs@13.6.31))(yjs@13.6.31)
       '@hookform/resolvers':
         specifier: ^3.9.1
         version: 3.10.0(react-hook-form@7.72.0(react@18.2.0))
@@ -2207,6 +2207,9 @@ importers:
       '@angular/platform-browser-dynamic':
         specifier: ^21.1.4
         version: 21.2.6(@angular/common@21.2.6(@angular/core@21.2.6(@angular/compiler@21.2.6)(rxjs@7.8.2)(zone.js@0.16.1))(rxjs@7.8.2))(@angular/compiler@21.2.6)(@angular/core@21.2.6(@angular/compiler@21.2.6)(rxjs@7.8.2)(zone.js@0.16.1))(@angular/platform-browser@21.2.6(@angular/common@21.2.6(@angular/core@21.2.6(@angular/compiler@21.2.6)(rxjs@7.8.2)(zone.js@0.16.1))(rxjs@7.8.2))(@angular/core@21.2.6(@angular/compiler@21.2.6)(rxjs@7.8.2)(zone.js@0.16.1)))
+      '@superdoc-dev/fonts':
+        specifier: workspace:*
+        version: link:../../../packages/fonts
       rxjs:
         specifier: ~7.8.2
         version: 7.8.2
@@ -2252,6 +2255,9 @@ importers:
 
   examples/getting-started/nextjs:
     dependencies:
+      '@superdoc-dev/fonts':
+        specifier: workspace:*
+        version: link:../../../packages/fonts
       '@superdoc-dev/react':
         specifier: workspace:*
         version: link:../../../packages/react
@@ -2292,6 +2298,9 @@ importers:
 
   examples/getting-started/nuxt:
     dependencies:
+      '@superdoc-dev/fonts':
+        specifier: workspace:*
+        version: link:../../../packages/fonts
       nuxt:
         specifier: ^4.3.1
         version: 4.4.2(9381df6151c57a8f0608b2d6c76973fb)
@@ -2304,6 +2313,9 @@ importers:
 
   examples/getting-started/react:
     dependencies:
+      '@superdoc-dev/fonts':
+        specifier: workspace:*
+        version: link:../../../packages/fonts
       '@superdoc-dev/react':
         specifier: workspace:*
         version: link:../../../packages/react
@@ -2332,6 +2344,9 @@ importers:
 
   examples/getting-started/solid:
     dependencies:
+      '@superdoc-dev/fonts':
+        specifier: workspace:*
+        version: link:../../../packages/fonts
       solid-js:
         specifier: ^1.9.5
         version: 1.9.13
@@ -2351,6 +2366,9 @@ importers:
 
   examples/getting-started/vanilla:
     dependencies:
+      '@superdoc-dev/fonts':
+        specifier: workspace:*
+        version: link:../../../packages/fonts
       superdoc:
         specifier: workspace:*
         version: link:../../../packages/superdoc
@@ -2361,6 +2379,9 @@ importers:
 
   examples/getting-started/vue:
     dependencies:
+      '@superdoc-dev/fonts':
+        specifier: workspace:*
+        version: link:../../../packages/fonts
       superdoc:
         specifier: workspace:*
         version: link:../../../packages/superdoc
@@ -2578,6 +2599,18 @@ importers:
       express:
         specifier: ^4.19.2
         version: 4.22.1
+
+  packages/fonts:
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 22.19.2
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vite:
+        specifier: npm:rolldown-vite@7.3.1
+        version: rolldown-vite@7.3.1(@emnapi/core@1.9.1)(@emnapi/runtime@1.9.1)(@types/node@22.19.2)(esbuild@0.27.7)(jiti@2.6.1)(less@4.4.2)(sass@1.97.3)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.3)
 
   packages/layout-engine: {}
 
@@ -5677,8 +5710,8 @@ packages:
   '@hocuspocus/common@2.15.3':
     resolution: {integrity: sha512-Rzh1HF0a2o/tf90A3w2XNdXd9Ym3aQzMDfD3lAUONCX9B9QOdqdyiORrj6M25QEaJrEIbXFy8LtAFcL0wRdWzA==}
 
-  '@hocuspocus/common@4.1.1':
-    resolution: {integrity: sha512-7jvCti57eYp6Yf7MHzPI4QI75o4zHg4G2f2HC3jbAdpTb+aKxAEPpnDxxpl2Lj4XzyDcisZfwB0Rvf7lbPXAog==}
+  '@hocuspocus/common@4.2.0':
+    resolution: {integrity: sha512-031clELz+rW7MpmpFUFN7+vE52Gtk1wkrSVHyqydZgKSLf5AtrorliCf38cH65mGGltLR2/JrydzqOk2bVQhjw==}
 
   '@hocuspocus/provider@2.15.3':
     resolution: {integrity: sha512-oadN05m+KL4ylNKVo5YspNG4MXkT2Y+FUFzrgigpQeTjQibkPUwCNmUnkUxMgrGRgxb+O0lJCfirFIJMxedctA==}
@@ -5686,8 +5719,8 @@ packages:
       y-protocols: ^1.0.6
       yjs: ^13.6.8
 
-  '@hocuspocus/provider@4.1.1':
-    resolution: {integrity: sha512-LSbr50a1+1yoyO7tiWBkBxZZQzSRkW6xQRfEx6phNhQDzn5E4lL24mvfkUIyVFrr+TzPDGMFz5CBx6cXSaFYzw==}
+  '@hocuspocus/provider@4.2.0':
+    resolution: {integrity: sha512-w38vvgYBs4NDonMkxb4R//n+CgBJ+K/03RMXcr8yHx1I3TY8HYpTlRqOUWdIJpmgw2ZyuM9EdbJwwRPrZF7iEA==}
     peerDependencies:
       y-protocols: ^1.0.6
       yjs: ^13.6.8
@@ -26295,7 +26328,7 @@ snapshots:
     dependencies:
       lib0: 0.2.117
 
-  '@hocuspocus/common@4.1.1':
+  '@hocuspocus/common@4.2.0':
     dependencies:
       lib0: 0.2.117
 
@@ -26323,9 +26356,9 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  '@hocuspocus/provider@4.1.1(y-protocols@1.0.7(yjs@13.6.31))(yjs@13.6.31)':
+  '@hocuspocus/provider@4.2.0(y-protocols@1.0.7(yjs@13.6.31))(yjs@13.6.31)':
     dependencies:
-      '@hocuspocus/common': 4.1.1
+      '@hocuspocus/common': 4.2.0
       '@lifeomic/attempt': 3.1.0
       lib0: 0.2.117
       y-protocols: 1.0.7(yjs@13.6.31)

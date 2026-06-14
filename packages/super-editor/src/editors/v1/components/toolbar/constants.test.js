@@ -1,13 +1,46 @@
 import { describe, expect, it } from 'vitest';
-import { composeToolbarFontOptions, TOOLBAR_FONTS } from './constants';
+import { FULLY_ACTIVE_BUNDLED } from '@superdoc/font-system';
+import { composeToolbarFontOptions, TOOLBAR_FONTS, toolbarFontOptionsFor } from './constants';
 
+<<<<<<< HEAD
 describe('TOOLBAR_FONTS (built-in font dropdown, derived from the font-offering registry)', () => {
   it('advertises the conservative no-package baseline, in alphabetical order', () => {
     expect(TOOLBAR_FONTS.map((f) => f.label)).toEqual(['Arial', 'Courier New', 'Georgia', 'Times New Roman']);
+=======
+const RICH_LABELS = [
+  'Arial',
+  'Arial Black',
+  'Arial Narrow',
+  'Baskerville Old Face',
+  'Bookman Old Style',
+  'Brush Script MT',
+  'Calibri',
+  'Century',
+  'Century Gothic',
+  'Comic Sans MS',
+  'Cooper Black',
+  'Courier New',
+  'Garamond',
+  'Georgia',
+  'Gill Sans MT Condensed',
+  'Helvetica',
+  'Lucida Console',
+  'Segoe UI',
+  'Tahoma',
+  'Times New Roman',
+  'Trebuchet MS',
+  'Verdana',
+];
+
+describe('TOOLBAR_FONTS (static built-in font dropdown)', () => {
+  it('is the conservative no-pack baseline: one Word font per CSS generic', () => {
+    expect(TOOLBAR_FONTS.map((f) => f.label)).toEqual(['Arial', 'Courier New', 'Times New Roman']);
+>>>>>>> origin/main
   });
 
-  it('does not leak non-advertised fonts into the default dropdown', () => {
+  it('does not advertise the rich pack or unsupported fonts in the static default', () => {
     const labels = new Set(TOOLBAR_FONTS.map((f) => f.label));
+<<<<<<< HEAD
     for (const name of [
       'Aptos',
       'Calibri',
@@ -18,22 +51,21 @@ describe('TOOLBAR_FONTS (built-in font dropdown, derived from the font-offering 
       'Arial MT',
       'Courier',
       'Times',
+=======
+    // Georgia is a second serif: a pack-enabled rich option, not part of the one-per-generic baseline.
+    for (const name of [
+      'Calibri',
+      'Georgia',
+      'Cooper Black',
+      'Verdana',
+      'Aptos',
+      'Cambria',
+      'Calibri Light',
+      'Arial MT',
+>>>>>>> origin/main
     ]) {
       expect(labels.has(name)).toBe(false);
     }
-  });
-
-  it('builds a FontConfig: logical label + logical key + physical-clone preview', () => {
-    const arial = TOOLBAR_FONTS.find((f) => f.label === 'Arial');
-    expect(arial).toMatchObject({
-      label: 'Arial', // applied to the selection + active-state match (Word-facing name)
-      key: 'Arial, sans-serif', // logical CSS stack (option identity)
-      fontWeight: 400,
-      props: {
-        style: { fontFamily: 'Liberation Sans, sans-serif' }, // preview renders in the bundled clone that paints
-        'data-item': 'btn-fontFamily-option',
-      },
-    });
   });
 
   it('honors the FontConfig contract: label equals the first family in key', () => {
@@ -43,7 +75,33 @@ describe('TOOLBAR_FONTS (built-in font dropdown, derived from the font-offering 
   });
 });
 
-describe('composeToolbarFontOptions (document fonts unioned with the bundled defaults)', () => {
+describe('toolbarFontOptionsFor (the configured rich set)', () => {
+  it('returns the full advertised set when the pack is active', () => {
+    expect(toolbarFontOptionsFor(FULLY_ACTIVE_BUNDLED).map((f) => f.label)).toEqual(RICH_LABELS);
+  });
+
+  it('builds a FontConfig: logical label + logical key + physical-clone preview', () => {
+<<<<<<< HEAD
+    const arial = TOOLBAR_FONTS.find((f) => f.label === 'Arial');
+    expect(arial).toMatchObject({
+      label: 'Arial', // applied to the selection + active-state match (Word-facing name)
+      key: 'Arial, sans-serif', // logical CSS stack (option identity)
+=======
+    const calibri = toolbarFontOptionsFor(FULLY_ACTIVE_BUNDLED).find((f) => f.label === 'Calibri');
+    expect(calibri).toMatchObject({
+      label: 'Calibri', // applied to the selection + active-state match (Word-facing name)
+      key: 'Calibri, sans-serif', // logical CSS stack (option identity)
+>>>>>>> origin/main
+      fontWeight: 400,
+      props: {
+        style: { fontFamily: 'Liberation Sans, sans-serif' }, // preview renders in the bundled clone that paints
+        'data-item': 'btn-fontFamily-option',
+      },
+    });
+  });
+});
+
+describe('composeToolbarFontOptions (document fonts unioned with the built-in set)', () => {
   const doc = (logicalFamily, previewFamily) => ({
     logicalFamily,
     previewFamily: previewFamily ?? logicalFamily,
@@ -54,12 +112,12 @@ describe('composeToolbarFontOptions (document fonts unioned with the bundled def
     expect(composeToolbarFontOptions([doc('Aptos')], custom)).toBe(custom);
   });
 
-  it('returns undefined with no document fonts, so the caller keeps the bundled defaults', () => {
+  it('returns undefined with baseline base AND no document fonts, so the caller keeps the static const', () => {
     expect(composeToolbarFontOptions([], undefined)).toBeUndefined();
     expect(composeToolbarFontOptions(undefined, undefined)).toBeUndefined();
   });
 
-  it('combines defaults and document fonts alphabetically, deduping one already in the defaults', () => {
+  it('with no pack configured: baseline base unioned with document fonts, alphabetical', () => {
     const options = composeToolbarFontOptions(
       [doc('Calibri', 'Carlito'), doc('Bangla MN'), doc('Aptos'), doc('Apple Chancery')],
       undefined,
@@ -68,6 +126,29 @@ describe('composeToolbarFontOptions (document fonts unioned with the bundled def
       'Apple Chancery',
       'Aptos',
       'Arial',
+<<<<<<< HEAD
+=======
+      'Bangla MN',
+      'Calibri',
+      'Courier New',
+      'Times New Roman',
+    ]);
+    expect(options.filter((o) => o.label === 'Calibri')).toHaveLength(1);
+  });
+
+  it('with the pack configured: the full set unioned with document fonts, deduping shared names', () => {
+    const options = composeToolbarFontOptions(
+      [doc('Calibri', 'Carlito'), doc('Bangla MN'), doc('Aptos'), doc('Apple Chancery')],
+      undefined,
+      FULLY_ACTIVE_BUNDLED,
+    );
+    expect(options.map((o) => o.label)).toEqual([
+      'Apple Chancery',
+      'Aptos',
+      'Arial',
+      'Arial Black',
+      'Arial Narrow',
+>>>>>>> origin/main
       'Bangla MN',
       'Calibri',
       'Courier New',
