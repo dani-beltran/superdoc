@@ -93,7 +93,6 @@ tests/                   Public test suites and fixtures
 | DOCX import/export | `super-editor/src/editors/v1/core/super-converter/` |
 | React integration | `packages/react/` |
 | Main entry point (Vue) | `packages/superdoc/` |
-| Browser behavior tests | `tests/behavior/` |
 
 ### Key Design Principle
 
