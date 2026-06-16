@@ -482,12 +482,18 @@ importers:
       '@types/ws':
         specifier: ^8.5.13
         version: 8.18.1
+      lib0:
+        specifier: 'catalog:'
+        version: 0.2.117
       superdoc:
         specifier: workspace:*
         version: link:../../packages/superdoc
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
+      y-protocols:
+        specifier: 'catalog:'
+        version: 1.0.7(yjs@13.6.30)
     optionalDependencies:
       '@superdoc-dev/cli-darwin-arm64':
         specifier: workspace:*
