@@ -4402,7 +4402,7 @@ describe('DomPainter', () => {
     expect(textSpan?.style.left).toBe('48px');
   });
 
-  it('positions first-line list text from the resolved tab stop instead of stale wordLayout.textStartPx', () => {
+  it('keeps segment-positioned first-line list text at its measured segment offset', () => {
     const block: FlowBlock = {
       kind: 'paragraph',
       id: 'list-tab-stop-block',
@@ -4482,7 +4482,7 @@ describe('DomPainter', () => {
       | HTMLElement
       | undefined;
     expect(textSpan).toBeTruthy();
-    expect(textSpan?.style.left).toBe('144px');
+    expect(textSpan?.style.left).toBe('48px');
   });
 
   it('preserves measured justification width for inline list first lines without explicit segments', () => {
