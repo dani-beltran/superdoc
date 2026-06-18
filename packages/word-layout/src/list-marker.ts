@@ -10,10 +10,7 @@
  * `NumberingManager` instance passed in. Callers (the v2 adapter, the v1
  * NumberingPlugin) are responsible for scope.
  */
-import {
-  generateOrderedListIndex,
-  normalizeLvlTextChar,
-} from '@superdoc/common/list-numbering';
+import { generateOrderedListIndex, normalizeLvlTextChar } from '@superdoc/common/list-numbering';
 import type { NumberingManager } from './numbering-manager.js';
 import type { ListRenderingAttrs, WordListJustification } from './types.js';
 
@@ -84,19 +81,8 @@ export function computeWordListMarker(input: ComputeWordListMarkerInput): Comput
     definition.startOverridden,
   );
 
-  const counter = manager.calculateCounter(
-    definition.numId,
-    definition.ilvl,
-    paragraphOrdinal,
-    definition.abstractId,
-  );
-  manager.setCounter(
-    definition.numId,
-    definition.ilvl,
-    paragraphOrdinal,
-    counter,
-    definition.abstractId,
-  );
+  const counter = manager.calculateCounter(definition.numId, definition.ilvl, paragraphOrdinal, definition.abstractId);
+  manager.setCounter(definition.numId, definition.ilvl, paragraphOrdinal, counter, definition.abstractId);
   const path = manager.calculatePath(definition.numId, definition.ilvl, paragraphOrdinal);
 
   const numberingType = definition.numFmt ?? 'decimal';

@@ -4249,11 +4249,7 @@ export class DomPainter {
     el: HTMLElement,
     fragment: Fragment,
     section?: 'body' | 'header' | 'footer',
-    resolvedItem?:
-      | ResolvedFragmentItem
-      | ResolvedTableItem
-      | ResolvedImageItem
-      | ResolvedDrawingItem,
+    resolvedItem?: ResolvedFragmentItem | ResolvedTableItem | ResolvedImageItem | ResolvedDrawingItem,
   ): void {
     // Footnote content is read-only: prevent cursor placement and typing
     if (typeof fragment.blockId === 'string' && fragment.blockId.startsWith('footnote-')) {
@@ -4392,11 +4388,7 @@ export class DomPainter {
       return resolvedItem.height;
     }
     // Atomic fragment kinds carry their own height on the fragment.
-    if (
-      fragment.kind === 'table' ||
-      fragment.kind === 'image' ||
-      fragment.kind === 'drawing'
-    ) {
+    if (fragment.kind === 'table' || fragment.kind === 'image' || fragment.kind === 'drawing') {
       return fragment.height;
     }
     return 0;

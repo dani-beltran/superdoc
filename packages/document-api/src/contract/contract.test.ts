@@ -326,7 +326,9 @@ describe('document-api contract catalog', () => {
 
     expect(patchVariants).toHaveLength(3);
 
-    const bodyVariant = patchVariants.find((variant) => Object.prototype.hasOwnProperty.call(variant.properties ?? {}, 'body'));
+    const bodyVariant = patchVariants.find((variant) =>
+      Object.prototype.hasOwnProperty.call(variant.properties ?? {}, 'body'),
+    );
     expect(bodyVariant).toBeDefined();
     expect(bodyVariant?.required).toEqual(['body']);
 
@@ -482,9 +484,7 @@ describe('document-api contract catalog', () => {
     expect(setFlowOptionsInput.properties?.snapToGrid?.type).toBe('boolean');
 
     const requiredSets = new Set(
-      (setFlowOptionsInput.anyOf ?? [])
-        .map((variant) => variant.required?.join('|') ?? '')
-        .filter(Boolean),
+      (setFlowOptionsInput.anyOf ?? []).map((variant) => variant.required?.join('|') ?? '').filter(Boolean),
     );
     expect(requiredSets).toEqual(
       new Set([

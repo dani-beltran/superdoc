@@ -1140,11 +1140,13 @@ const textSelectorSchema = objectSchema(
     type: { const: 'text', description: "Must be 'text' for text pattern search." },
     pattern: {
       type: 'string',
-      description: 'Text to match. In regex mode, patterns are validated for syntax, maximum length, and safety before execution.',
+      description:
+        'Text to match. In regex mode, patterns are validated for syntax, maximum length, and safety before execution.',
     },
     mode: {
       enum: ['contains', 'regex'],
-      description: "Match mode: 'contains' (literal substring, recommended for literal text) or 'regex' (validated regular expression).",
+      description:
+        "Match mode: 'contains' (literal substring, recommended for literal text) or 'regex' (validated regular expression).",
     },
     caseSensitive: { type: 'boolean', description: 'Case-sensitive matching. Default: false.' },
     wholeWord: { type: 'boolean', description: 'Require word-boundary matches. Default: false.' },
@@ -5556,9 +5558,14 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
         commentId: { type: 'string' },
         text: { type: 'string', description: 'Updated comment text.' },
         target: {
-          oneOf: [textAddressSchema, selectionTargetSchema, commentTrackedChangeTargetSchema, textSearchCommentTargetSchema],
+          oneOf: [
+            textAddressSchema,
+            selectionTargetSchema,
+            commentTrackedChangeTargetSchema,
+            textSearchCommentTargetSchema,
+          ],
           description:
-            'New anchor for the comment. Accepts a plain TextAddress, a SelectionTarget {kind:\'selection\', start, end}, a TextSearchCommentTarget {text, story?}, or a TrackedChangeCommentTarget, with or without kind, that names a logical tracked-change id as a convenience re-anchor target .',
+            "New anchor for the comment. Accepts a plain TextAddress, a SelectionTarget {kind:'selection', start, end}, a TextSearchCommentTarget {text, story?}, or a TrackedChangeCommentTarget, with or without kind, that names a logical tracked-change id as a convenience re-anchor target .",
         },
         status: {
           enum: ['resolved', 'active'],
@@ -8051,10 +8058,10 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
   'footnotes.insert': {
     input: {
       oneOf: [
-        objectSchema(
-          { at: textTargetSchema, type: { enum: ['footnote', 'endnote'] }, content: { type: 'string' } },
-          ['type', 'content'],
-        ),
+        objectSchema({ at: textTargetSchema, type: { enum: ['footnote', 'endnote'] }, content: { type: 'string' } }, [
+          'type',
+          'content',
+        ]),
         objectSchema(
           {
             at: textTargetSchema,

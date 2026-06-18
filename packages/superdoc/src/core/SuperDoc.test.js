@@ -3441,7 +3441,6 @@ describe('SuperDoc core', () => {
         warnSpy.mockRestore();
       }
     });
-
   });
 
   // ---------------------------------------------------------------------------
@@ -3972,7 +3971,6 @@ describe('SuperDoc core', () => {
       editorA.emit('transaction');
       expect(toolbarUpdateSpy).toHaveBeenCalledTimes(1);
     });
-
   });
 
   // ---------------------------------------------------------------------------

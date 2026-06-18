@@ -234,7 +234,10 @@ const buildRelativeBounds = (element, layersContainer) => {
 
 const collectTestV2GeometryEntries = async ({ host, layersContainer, mountContainer }) => {
   const entries = {};
-  const commentsResult = await host?.getHandles?.()?.comments?.list?.().catch(() => null);
+  const commentsResult = await host
+    ?.getHandles?.()
+    ?.comments?.list?.()
+    .catch(() => null);
   const aliases = new Map();
   for (const item of commentsResult?.items ?? []) {
     const id = item?.id ?? item?.commentId;

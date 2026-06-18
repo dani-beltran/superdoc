@@ -233,7 +233,10 @@ function commandKindForSupport(kind: EditorRuntimeCommandKind): HostCommandKind 
   }
 }
 
-function historyNoopReason(kind: EditorRuntimeCommand['kind'], result: unknown): 'nothing-to-undo' | 'nothing-to-redo' | 'no-effect' {
+function historyNoopReason(
+  kind: EditorRuntimeCommand['kind'],
+  result: unknown,
+): 'nothing-to-undo' | 'nothing-to-redo' | 'no-effect' {
   const rawReason = (result as { reason?: string } | null | undefined)?.reason;
   if (kind === 'history.undo') {
     return rawReason === 'NO_EFFECT' || rawReason === 'apply-rejected' ? 'no-effect' : 'nothing-to-undo';
@@ -454,9 +457,10 @@ export function createV2EditorRuntimeAdapter(options: V2EditorRuntimeAdapterOpti
   }
 
   hostUnsubscribe = host.subscribe(handleHostSnapshot);
-  pageMetricsUnsubscribe = host.subscribePageMetrics?.(() => {
-    emit({ type: 'layout-change', layout: currentLayoutSnapshot() });
-  }) ?? null;
+  pageMetricsUnsubscribe =
+    host.subscribePageMetrics?.(() => {
+      emit({ type: 'layout-change', layout: currentLayoutSnapshot() });
+    }) ?? null;
   syncSelectionSubscription();
 
   async function dispatch(command: EditorRuntimeCommand): Promise<EditorRuntimeCommandResult> {
@@ -568,7 +572,11 @@ export function createV2EditorRuntimeAdapter(options: V2EditorRuntimeAdapterOpti
         invalidatePositionTokens();
         return { status: 'history-committed', result: result.result };
       case 'history-noop':
-        return { status: 'history-noop', reason: historyNoopReason(command.kind, result.result), result: result.result };
+        return {
+          status: 'history-noop',
+          reason: historyNoopReason(command.kind, result.result),
+          result: result.result,
+        };
       case 'receipt-failure':
         return { status: 'receipt-failure', failure: result.failure };
       case 'rejected':

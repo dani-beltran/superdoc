@@ -28,7 +28,8 @@ const stripEsbuildBanner = (config) => {
     return config;
   }
 
-  const { banner: _banner, ...restEsbuild } = config.esbuild;
+  const restEsbuild = { ...config.esbuild };
+  delete restEsbuild.banner;
   if (Object.keys(restEsbuild).length === 0) {
     delete config.esbuild;
     return config;

@@ -16,10 +16,7 @@ import { normalizeBaselineShift } from '@superdoc/contracts';
 import { toCssFontFamily } from '@superdoc/font-utils';
 
 import type { RunProperties, UnderlineProperties } from '../ooxml/types.js';
-import type {
-  WordThemeColorPalette,
-  WordThemeFontScheme,
-} from '../ooxml/word-style-model/parse-theme.js';
+import type { WordThemeColorPalette, WordThemeFontScheme } from '../ooxml/word-style-model/parse-theme.js';
 import { applyThemeTintShade, normalizeHexColor, resolveThemeColor } from './colors.js';
 import { halfPointsToPx, twipsToPx } from './units.js';
 import type { TextRunStyleAttrs } from './types.js';
@@ -97,11 +94,7 @@ export function normalizeRunAttrsFromOoxml(
   const underline = mapUnderline(props.underline);
   if (underline) out.underline = underline;
 
-  if (
-    props.vertAlign === 'superscript' ||
-    props.vertAlign === 'subscript' ||
-    props.vertAlign === 'baseline'
-  ) {
+  if (props.vertAlign === 'superscript' || props.vertAlign === 'subscript' || props.vertAlign === 'baseline') {
     out.vertAlign = props.vertAlign;
   }
 
@@ -212,7 +205,9 @@ function mapUnderline(underline: UnderlineProperties | undefined): TextRunStyleA
   return Object.keys(out).length > 0 ? out : { style: 'single' };
 }
 
-function mapUnderlineStyle(value: string | null | undefined): NonNullable<TextRunStyleAttrs['underline']>['style'] | undefined {
+function mapUnderlineStyle(
+  value: string | null | undefined,
+): NonNullable<TextRunStyleAttrs['underline']>['style'] | undefined {
   if (!value) return undefined;
   switch (value) {
     case 'single':

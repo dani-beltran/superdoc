@@ -194,9 +194,22 @@ jobs:
 
       - name: Create .env for cloud providers
         working-directory: examples/editor/collaboration/providers/${{ matrix.example }}
+        env:
+          VITE_LIVEBLOCKS_PUBLIC_KEY: ${{ secrets.VITE_LIVEBLOCKS_PUBLIC_KEY }}
         run: |
           if [ "${{ matrix.example }}" = "liveblocks" ]; then
-            echo "VITE_LIVEBLOCKS_PUBLIC_KEY=${{ secrets.VITE_LIVEBLOCKS_PUBLIC_KEY }}" > .env
+            case "$VITE_LIVEBLOCKS_PUBLIC_KEY" in
+              pk_*) ;;
+              sk_*)
+                echo "::error::VITE_LIVEBLOCKS_PUBLIC_KEY must be a Liveblocks public key (pk_...), not a secret key (sk_...)."
+                exit 1
+                ;;
+              *)
+                echo "::error::VITE_LIVEBLOCKS_PUBLIC_KEY must be a Liveblocks public key beginning with pk_."
+                exit 1
+                ;;
+            esac
+            printf 'VITE_LIVEBLOCKS_PUBLIC_KEY=%s\n' "$VITE_LIVEBLOCKS_PUBLIC_KEY" > .env
           fi
 
       - name: Resolve Playwright version

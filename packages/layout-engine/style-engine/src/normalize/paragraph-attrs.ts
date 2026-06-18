@@ -40,7 +40,9 @@ import { normalizeHexColor } from './colors.js';
 const AUTO_SPACING_LINE_DEFAULT = 240;
 const AUTO_SPACING_DEFAULT_MULTIPLIER = 1.15;
 
-export function normalizeParagraphAttrsFromOoxml(props: ParagraphProperties | null | undefined): Partial<ParagraphAttrs> {
+export function normalizeParagraphAttrsFromOoxml(
+  props: ParagraphProperties | null | undefined,
+): Partial<ParagraphAttrs> {
   if (!props) return {};
   const attrs: Partial<ParagraphAttrs> = {};
 
@@ -171,7 +173,7 @@ function mapParagraphBorder(border: BorderProperties | undefined): ParagraphBord
   const out: ParagraphBorder = {};
   if (style) out.style = style;
   if (border.size != null) {
-    const widthPx = border.size / 8 * (96 / 72); // eighth-points -> px
+    const widthPx = (border.size / 8) * (96 / 72); // eighth-points -> px
     if (widthPx > 0) out.width = Math.max(0.5, Math.min(100, widthPx));
   }
   const color = normalizeHexColor(border.color);

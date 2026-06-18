@@ -95,8 +95,8 @@ const LANES = [
     title: 'CI SuperDoc',
     workflow: '.github/workflows/ci-superdoc.yml',
     stages: [
-      { id: 'lint', title: 'Lint', ...sh('pnpm run lint') },
-      { id: 'format', title: 'Format check', ...sh('pnpm run format --check') },
+      { id: 'lint', title: 'Lint', ...sh('NODE_OPTIONS=--max-old-space-size=4096 pnpm run lint') },
+      { id: 'format', title: 'Format check', ...sh('pnpm run format:check') },
       { id: 'build', title: 'Build', ...sh('pnpm run build') },
       {
         id: 'validate-command-types',

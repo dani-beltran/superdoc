@@ -212,7 +212,8 @@ export const DRAWING_SUPPORT_TAXONOMY: Readonly<Record<DrawingFamily, DrawingFam
   inlineBitmap: {
     family: 'inlineBitmap',
     support: 'supported',
-    description: 'wp:inline pic:pic with internal media and browser-safe MIME (PNG/JPEG; WebP/SVG once the host media resolver lands).',
+    description:
+      'wp:inline pic:pic with internal media and browser-safe MIME (PNG/JPEG; WebP/SVG once the host media resolver lands).',
     contract: 'ImageRun',
   },
   anchoredBitmap: {

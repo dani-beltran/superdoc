@@ -2847,8 +2847,8 @@ export const OPERATION_DEFINITIONS = {
   'plan.execute': {
     memberPath: 'plan.execute',
     description:
-      'Execute a compiled batch of plan-safe operation entries with per-entry transactions, '
-      + 'capture resolution between entries, and keep-prefix-and-continue failure semantics.',
+      'Execute a compiled batch of plan-safe operation entries with per-entry transactions, ' +
+      'capture resolution between entries, and keep-prefix-and-continue failure semantics.',
     expectedResult:
       'Returns a PlanExecuteResult with per-entry receipts, projected captures, and the first hard failure if any.',
     requiresDocumentContext: true,
@@ -2948,8 +2948,7 @@ export const OPERATION_DEFINITIONS = {
   },
   'tables.move': {
     memberPath: 'tables.move',
-    description:
-      'Move a table to a new position in the document.',
+    description: 'Move a table to a new position in the document.',
     expectedResult:
       'Returns a TableMutationResult receipt; reports NO_OP if the table is already at the target position.',
     requiresDocumentContext: true,

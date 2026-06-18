@@ -6,10 +6,7 @@
 // rejection.
 
 import { describe, expect, it } from 'vitest';
-import type {
-  EditorRuntimeCommand,
-  EditorRuntimeCommandKind,
-} from '../index.js';
+import type { EditorRuntimeCommand, EditorRuntimeCommandKind } from '../index.js';
 import { createFakeV1Runtime } from './fake-v1-runtime.js';
 
 const commandFixtureByKind = {

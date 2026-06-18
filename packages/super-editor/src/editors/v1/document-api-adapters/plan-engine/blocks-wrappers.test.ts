@@ -411,8 +411,9 @@ describe('blocksDeleteWrapper', () => {
 
     it('still validates tracked capability during dry run', () => {
       const { editor } = makeBlockDeleteEditor({ insertTrackedChange: null });
-      expect(() => blocksDeleteWrapper(editor, makeInput('paragraph', 'p1'), { changeMode: 'tracked', dryRun: true }))
-        .toThrow(DocumentApiAdapterError);
+      expect(() =>
+        blocksDeleteWrapper(editor, makeInput('paragraph', 'p1'), { changeMode: 'tracked', dryRun: true }),
+      ).toThrow(DocumentApiAdapterError);
     });
   });
 

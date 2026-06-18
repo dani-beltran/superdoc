@@ -443,7 +443,9 @@ if (isMain) {
       const probe = await probeExistingSidecar();
       if (probe.isHealthySidecar) {
         if (STAY_ALIVE_ON_REUSE) {
-          console.log(`[word-sidecar] word-sidecar is already running at http://${HOST}:${PORT}; skipping local start.`);
+          console.log(
+            `[word-sidecar] word-sidecar is already running at http://${HOST}:${PORT}; skipping local start.`,
+          );
           await waitForShutdownSignal();
           process.exit(0);
         } else {

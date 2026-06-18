@@ -2420,12 +2420,7 @@ export type ListItemFragment = {
   layoutSourceIdentity?: LayoutSourceIdentity;
 };
 
-export type Fragment =
-  | ParaFragment
-  | ImageFragment
-  | DrawingFragment
-  | ListItemFragment
-  | TableFragment;
+export type Fragment = ParaFragment | ImageFragment | DrawingFragment | ListItemFragment | TableFragment;
 
 export type HeaderFooterType = 'default' | 'first' | 'even' | 'odd';
 

@@ -149,7 +149,9 @@ function normalizeDocumentMode(mode: unknown): EditorRuntimeDocumentMode {
   return mode === 'suggesting' || mode === 'viewing' ? mode : 'editing';
 }
 
-function readyStateForMode(mode: EditorRuntimeDocumentMode): Extract<EditorRuntimeState, 'review-ready' | 'editing-ready'> {
+function readyStateForMode(
+  mode: EditorRuntimeDocumentMode,
+): Extract<EditorRuntimeState, 'review-ready' | 'editing-ready'> {
   return mode === 'viewing' ? 'review-ready' : 'editing-ready';
 }
 

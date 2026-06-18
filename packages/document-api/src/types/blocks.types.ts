@@ -1,5 +1,12 @@
 import type { BlockNodeType, BlockNodeAddress, DeletableBlockNodeAddress } from './base.js';
-import type { AffectedRef, AffectedRefRemapping, Receipt, ReceiptFailure, ReceiptInsert, TextRangeShift } from './receipt.js';
+import type {
+  AffectedRef,
+  AffectedRefRemapping,
+  Receipt,
+  ReceiptFailure,
+  ReceiptInsert,
+  TextRangeShift,
+} from './receipt.js';
 import type { StoryLocator } from './story.types.js';
 // ---------------------------------------------------------------------------
 // blocks.list

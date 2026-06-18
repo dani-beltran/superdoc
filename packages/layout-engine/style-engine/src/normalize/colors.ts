@@ -65,11 +65,7 @@ export function resolveThemeColor(
  * and proven elsewhere in the v1 pipeline. The painter / pm-adapter parity
  * gate will harden corner cases if needed.
  */
-export function applyThemeTintShade(
-  hexInput: string,
-  themeTint?: string,
-  themeShade?: string,
-): string {
+export function applyThemeTintShade(hexInput: string, themeTint?: string, themeShade?: string): string {
   const base = hexInput.startsWith('#') ? hexInput.slice(1) : hexInput;
   if (!/^[0-9A-Fa-f]{6}$/.test(base)) return hexInput;
   const tint = parseTintShadeByte(themeTint);
