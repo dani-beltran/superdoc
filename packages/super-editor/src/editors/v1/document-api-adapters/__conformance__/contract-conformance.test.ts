@@ -46,6 +46,7 @@ import {
   paragraphsClearShadingWrapper,
   paragraphsSetDirectionWrapper,
   paragraphsClearDirectionWrapper,
+  paragraphsSetNumberingWrapper,
 } from '../plan-engine/paragraphs-wrappers.js';
 import { stylesApplyAdapter } from '../styles-adapter.js';
 import { templatesApplyAdapter } from '../templates/templates-adapter.js';
@@ -1197,6 +1198,7 @@ function makeBlockDeleteEditor(
 
   const dispatch = vi.fn();
   const tr = {
+    delete: vi.fn().mockReturnThis(),
     setMeta: vi.fn().mockReturnThis(),
     mapping: { map: (pos: number) => pos },
     docChanged: false,
@@ -2061,9 +2063,14 @@ const V1_COMPATIBILITY_STUB_DRY_RUN_OPS: ReadonlySet<OperationId> = new Set(
 
 /**
  * Plan-engine meta-operations that don't follow the standard throw/failure/apply
- * pattern. mutations.apply returns PlanReceipt (always success: true) or throws.
+ * pattern. mutations.apply returns PlanReceipt (always success: true) or throws;
+ * plan.execute returns batch receipts/captures and owns its dedicated executor
+ * tests in @superdoc/document-api.
  */
-const PLAN_ENGINE_META_OPS: ReadonlySet<OperationId> = new Set(['mutations.apply'] as OperationId[]);
+const PLAN_ENGINE_META_OPS: ReadonlySet<OperationId> = new Set([
+  'mutations.apply',
+  'plan.execute',
+] as OperationId[]);
 const NON_RECEIPT_MUTATION_OPS: ReadonlySet<OperationId> = new Set([
   'history.undo',
   'history.redo',
@@ -2586,6 +2593,26 @@ const paragraphMutationVectors: Partial<Record<OperationId, MutationVector>> = {
       return paragraphsClearDirectionWrapper(editor, { target: PARAGRAPH_TARGET });
     },
   },
+  'format.paragraph.setNumbering': {
+    throwCase: () => {
+      const { editor } = makeParagraphEditor();
+      return paragraphsSetNumberingWrapper(editor, { target: MISSING_PARAGRAPH_TARGET, numId: 2 });
+    },
+    failureCase: () => {
+      const hasDefinitionSpy = vi.spyOn(ListHelpers, 'hasListDefinition').mockReturnValue(true);
+      const { editor } = makeParagraphEditor({ numberingProperties: { numId: 2, ilvl: 0 } });
+      const result = paragraphsSetNumberingWrapper(editor, { target: PARAGRAPH_TARGET, numId: 2, level: 0 });
+      hasDefinitionSpy.mockRestore();
+      return result;
+    },
+    applyCase: () => {
+      const hasDefinitionSpy = vi.spyOn(ListHelpers, 'hasListDefinition').mockReturnValue(true);
+      const { editor } = makeParagraphEditor();
+      const result = paragraphsSetNumberingWrapper(editor, { target: PARAGRAPH_TARGET, numId: 2, level: 0 });
+      hasDefinitionSpy.mockRestore();
+      return result;
+    },
+  },
 };
 
 const paragraphDryRunVectors: Partial<Record<OperationId, () => unknown>> = {
@@ -2796,6 +2823,18 @@ const paragraphDryRunVectors: Partial<Record<OperationId, () => unknown>> = {
       { target: PARAGRAPH_TARGET },
       { changeMode: 'direct', dryRun: true },
     );
+    expect(dispatch).not.toHaveBeenCalled();
+    return result;
+  },
+  'format.paragraph.setNumbering': () => {
+    const hasDefinitionSpy = vi.spyOn(ListHelpers, 'hasListDefinition').mockReturnValue(true);
+    const { editor, dispatch } = makeParagraphEditor();
+    const result = paragraphsSetNumberingWrapper(
+      editor,
+      { target: PARAGRAPH_TARGET, numId: 2, level: 0 },
+      { changeMode: 'direct', dryRun: true },
+    );
+    hasDefinitionSpy.mockRestore();
     expect(dispatch).not.toHaveBeenCalled();
     return result;
   },

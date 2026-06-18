@@ -70,14 +70,16 @@ export interface SuperDocLike {
   config?: {
     documentMode?: 'editing' | 'suggesting' | 'viewing';
     /**
-     * Track-changes module config. The controller reads
-     * `modules.trackChanges.authorColors` to resolve per-author colors for
-     * the `ui.trackChanges` snapshot (authors + per-item `authorColor`),
-     * matching the colors the layout engine paints. Loosely typed so test
-     * stubs need not model the full module config.
+     * Track-changes module config. The controller reads `enabled` to block
+     * tracked-change decisions when the module is inert, and reads
+     * `authorColors` to resolve per-author colors for the `ui.trackChanges`
+     * snapshot (authors + per-item `authorColor`), matching the colors the
+     * layout engine paints. Loosely typed so test stubs need not model the
+     * full module config.
      */
     modules?: {
       trackChanges?: {
+        enabled?: boolean;
         authorColors?: import('@superdoc/contracts').AuthorColorsConfig;
       };
     };
