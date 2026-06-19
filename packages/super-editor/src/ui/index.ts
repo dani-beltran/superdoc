@@ -18,6 +18,8 @@
 
 export { createSuperDocUI } from './create-super-doc-ui.js';
 export { shallowEqual } from './equality.js';
+export { attachLegacyReviewMirror, createReviewStateAdapter } from './review-state.js';
+export { collectReviewTargetCandidatesFromChain } from './review-target.js';
 export { BUILT_IN_COMMAND_IDS } from '../headless-toolbar/types.js';
 export type { PublicToolbarItemId } from '../headless-toolbar/types.js';
 

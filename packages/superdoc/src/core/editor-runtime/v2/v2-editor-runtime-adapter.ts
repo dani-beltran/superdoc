@@ -21,7 +21,7 @@ import type {
   EditorRuntimeUnsubscribe,
 } from '../index.js';
 
-type HostLifecycleState = 'opening' | 'blocked' | 'ready' | 'saving' | 'disposed' | 'failed';
+type HostLifecycleState = EditorRuntimeState | 'ready';
 
 type HostCommandKind =
   | 'text.insert'
@@ -179,8 +179,16 @@ export interface V2EditorRuntimeAdapterOptions {
   readonly documentId: string;
   readonly root: HTMLElement;
   readonly host: ModeAwareHostLike;
+  readonly getLegacyEditorProjection?: () => unknown;
   readonly onUnregister?: (id: EditorRuntimeId) => void;
 }
+
+const DEFAULT_V2_LEGACY_PROJECTION = Object.freeze({
+  editorVersion: 2,
+  commands: null,
+  state: null,
+  view: null,
+});
 
 const TEXT_AND_STRUCTURE_COMMANDS: readonly EditorRuntimeCommandKind[] = [
   'text.insert',
@@ -210,9 +218,13 @@ const REVIEW_COMMANDS: readonly EditorRuntimeCommandKind[] = [
 
 const ALWAYS_SUPPORTED_COMMANDS: readonly EditorRuntimeCommandKind[] = ['trackedChanges.setAuthoringMode'];
 
-function mapLifecycleState(snapshot: HostSnapshotLike): EditorRuntimeState {
+function normalizeLifecycleState(snapshot: HostSnapshotLike): EditorRuntimeState {
   if (snapshot.state !== 'ready') return snapshot.state;
   return snapshot.documentMode === 'viewing' ? 'review-ready' : 'editing-ready';
+}
+
+function isReadyLifecycleState(state: EditorRuntimeState): boolean {
+  return state === 'review-ready' || state === 'editing-ready';
 }
 
 function commandKindForSupport(kind: EditorRuntimeCommandKind): HostCommandKind | null {
@@ -350,7 +362,7 @@ export function createV2EditorRuntimeAdapter(options: V2EditorRuntimeAdapterOpti
   runtime: EditorRuntime;
   attachMountHandle(handle: HostMountHandleLike | null): void;
 } {
-  const { id, documentId, root, host, onUnregister } = options;
+  const { id, documentId, root, host, getLegacyEditorProjection, onUnregister } = options;
 
   let snapshot = host.getSnapshot();
   let didDispose = false;
@@ -449,7 +461,7 @@ export function createV2EditorRuntimeAdapter(options: V2EditorRuntimeAdapterOpti
   }
 
   function supportedCommands(current: HostSnapshotLike): readonly EditorRuntimeCommandKind[] {
-    if (current.state !== 'ready') return [];
+    if (!isReadyLifecycleState(normalizeLifecycleState(current))) return [];
     const runtimeKinds = TEXT_AND_STRUCTURE_COMMANDS.filter((kind) => {
       const mapped = commandKindForSupport(kind);
       return mapped !== null && isHostCommandSupported(current, mapped);
@@ -464,7 +476,8 @@ export function createV2EditorRuntimeAdapter(options: V2EditorRuntimeAdapterOpti
   }
 
   function capabilities(current: HostSnapshotLike = snapshot): EditorRuntimeCapabilities {
-    const canFocus = current.state !== 'disposed';
+    const lifecycleState = normalizeLifecycleState(current);
+    const canFocus = lifecycleState !== 'disposed';
     const availableCommands = supportedCommands(current);
     return {
       lifecycle: { canFocus, canDispose: true },
@@ -474,7 +487,7 @@ export function createV2EditorRuntimeAdapter(options: V2EditorRuntimeAdapterOpti
         canMintPositionTokens: true,
       },
       commands: {
-        canDispatch: current.state === 'ready' && availableCommands.length > 0,
+        canDispatch: isReadyLifecycleState(lifecycleState) && availableCommands.length > 0,
         supportedCommands: availableCommands,
       },
       layout: { supported: true, hasSyncSnapshot: true },
@@ -484,16 +497,21 @@ export function createV2EditorRuntimeAdapter(options: V2EditorRuntimeAdapterOpti
       comments: {
         supported: true,
         canMutate:
-          current.commentCommandsReason !== 'author-required'
-          && ['comments.create', 'comments.resolve', 'comments.reopen', 'comments.delete', 'comments.reply', 'comments.edit']
-            .some((kind) => availableCommands.includes(kind as EditorRuntimeCommandKind)),
+          current.commentCommandsReason !== 'author-required' &&
+          [
+            'comments.create',
+            'comments.resolve',
+            'comments.reopen',
+            'comments.delete',
+            'comments.reply',
+            'comments.edit',
+          ].some((kind) => availableCommands.includes(kind as EditorRuntimeCommandKind)),
       },
       trackedChanges: {
         supported: true,
         canDecide:
-          availableCommands.includes('trackedChanges.accept')
-          || availableCommands.includes('trackedChanges.reject'),
-        canToggleAuthoring: current.state === 'ready',
+          availableCommands.includes('trackedChanges.accept') || availableCommands.includes('trackedChanges.reject'),
+        canToggleAuthoring: isReadyLifecycleState(lifecycleState),
       },
     };
   }
@@ -512,7 +530,7 @@ export function createV2EditorRuntimeAdapter(options: V2EditorRuntimeAdapterOpti
       id,
       kind: 'v2',
       documentId,
-      state: mapLifecycleState(current),
+      state: normalizeLifecycleState(current),
       documentMode: current.documentMode,
       reason: current.reason,
       capabilities: capabilities(current),
@@ -602,7 +620,11 @@ export function createV2EditorRuntimeAdapter(options: V2EditorRuntimeAdapterOpti
           return null;
       }
     } catch (error) {
-      return { status: 'rejected', reason: 'command-failed', detail: error instanceof Error ? error.message : String(error) };
+      return {
+        status: 'rejected',
+        reason: 'command-failed',
+        detail: error instanceof Error ? error.message : String(error),
+      };
     }
   }
 
@@ -610,7 +632,7 @@ export function createV2EditorRuntimeAdapter(options: V2EditorRuntimeAdapterOpti
     snapshot = next;
     invalidatePositionTokens();
     syncSelectionSubscription();
-    emit({ type: 'state-change', state: mapLifecycleState(next) });
+    emit({ type: 'state-change', state: normalizeLifecycleState(next) });
     emit({ type: 'capabilities-change', capabilities: capabilities(next) });
     if (next.state === 'disposed' && !didDispose) {
       didDispose = true;
@@ -635,9 +657,10 @@ export function createV2EditorRuntimeAdapter(options: V2EditorRuntimeAdapterOpti
   syncSelectionSubscription();
 
   async function dispatch(command: EditorRuntimeCommand): Promise<EditorRuntimeCommandResult> {
-    if (snapshot.state === 'disposed') return { status: 'rejected', reason: 'runtime-not-ready' };
-    if (snapshot.state === 'saving') return { status: 'rejected', reason: 'host-saving' };
-    if (snapshot.state !== 'ready') return { status: 'rejected', reason: 'runtime-not-ready' };
+    const lifecycleState = normalizeLifecycleState(snapshot);
+    if (lifecycleState === 'disposed') return { status: 'rejected', reason: 'runtime-not-ready' };
+    if (lifecycleState === 'saving') return { status: 'rejected', reason: 'host-saving' };
+    if (!isReadyLifecycleState(lifecycleState)) return { status: 'rejected', reason: 'runtime-not-ready' };
 
     const token = 'at' in command ? command.at : 'range' in command ? command.range : undefined;
     if (token) {
@@ -767,7 +790,7 @@ export function createV2EditorRuntimeAdapter(options: V2EditorRuntimeAdapterOpti
       host.setDocumentMode(mode);
     },
     getDocumentMode: () => host.getDocumentMode(),
-    getLegacyEditorProjection: () => ({ editorVersion: 2, commands: null, state: null, view: null }),
+    getLegacyEditorProjection: () => getLegacyEditorProjection?.() ?? DEFAULT_V2_LEGACY_PROJECTION,
 
     focus,
     dispose,

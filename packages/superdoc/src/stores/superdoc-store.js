@@ -254,6 +254,48 @@ export const useSuperdocStore = defineStore('superdoc', () => {
   });
 
   const getDocument = (documentId) => documents.value.find((doc) => doc.id === documentId);
+
+  /**
+   * Remove one mounted document by id and prune shell-owned state tied to it.
+   *
+   * @param {string} documentId
+   * @returns {import('@superdoc/core/types/index.js').RuntimeDocument | null}
+   */
+  const removeDocument = (documentId) => {
+    const normalizedDocumentId = documentId != null ? String(documentId) : null;
+    if (!normalizedDocumentId) return null;
+
+    const docIndex = documents.value.findIndex((doc) => String(doc?.id ?? '') === normalizedDocumentId);
+    if (docIndex === -1) return null;
+
+    commentsStore.removeCommentsForDocument?.(normalizedDocumentId);
+
+    if (
+      activeSelection.value?.documentId != null &&
+      String(activeSelection.value.documentId) === normalizedDocumentId
+    ) {
+      activeSelection.value = null;
+      selectionPosition.value = {
+        left: 0,
+        top: 0,
+        width: 0,
+        height: 0,
+        source: null,
+      };
+    }
+
+    delete pages[normalizedDocumentId];
+
+    const [removed] = documents.value.splice(docIndex, 1);
+
+    const configDocs = currentConfig.value?.documents;
+    if (Array.isArray(configDocs)) {
+      const configIndex = configDocs.findIndex((doc) => String(doc?.id ?? '') === normalizedDocumentId);
+      if (configIndex !== -1) configDocs.splice(configIndex, 1);
+    }
+
+    return removed ?? null;
+  };
   const getPageBounds = (documentId, page) => {
     const matchedPage = pages[documentId];
     if (!matchedPage) return;
@@ -311,6 +353,7 @@ export const useSuperdocStore = defineStore('superdoc', () => {
     reset,
     handlePageReady,
     getDocument,
+    removeDocument,
     getPageBounds,
   };
 });

@@ -311,13 +311,23 @@ if (!hasSuperDocExport) {
 // maps bare @superdoc/common to dist/shared/common/comments-types.d.ts.
 function inlineCommonRuntimeDeclarations(filePath) {
   let fileContent = fs.readFileSync(filePath, 'utf8');
-  if (!fileContent.includes('@superdoc/common')) return false;
+  const commonRuntimeImportPatterns = [
+    /import\s*\{[^}]*\}\s*from\s*['"]@superdoc\/common['"];?\s*\n?/g,
+    /import\s*\{[^}]*\}\s*from\s*['"]@superdoc\/common\/document-types['"];?\s*\n?/g,
+    /import\s*\{[^}]*\}\s*from\s*['"]@superdoc\/common\/helpers\/get-file-object['"];?\s*\n?/g,
+    /import\s*\{[^}]*\}\s*from\s*['"]@superdoc\/common\/helpers\/compare-superdoc-versions['"];?\s*\n?/g,
+    /import\s*\{[^}]*\}\s*from\s*['"][^'"]*\/shared\/common(?:\/index)?(?:\.js)?['"];?\s*\n?/g,
+    /import\s*\{[^}]*\}\s*from\s*['"][^'"]*\/shared\/common\/document-types(?:\.js)?['"];?\s*\n?/g,
+    /import\s*\{[^}]*\}\s*from\s*['"][^'"]*\/shared\/common\/helpers\/get-file-object(?:\.js)?['"];?\s*\n?/g,
+    /import\s*\{[^}]*\}\s*from\s*['"][^'"]*\/shared\/common\/helpers\/compare-superdoc-versions(?:\.js)?['"];?\s*\n?/g,
+  ];
 
-  fileContent = fileContent
-    .replace(/import\s*\{[^}]*\}\s*from\s*['"]@superdoc\/common['"];?\s*\n?/g, '')
-    .replace(/import\s*\{[^}]*\}\s*from\s*['"]@superdoc\/common\/document-types['"];?\s*\n?/g, '')
-    .replace(/import\s*\{[^}]*\}\s*from\s*['"]@superdoc\/common\/helpers\/get-file-object['"];?\s*\n?/g, '')
-    .replace(/import\s*\{[^}]*\}\s*from\s*['"]@superdoc\/common\/helpers\/compare-superdoc-versions['"];?\s*\n?/g, '');
+  const hasCommonRuntimeImport = commonRuntimeImportPatterns.some((pattern) => pattern.test(fileContent));
+  if (!hasCommonRuntimeImport) return false;
+
+  for (const pattern of commonRuntimeImportPatterns) {
+    fileContent = fileContent.replace(pattern, '');
+  }
 
   const hasExportedBlankDocxDeclaration = /\bexport\s+declare\s+const\s+BlankDOCX\b/.test(fileContent);
   const declarations = [

@@ -2,7 +2,7 @@ import '../style.css';
 
 import { EventEmitter } from 'eventemitter3';
 import { v4 as uuidv4 } from 'uuid';
-import { markRaw, toRaw } from 'vue';
+import { markRaw, nextTick, toRaw } from 'vue';
 import { HocuspocusProviderWebsocket } from '@hocuspocus/provider';
 
 import { DOCX, PDF, HTML, getActorIdentityKey, normalizeActorEmail } from '@superdoc/common';
@@ -152,6 +152,19 @@ type ActiveEditor = Editor | V2ActiveEditorFacade;
 
 function isV2ActiveEditorFacade(editor: unknown): editor is V2ActiveEditorFacade {
   return Boolean(editor && typeof editor === 'object' && (editor as { editorVersion?: unknown }).editorVersion === 2);
+}
+
+function normalizeActiveEditorDocumentId(documentId: unknown): string | null {
+  return typeof documentId === 'string' && documentId.length > 0 ? documentId : null;
+}
+
+function getActiveEditorDocumentId(editor: ActiveEditor | null | undefined): string | null {
+  if (!editor) return null;
+  if (isV2ActiveEditorFacade(editor)) {
+    return normalizeActiveEditorDocumentId(editor.documentId ?? editor.options?.documentId ?? null);
+  }
+  const documentId = typeof editor.getDocumentId === 'function' ? editor.getDocumentId() : editor.options?.documentId;
+  return normalizeActiveEditorDocumentId(documentId);
 }
 
 function getActivePresentationEditor(editor: ActiveEditor | null | undefined): PresentationEditor | null {
@@ -437,9 +450,10 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
 
   /**
    * Re-entrancy guard. True while the registry active-change bridge is applying
-   * a projection through `setActiveEditor(...)`, so that call applies the
-   * projection directly instead of routing back into runtime activation (which
-   * would recurse). The sole writer of `activeEditor` stays `setActiveEditor`.
+   * a projection through `#setActiveEditorCompatibilityProjection(...)`, so
+   * that call applies the projection directly instead of routing back into
+   * runtime activation (which would recurse). The compatibility projection
+   * stays centralized in one writer.
    */
   #applyingRuntimeActiveChange = false;
 
@@ -1782,10 +1796,11 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
   }
 
   /**
-   * Reconcile the legacy `activeEditor` projection with a registry active-runtime
-   * change. SuperDoc owns the invariant that `activeEditor` is either the active
-   * runtime's supported v1 projection, or `null` when the active runtime has no
-   * supported legacy projection.
+   * Reconcile the compatibility `activeEditor` projection with a registry
+   * active-runtime change. SuperDoc owns the invariant that `activeEditor` is
+   * either the active runtime's supported projection (v1 legacy editor or the
+   * v2 facade emitted by the shell), or `null` when the active runtime has no
+   * supported projection.
    *
    * @param nextRuntimeId The newly active runtime id, or `null` when cleared.
    * @param projection The next runtime's legacy projection, if any.
@@ -1800,10 +1815,11 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
       const runtime = this.#editorRuntimeRegistry.get(nextRuntimeId);
       if (runtime?.kind === 'v1' && isCommandCapableV1LegacyProjection(projection)) {
         this.setActiveEditor(projection);
+      } else if (runtime?.kind === 'v2' && isV2ActiveEditorFacade(projection)) {
+        this.#setActiveEditorCompatibilityProjection(projection);
       } else {
-        // Fail closed: a non-v1 runtime, or a runtime with a v2-shaped / null /
-        // command-incapable projection, must not leave a stale v1 editor or
-        // toolbar bound.
+        // Fail closed: an unsupported projection must not leave a stale v1
+        // editor, toolbar binding, or v2 facade attached to the wrong runtime.
         this.#clearActiveEditorProjection();
       }
     } finally {
@@ -1825,7 +1841,7 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
       if (runtime.kind !== 'v1') continue;
       if (runtime.getLegacyEditorProjection?.() === editor) return runtime.id;
     }
-    const documentId = editor.options?.documentId;
+    const documentId = getActiveEditorDocumentId(editor);
     if (typeof documentId === 'string' && documentId.length > 0) {
       const matches = this.#editorRuntimeRegistry
         .getAllByDocumentId(documentId)
@@ -1836,16 +1852,10 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
   }
 
   /**
-   * Set the active editor (legacy entry point). When the editor maps to a
-   * registered runtime this routes through the registry so the active runtime
-   * and `activeEditor` cannot drift apart; the registry bridge then applies the
-   * projection. Direct legacy assignment is used only before runtime
-   * registration (startup) or when no owning runtime can be resolved.
-   *
-   * @param editor The editor to set as active
+   * Centralized compatibility projection writer used by both the public legacy
+   * entry point and the registry-driven v2 activation bridge.
    */
-  setActiveEditor(editor: Editor | null): void;
-  setActiveEditor(editor: ActiveEditor | null) {
+  #setActiveEditorCompatibilityProjection(editor: ActiveEditor | null) {
     if (isV2ActiveEditorFacade(editor)) {
       if (!this.#applyingRuntimeActiveChange && this.#editorRuntimeRegistry.getActive()) {
         this.#editorRuntimeRegistry.setActive(null, 'set-active-v2-facade');
@@ -1885,8 +1895,50 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
     this.#applyActiveEditorProjection(editor);
   }
 
+  /**
+   * Set the active editor (legacy entry point). When the editor maps to a
+   * registered runtime this routes through the registry so the active runtime
+   * and `activeEditor` cannot drift apart; the registry bridge then applies the
+   * projection. Direct legacy assignment is used only before runtime
+   * registration (startup) or when no owning runtime can be resolved.
+   *
+   * @param editor The editor to set as active
+   */
+  setActiveEditor(editor: Editor | null): void {
+    this.#setActiveEditorCompatibilityProjection(editor);
+  }
+
   getV2FeatureMatrix() {
     return [
+      {
+        feature: 'source.docx-bytes',
+        status: 'supported',
+        reason:
+          'public SuperDoc normalizes File/Blob/ArrayBuffer/Uint8Array DOCX inputs into the injected private v2 integration path',
+      },
+      {
+        feature: 'source.url',
+        status: 'supported',
+        reason:
+          'shell-owned source normalization resolves URL-backed DOCX inputs before opening the injected v2 editor',
+      },
+      {
+        feature: 'source.blank',
+        status: 'supported',
+        reason: 'shell-owned blank-document seeding resolves to DOCX bytes before mounting the injected v2 editor',
+      },
+      {
+        feature: 'execution.browser-worker',
+        status: 'disabled',
+        reason:
+          'browser-worker v2 execution is an opt-in advanced path; the shipped public shell runs inline by default',
+      },
+      {
+        feature: 'distribution.cdn-iife',
+        status: 'not-shipped',
+        reason:
+          'the single-file CDN/IIFE build intentionally omits the private v2 runtime because it requires the multi-file package distribution',
+      },
       {
         feature: 'docx.open-render',
         status: 'supported',
@@ -2929,6 +2981,32 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
   }
 
   /**
+   * Clean up collaboration resources owned only by a removed document.
+   *
+   * Shared instance-level providers/ydocs stay alive; `destroy()` remains the
+   * one place that tears down shell-wide collaboration state.
+   */
+  #cleanupRemovedDocumentCollaboration(
+    removedDocument: RuntimeDocument,
+    remainingDocuments: readonly RuntimeDocument[],
+  ) {
+    const removedProvider = removedDocument.provider;
+    if (
+      removedProvider &&
+      removedProvider !== this.provider &&
+      !remainingDocuments.some((doc) => doc.provider === removedProvider)
+    ) {
+      removedProvider.disconnect?.();
+      removedProvider.destroy?.();
+    }
+
+    const removedYDoc = removedDocument.ydoc;
+    if (removedYDoc && removedYDoc !== this.ydoc && !remainingDocuments.some((doc) => doc.ydoc === removedYDoc)) {
+      removedYDoc.destroy?.();
+    }
+  }
+
+  /**
    * Clean up collaboration resources (providers, ydocs, sockets)
    */
   #cleanupCollaboration() {
@@ -2977,6 +3055,42 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
    */
   closeSurface(id?: string) {
     this.#surfaceManager.close(id);
+  }
+
+  /**
+   * Remove one mounted document from the shell by document id.
+   *
+   * Clears any registered runtimes for that document without silently
+   * promoting another runtime, prunes shell-owned comment state for the
+   * document, and resolves after Vue flushes the unmount so DOM-based callers
+   * can observe the root disappearing.
+   *
+   * @param documentId The document id to remove.
+   * @returns `true` when a document was removed, `false` when none matched.
+   */
+  async removeDocument(documentId: string): Promise<boolean> {
+    const normalizedDocumentId = typeof documentId === 'string' ? documentId : String(documentId ?? '');
+    if (!normalizedDocumentId) return false;
+
+    const store = this.#requireSuperdocStore('removeDocument');
+    const activeEditor = this.activeEditor as ActiveEditor | null;
+    const activeDocumentId = getActiveEditorDocumentId(activeEditor);
+
+    for (const runtime of this.#editorRuntimeRegistry.getAllByDocumentId(normalizedDocumentId)) {
+      this.#editorRuntimeRegistry.unregister(runtime.id);
+    }
+
+    if (activeDocumentId === normalizedDocumentId && activeEditor !== null) {
+      this.#clearActiveEditorProjection();
+    }
+
+    const removedDocument = store.removeDocument(normalizedDocumentId);
+    if (!removedDocument) return false;
+
+    this.#cleanupRemovedDocumentCollaboration(removedDocument, store.documents);
+
+    await nextTick();
+    return true;
   }
 
   /**

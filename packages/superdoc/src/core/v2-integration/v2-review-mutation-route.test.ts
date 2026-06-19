@@ -34,9 +34,7 @@ const REVIEW_MUTATION_SURFACES = [
 // Strip line and block comments so guidance comments that mention the old
 // routes do not trip the scanner.
 function stripComments(source: string): string {
-  return source
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
 }
 
 const FORBIDDEN_PATTERNS: { label: string; re: RegExp }[] = [
@@ -89,7 +87,9 @@ describe('public v2 review mutation route guard', () => {
   });
 
   it('self-test: scanner ignores forbidden routes that appear only in comments', () => {
-    const synthetic = stripComments(`// route through host.dispatch({ kind: 'review.trackedChangeDecide' })\nconst x = 1;`);
+    const synthetic = stripComments(
+      `// route through host.dispatch({ kind: 'review.trackedChangeDecide' })\nconst x = 1;`,
+    );
     const hit = FORBIDDEN_PATTERNS.some(({ re }) => re.test(synthetic));
     expect(hit).toBe(false);
   });

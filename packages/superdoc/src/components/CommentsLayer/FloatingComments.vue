@@ -219,7 +219,11 @@ const getFloatingViewportRange = () => {
   }
 
   const containerRect = container.getBoundingClientRect();
-  if (!Number.isFinite(containerRect.top) || !Number.isFinite(viewportRect.top) || !Number.isFinite(viewportRect.bottom)) {
+  if (
+    !Number.isFinite(containerRect.top) ||
+    !Number.isFinite(viewportRect.top) ||
+    !Number.isFinite(viewportRect.bottom)
+  ) {
     return null;
   }
 
@@ -625,11 +629,7 @@ watch(allPositions, (positions) => {
       : null;
   const activeAnchorMoved =
     activeAnchorTop != null && prevActiveAnchorTop != null && Math.abs(activeAnchorTop - prevActiveAnchorTop) > 1;
-  if (
-    activeAnchorMoved &&
-    sidebarOffsetY.value !== 0 &&
-    !Number.isFinite(instantSidebarAlignmentTargetY.value)
-  ) {
+  if (activeAnchorMoved && sidebarOffsetY.value !== 0 && !Number.isFinite(instantSidebarAlignmentTargetY.value)) {
     sidebarOffsetY.value = 0;
     setInstantLayoutTransitionsDisabled(false);
   }

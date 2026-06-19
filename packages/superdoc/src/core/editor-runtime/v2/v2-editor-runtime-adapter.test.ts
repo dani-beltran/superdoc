@@ -5,13 +5,11 @@ import { createV2EditorRuntimeAdapter } from './v2-editor-runtime-adapter.js';
 function createReadyHost(overrides: Record<string, unknown> = {}) {
   return {
     getSnapshot: () => ({
-      state: 'ready',
+      state: 'editing-ready',
       documentMode: 'editing',
       editableSubset: {
         editingMounted: true,
-        commands: [
-          { command: 'review.trackedChangeDecide', status: 'supported', rejectionCode: null, detail: null },
-        ],
+        commands: [{ command: 'review.trackedChangeDecide', status: 'supported', rejectionCode: null, detail: null }],
       },
       commentCommandsReason: null,
     }),
@@ -29,6 +27,28 @@ function createReadyHost(overrides: Record<string, unknown> = {}) {
 }
 
 describe('createV2EditorRuntimeAdapter review mutation route', () => {
+  it('returns the caller-supplied v2 facade as the legacy projection when provided', () => {
+    const facade = {
+      editorVersion: 2,
+      documentId: 'doc-1',
+      options: { documentId: 'doc-1' },
+      commands: null,
+      state: null,
+      view: null,
+      editCommands: { getMatrix: vi.fn(() => []), getSnapshot: vi.fn(() => ({})) },
+    };
+    const host = createReadyHost();
+    const { runtime } = createV2EditorRuntimeAdapter({
+      id: 'v2-runtime',
+      documentId: 'doc-1',
+      root: document.createElement('div'),
+      host,
+      getLegacyEditorProjection: () => facade,
+    });
+
+    expect(runtime.getLegacyEditorProjection?.()).toBe(facade);
+  });
+
   it('routes tracked-change decisions through the synchronous Document API facade', async () => {
     const decide = vi.fn(() => ({ success: true, txId: 'tx-1' }));
     const host = createReadyHost({
@@ -58,7 +78,7 @@ describe('createV2EditorRuntimeAdapter review mutation route', () => {
     const decide = vi.fn(() => ({ success: true, txId: 'tx-1' }));
     const host = createReadyHost({
       getSnapshot: () => ({
-        state: 'ready',
+        state: 'editing-ready',
         documentMode: 'editing',
         editableSubset: {
           editingMounted: true,
@@ -97,7 +117,7 @@ describe('createV2EditorRuntimeAdapter review mutation route', () => {
     const decide = vi.fn(() => ({ success: true, txId: 'tx-1' }));
     const host = createReadyHost({
       getSnapshot: () => ({
-        state: 'ready',
+        state: 'review-ready',
         documentMode: 'viewing',
         editableSubset: {
           editingMounted: false,

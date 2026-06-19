@@ -226,7 +226,10 @@ interface ReactProps {
  * Callback props are explicitly typed to ensure proper TypeScript inference.
  */
 export interface SuperDocEditorProps
-  extends Omit<SuperDocConfig, InternalProps | OptionalInReact | ExplicitCallbackProps | keyof EditorImplementationProps>,
+  extends Omit<
+      SuperDocConfig,
+      InternalProps | OptionalInReact | ExplicitCallbackProps | keyof EditorImplementationProps
+    >,
     Partial<Pick<SuperDocConfig, OptionalInReact>>,
     EditorImplementationProps,
     CallbackProps,

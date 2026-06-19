@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { DOCX, PDF } from '@superdoc/common';
 import { createFakeV1Runtime } from './editor-runtime/conformance/fake-v1-runtime.js';
+import { createV2EditorRuntimeAdapter } from './editor-runtime/v2/v2-editor-runtime-adapter.js';
 import { createV1EditorRuntimeAdapter } from './editor-runtime/v1/v1-editor-runtime-adapter.js';
 import { markRuntimeRoot } from './editor-runtime/root-marker.js';
 
@@ -142,6 +143,7 @@ const createAppHarness = () => {
   const superdocStore = {
     documents: [],
     init: vi.fn(),
+    removeDocument: vi.fn(),
     reset: vi.fn(),
     setExceptionHandler: vi.fn(),
     activeZoom: 100,
@@ -3588,6 +3590,43 @@ describe('SuperDoc core', () => {
       };
     };
 
+    const makeFakeV2Facade = (documentId = 'doc-1') => ({
+      editorVersion: 2,
+      documentId,
+      options: { documentId },
+      commands: null,
+      state: null,
+      view: null,
+      editCommands: { getMatrix: vi.fn(() => []), getSnapshot: vi.fn(() => ({})) },
+      focus: vi.fn(() => true),
+    });
+
+    const makeFakeV2Adapter = (id, documentId, facade, root = document.createElement('div')) =>
+      createV2EditorRuntimeAdapter({
+        id,
+        documentId,
+        root,
+        host: {
+          getSnapshot: () => ({
+            state: 'editing-ready',
+            documentMode: 'editing',
+            editableSubset: { editingMounted: true, commands: [] },
+            commentCommandsReason: null,
+          }),
+          subscribe: () => () => {},
+          getDocumentMode: () => 'editing',
+          setDocumentMode: vi.fn(),
+          dispatch: vi.fn(async () => ({ status: 'committed', receipt: { success: true } })),
+          save: vi.fn(async () => new ArrayBuffer(0)),
+          dispose: vi.fn(async () => {}),
+          getHandles: () => ({ editing: null }),
+          getPageMetricsSnapshot: () => ({ pages: [], zoom: { percent: 100 } }),
+          subscribePageMetrics: () => () => {},
+          setZoom: vi.fn(() => ({ status: 'ok' })),
+        },
+        getLegacyEditorProjection: () => facade,
+      });
+
     it('projects activeEditor from a v1 runtime and rebinds the toolbar on activation', async () => {
       createAppHarness();
       const instance = new SuperDoc({
@@ -3768,6 +3807,113 @@ describe('SuperDoc core', () => {
         expect(editorA.commands.search).toHaveBeenCalledTimes(1);
 
         expect(instance.getActiveRuntime().getSelectedText()).toBe('beta selection');
+      } finally {
+        rootA.remove();
+        rootB.remove();
+        instance.destroy();
+      }
+    });
+
+    it('projects activeEditor from a v2 runtime on activation and keeps the v1 toolbar detached', async () => {
+      createAppHarness();
+      const instance = new SuperDoc({
+        selector: '#host',
+        document: 'https://example.com/doc.docx',
+        modules: { toolbar: {} },
+      });
+      await flushMicrotasks();
+
+      toolbarSetActiveSpy.mockClear();
+      const rootA = document.createElement('div');
+      const rootB = document.createElement('div');
+      const innerA = document.createElement('span');
+      const innerB = document.createElement('span');
+      rootA.appendChild(innerA);
+      rootB.appendChild(innerB);
+      document.body.append(rootA, rootB);
+
+      const facadeA = makeFakeV2Facade('doc-a');
+      const facadeB = makeFakeV2Facade('doc-b');
+      const adapterA = makeFakeV2Adapter('v2:doc-a', 'doc-a', facadeA, rootA);
+      const adapterB = makeFakeV2Adapter('v2:doc-b', 'doc-b', facadeB, rootB);
+
+      try {
+        markRuntimeRoot(rootA, adapterA.runtime.id);
+        markRuntimeRoot(rootB, adapterB.runtime.id);
+        instance.registerEditorRuntime(adapterA.runtime);
+        instance.registerEditorRuntime(adapterB.runtime);
+
+        instance.activateRuntimeFromEventTarget(innerA, 'pointerdown');
+        expect(instance.getActiveRuntime()).toBe(adapterA.runtime);
+        expect(instance.activeEditor).toBe(facadeA);
+
+        instance.activateRuntimeFromEventTarget(innerB, 'pointerdown');
+        expect(instance.getActiveRuntime()).toBe(adapterB.runtime);
+        expect(instance.activeEditor).toBe(facadeB);
+        expect(toolbarSetActiveSpy).not.toHaveBeenCalled();
+      } finally {
+        rootA.remove();
+        rootB.remove();
+        instance.destroy();
+      }
+    });
+
+    it('publishes the v2 source/execution/distribution posture in the feature matrix', async () => {
+      createAppHarness();
+      const instance = new SuperDoc({
+        selector: '#host',
+        document: 'https://example.com/doc.docx',
+        editorVersion: 2,
+      });
+      await flushMicrotasks();
+
+      const statusByFeature = Object.fromEntries(instance.getV2FeatureMatrix().map((row) => [row.feature, row.status]));
+      expect(statusByFeature['source.docx-bytes']).toBe('supported');
+      expect(statusByFeature['source.url']).toBe('supported');
+      expect(statusByFeature['source.blank']).toBe('supported');
+      expect(statusByFeature['execution.browser-worker']).toBe('disabled');
+      expect(statusByFeature['distribution.cdn-iife']).toBe('not-shipped');
+    });
+
+    it('removeDocument clears the active v2 runtime without auto-promoting another mounted document', async () => {
+      const { superdocStore } = createAppHarness();
+      superdocStore.removeDocument.mockImplementation((documentId) => {
+        const index = superdocStore.documents.findIndex((doc) => doc.id === documentId);
+        if (index === -1) return null;
+        return superdocStore.documents.splice(index, 1)[0];
+      });
+
+      const instance = new SuperDoc({
+        selector: '#host',
+        document: 'https://example.com/doc.docx',
+        editorVersion: 2,
+        modules: { toolbar: {} },
+      });
+      await flushMicrotasks();
+
+      const rootA = document.createElement('div');
+      const rootB = document.createElement('div');
+      document.body.append(rootA, rootB);
+
+      superdocStore.documents = [{ id: 'doc-a' }, { id: 'doc-b' }];
+      const facadeA = makeFakeV2Facade('doc-a');
+      const facadeB = makeFakeV2Facade('doc-b');
+      const adapterA = makeFakeV2Adapter('v2:doc-a', 'doc-a', facadeA, rootA);
+      const adapterB = makeFakeV2Adapter('v2:doc-b', 'doc-b', facadeB, rootB);
+
+      try {
+        instance.registerEditorRuntime(adapterA.runtime);
+        instance.registerEditorRuntime(adapterB.runtime);
+        instance.setActiveRuntime('v2:doc-b', 'focus');
+
+        const removed = await instance.removeDocument('doc-b');
+
+        expect(removed).toBe(true);
+        expect(superdocStore.removeDocument).toHaveBeenCalledWith('doc-b');
+        expect(superdocStore.documents.map((doc) => doc.id)).toEqual(['doc-a']);
+        expect(instance.getActiveRuntime()).toBeNull();
+        expect(instance.activeEditor).toBeNull();
+        expect(instance.unregisterEditorRuntime('v2:doc-b')).toBe(false);
       } finally {
         rootA.remove();
         rootB.remove();

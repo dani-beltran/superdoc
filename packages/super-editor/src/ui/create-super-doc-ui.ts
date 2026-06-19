@@ -1998,10 +1998,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
   // SD-2667/S4 (filed separately).
 
   const requireDocTrackChanges = () => {
-    if (
-      superdoc.config?.documentMode === 'viewing' ||
-      superdoc.config?.modules?.trackChanges?.enabled === false
-    ) {
+    if (superdoc.config?.documentMode === 'viewing' || superdoc.config?.modules?.trackChanges?.enabled === false) {
       throw new Error('ui.trackChanges: tracked-change decisions are unavailable in read-only mode.');
     }
     // Always go through the host editor — `trackChanges.decide` is

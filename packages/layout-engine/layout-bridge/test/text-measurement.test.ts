@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { FlowBlock, Line, Run } from '@superdoc/contracts';
-import { findCharacterAtX, measureCharacterX, charOffsetToPm } from '../src/text-measurement.ts';
+import { resolvePhysicalFamily } from '@superdoc/font-system';
+import { findCharacterAtX, measureCharacterX, charOffsetToPm, getRunFontString } from '../src/text-measurement.ts';
 
 // Helper to count spaces (tests functionality indirectly through justify calculations)
 const countSpaces = (text: string): number => {
@@ -80,6 +81,15 @@ const baseLine = (overrides?: Partial<Line>): Line => ({
 });
 
 describe('text measurement utility', () => {
+  it('measures text with the shared physical font family', () => {
+    expect(getRunFontString({ text: 'Editable', fontFamily: 'Calibri', fontSize: 16 })).toBe(
+      `normal normal 16px ${resolvePhysicalFamily('Calibri')}`,
+    );
+    expect(
+      getRunFontString({ text: 'Bold italic', fontFamily: 'Calibri', fontSize: 16, bold: true, italic: true }),
+    ).toBe(`italic bold 16px ${resolvePhysicalFamily('Calibri')}`);
+  });
+
   it('measures across multiple runs', () => {
     const block = createBlock([
       { text: 'Hello', fontFamily: 'Arial', fontSize: 16 },
@@ -772,6 +782,79 @@ describe('text measurement utility', () => {
 
       const x3 = measureCharacterX(block, line, 3, 200);
       expect(x3).toBe(3 * CHAR_WIDTH); // Just character position
+    });
+  });
+
+  describe('forward/inverse round-trip (caret placement oracle)', () => {
+    // Correctness invariant, asserted without a browser or screenshots:
+    // clicking the x of any caret offset must resolve back to that offset.
+    // findCharacterAtX must be the exact inverse of measureCharacterX across
+    // every alignment/positioning mode.
+    const assertInverse = (
+      block: FlowBlock,
+      line: Line,
+      length: number,
+      availableWidth?: number,
+      alignment?: string,
+    ): void => {
+      for (let offset = 0; offset <= length; offset += 1) {
+        const x = measureCharacterX(block, line, offset, availableWidth, alignment);
+        const resolved = findCharacterAtX(block, line, x, 0, availableWidth, alignment).charOffset;
+        expect(resolved, `offset ${offset} at x=${x}`).toBe(offset);
+      }
+    };
+
+    it('round-trips left-aligned multi-run text', () => {
+      const block = createBlock([
+        { text: 'Hello', fontFamily: 'Arial', fontSize: 16 },
+        { text: 'World', fontFamily: 'Arial', fontSize: 16 },
+      ]);
+      assertInverse(block, baseLine({ fromRun: 0, toRun: 1, toChar: 5, width: 100 }), 10);
+    });
+
+    it('round-trips center-aligned text (alignment-offset path)', () => {
+      const block = createBlock([{ text: 'Hello', fontFamily: 'Arial', fontSize: 16 }]);
+      (block as any).attrs = { alignment: 'center' };
+      assertInverse(block, baseLine({ fromRun: 0, toRun: 0, toChar: 5, width: 50 }), 5, 200, 'center');
+    });
+
+    it('round-trips a tab-aligned line', () => {
+      const block = createBlock([
+        { text: 'A', fontFamily: 'Arial', fontSize: 16 },
+        { kind: 'tab', text: '\t', width: 48 },
+        { text: 'B', fontFamily: 'Arial', fontSize: 16 },
+      ]);
+      assertInverse(block, baseLine({ fromRun: 0, toRun: 2, toChar: 1, width: CHAR_WIDTH + 48 + CHAR_WIDTH }), 3);
+    });
+
+    // Regression for the centered-title bug (SD-3464): the title is laid out with
+    // explicit per-segment x (a centering pad), NOT text-align:center. The inverse
+    // (measureCharacterX) honors segment.x via the segment-based branch; the forward
+    // must honor it too, or clicks near the start resolve to the line end.
+    const centeredTitleLine = (): { block: FlowBlock; line: Line } => {
+      const block = createBlock([{ text: 'ABCDE', fontFamily: 'Arial', fontSize: 16, pmStart: 0, pmEnd: 5 }]);
+      const line = baseLine({
+        fromRun: 0,
+        toRun: 0,
+        toChar: 5,
+        width: 50,
+        maxWidth: 200,
+        segments: [{ runIndex: 0, fromChar: 0, toChar: 5, x: 75, width: 50 }],
+      } as Partial<Line>);
+      return { block, line };
+    };
+
+    it('round-trips a segment-positioned (explicitly centered) line', () => {
+      const { block, line } = centeredTitleLine();
+      assertInverse(block, line, 5, 200);
+    });
+
+    it('maps a click at the visual start of a centered title to the start, not the end', () => {
+      const { block, line } = centeredTitleLine();
+      // Painted text starts at x=75 (segment.x). A click at x=77 (the 'A') must land
+      // near offset 0 — before the fix it resolved to the line end (offset ~5).
+      const result = findCharacterAtX(block, line, 77, 0, 200);
+      expect(result.charOffset).toBeLessThanOrEqual(1);
     });
   });
 });

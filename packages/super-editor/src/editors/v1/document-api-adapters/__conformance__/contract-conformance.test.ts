@@ -2067,10 +2067,7 @@ const V1_COMPATIBILITY_STUB_DRY_RUN_OPS: ReadonlySet<OperationId> = new Set(
  * plan.execute returns batch receipts/captures and owns its dedicated executor
  * tests in @superdoc/document-api.
  */
-const PLAN_ENGINE_META_OPS: ReadonlySet<OperationId> = new Set([
-  'mutations.apply',
-  'plan.execute',
-] as OperationId[]);
+const PLAN_ENGINE_META_OPS: ReadonlySet<OperationId> = new Set(['mutations.apply', 'plan.execute'] as OperationId[]);
 const NON_RECEIPT_MUTATION_OPS: ReadonlySet<OperationId> = new Set([
   'history.undo',
   'history.redo',

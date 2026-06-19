@@ -58,6 +58,7 @@ import { usePasswordPrompt } from './composables/use-password-prompt.js';
 import { useFindReplace } from './composables/use-find-replace.js';
 import { useViewportFit } from './composables/use-viewport-fit.js';
 import { createV1EditorRuntimeAdapter } from './core/editor-runtime/v1/v1-editor-runtime-adapter.js';
+import { createV2EditorRuntimeAdapter } from './core/editor-runtime/v2/v2-editor-runtime-adapter.js';
 import { markRuntimeRoot, unmarkRuntimeRoot } from './core/editor-runtime/root-marker.js';
 import { collectTouchedTrackedChangeIds } from './helpers/collect-touched-tracked-change-ids.js';
 import { resolveV2Integration } from './core/v2-integration/v2-integration.js';
@@ -457,7 +458,9 @@ const onEditorContentControlClick = (payload) => {
 // Shell-owned per-document state for the v1 runtime adapter.
 const subDocumentRoots = new Map();
 const v1Runtimes = new Map();
+const v2Runtimes = new Map();
 let v1RuntimeSeq = 0;
+let v2RuntimeSeq = 0;
 
 /**
  * Store the shell-owned wrapper for a document editor. This wrapper is outside
@@ -469,6 +472,15 @@ const setSubDocumentRoot = (doc, el) => {
   if (!doc?.id) return;
   if (el) subDocumentRoots.set(doc.id, el);
   else subDocumentRoots.delete(doc.id);
+};
+
+const clearV2RuntimeRegistration = (documentId) => {
+  const entry = v2Runtimes.get(documentId);
+  if (!entry) return;
+  proxy.$superdoc.unregisterEditorRuntime(entry.runtimeId);
+  v2Runtimes.delete(documentId);
+  const hostRoot = subDocumentRoots.get(documentId);
+  if (hostRoot) unmarkRuntimeRoot(hostRoot);
 };
 
 /**
@@ -507,6 +519,41 @@ const registerV1Runtime = (documentId, editor) => {
   proxy.$superdoc.registerEditorRuntime(adapter.runtime);
   v1Runtimes.set(documentId, { runtimeId, adapter });
   proxy.$superdoc.setActiveRuntime(runtimeId, 'v1-editor-create');
+};
+
+const registerV2Runtime = ({ documentId, host, mount, facade }) => {
+  const root = subDocumentRoots.get(documentId);
+  if (!root) {
+    console.warn('[SuperDoc] v2 runtime host root unavailable; skipping runtime registration for', documentId);
+    return false;
+  }
+
+  if (v2Runtimes.has(documentId)) {
+    clearV2RuntimeRegistration(documentId);
+  }
+
+  const runtimeId = `v2:${documentId}:${++v2RuntimeSeq}`;
+  const adapter = createV2EditorRuntimeAdapter({
+    id: runtimeId,
+    documentId,
+    root,
+    host,
+    getLegacyEditorProjection: () => facade,
+    onUnregister: (id) => {
+      proxy.$superdoc.unregisterEditorRuntime(id);
+      const current = v2Runtimes.get(documentId);
+      if (current && current.runtimeId === id) v2Runtimes.delete(documentId);
+      const hostRoot = subDocumentRoots.get(documentId);
+      if (hostRoot) unmarkRuntimeRoot(hostRoot);
+    },
+  });
+
+  adapter.attachMountHandle(mount ?? null);
+  markRuntimeRoot(root, runtimeId);
+  proxy.$superdoc.registerEditorRuntime(adapter.runtime);
+  v2Runtimes.set(documentId, { runtimeId, adapter });
+  proxy.$superdoc.setActiveRuntime(runtimeId, 'v2-editor-ready');
+  return true;
 };
 
 const onEditorCreate = ({ editor }) => {
@@ -675,17 +722,32 @@ const readV2SelectionInfo = (host) => {
 
 const clearActiveV2EditorFacade = (documentId = null) => {
   const activeEditor = proxy.$superdoc?.activeEditor;
-  if (!activeEditor || activeEditor.editorVersion !== 2) return;
+  const activeDocumentId = documentId ?? activeEditor?.documentId ?? activeEditor?.options?.documentId ?? null;
+  if (!activeDocumentId) {
+    if (activeEditor?.editorVersion === 2) {
+      proxy.$superdoc.setActiveEditor(null);
+    }
+    return;
+  }
 
-  const activeDocumentId = activeEditor.documentId ?? activeEditor.options?.documentId ?? null;
-  if (documentId && activeDocumentId && activeDocumentId !== documentId) return;
+  if (documentId && activeEditor?.editorVersion === 2) {
+    const currentDocumentId = activeEditor.documentId ?? activeEditor.options?.documentId ?? null;
+    if (currentDocumentId && currentDocumentId !== documentId) return;
+  }
 
   const doc = activeDocumentId ? getDocument(activeDocumentId) : null;
   if (doc) {
     doc.isReady = false;
     if (typeof doc.setEditor === 'function') doc.setEditor(null);
   }
-  proxy.$superdoc.setActiveEditor(null);
+  const hadRegisteredRuntime = v2Runtimes.has(activeDocumentId);
+  clearV2RuntimeRegistration(activeDocumentId);
+  if (!hadRegisteredRuntime && activeEditor?.editorVersion === 2) {
+    const currentDocumentId = activeEditor.documentId ?? activeEditor.options?.documentId ?? null;
+    if (currentDocumentId === activeDocumentId) {
+      proxy.$superdoc.setActiveEditor(null);
+    }
+  }
 };
 
 const assertV2DocumentApiCanMutate = (operation) => {
@@ -740,6 +802,7 @@ const onV2EditorReady = (payload) => {
     mount,
     documentId,
     capabilities,
+    editCommands,
     commentsAdapter,
     trackedChangesAdapter,
     documentApi,
@@ -810,6 +873,7 @@ const onV2EditorReady = (payload) => {
       }
       return false;
     },
+    editCommands: editCommands ?? null,
     // ui-phase3-002: v2 comments adapter — used by comments-store and
     // CommentDialog to route create / reply / edit / resolve / delete through
     // v2 host APIs. Always present in v2 mode; null when the v2 editor host
@@ -863,7 +927,10 @@ const onV2EditorReady = (payload) => {
     doc.isReady = true;
     if (typeof doc.setEditor === 'function') doc.setEditor(facade);
   }
-  proxy.$superdoc.setActiveEditor(facade);
+  const runtimeRegistered = registerV2Runtime({ documentId, host, mount, facade });
+  if (!runtimeRegistered) {
+    proxy.$superdoc.setActiveEditor(facade);
+  }
   proxy.$superdoc.broadcastEditorCreate(facade);
   if (getDocument(documentId)?.v2Collaboration) {
     onEditorCollaborationReady({ editor: facade });
@@ -1154,7 +1221,7 @@ const onV2PageMetrics = (payload) => {
   });
 };
 
-const onV2RenderCleared = () => {
+const onV2RenderCleared = (payload) => {
   if (v2GeometryRafHandle && typeof cancelAnimationFrame === 'function') {
     cancelAnimationFrame(v2GeometryRafHandle);
   }
@@ -1176,7 +1243,7 @@ const onV2RenderCleared = () => {
   commentsStore.setV2CommentsAdapter?.(null);
   commentsStore.setV2TrackedChangesAdapter?.(null);
   commentsStore.clearEditorCommentPositions?.();
-  clearActiveV2EditorFacade();
+  clearActiveV2EditorFacade(payload?.documentId ?? null);
   // ui-phase4-002: tear down ruler observers on document switch / dispose.
   cleanupV2RulerObservers();
   v2RulerHostStyle.value = {};
@@ -1228,7 +1295,7 @@ const recollectV2GeometryIfActive = () => {
 };
 
 const onV2EditorFailed = (payload) => {
-  clearActiveV2EditorFacade();
+  clearActiveV2EditorFacade(payload?.documentId ?? null);
   proxy.$superdoc.emit('exception', {
     error: new Error(`v2-editor: ${payload?.reason ?? 'open-failed'}${payload?.detail ? ':' + payload.detail : ''}`),
     code: payload?.reason ?? 'open-failed',
@@ -2263,6 +2330,10 @@ onBeforeUnmount(() => {
     entry.adapter.runtime.dispose();
   }
   v1Runtimes.clear();
+  for (const documentId of Array.from(v2Runtimes.keys())) {
+    clearV2RuntimeRegistration(documentId);
+  }
+  v2Runtimes.clear();
   subDocumentRoots.clear();
   document.removeEventListener('contextmenu', handleDocumentContextMenu, true);
   document.removeEventListener('keydown', handleDocumentShortcut, true);

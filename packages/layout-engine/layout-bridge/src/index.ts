@@ -20,7 +20,7 @@ import {
   getFirstLineIndentOffset,
 } from '@superdoc/contracts';
 import { describeCellRenderBlocks, computeCellSliceContentHeight, getEmbeddedRowLines } from '@superdoc/layout-engine';
-import { measureCharacterX } from './text-measurement.js';
+import { findCharacterAtX, measureCharacterX } from './text-measurement.js';
 import { clickToPositionDom, findPageElement } from './dom-mapping.js';
 import {
   isListItem,
@@ -101,7 +101,7 @@ export type {
 export { computeDisplayPageNumber } from '@superdoc/layout-engine';
 export type { DisplayPageInfo, HeaderFooterConstraints } from '@superdoc/layout-engine';
 export { remeasureParagraph } from './remeasure';
-export { measureCharacterX } from './text-measurement';
+export { findCharacterAtX, measureCharacterX } from './text-measurement';
 export { sliceRunsForLine } from '@superdoc/contracts';
 export { clickToPositionDom, findPageElement } from './dom-mapping';
 export { isListItem, getWordLayoutConfig, calculateTextStartIndent, extractParagraphIndent } from './list-indent-utils';
@@ -208,6 +208,15 @@ export type {
   PmOpaqueRange,
 } from './neutral-hit.js';
 export { hitTestNeutral, mapRangeToFragmentsNeutral } from './neutral-hit.js';
+
+// Editor-neutral measured segment-geometry readback (Phase 1 / 001).
+//
+// Promotes the per-line / per-segment geometry the measure + layout pipeline
+// already computes to a first-class neutral output a host can use to resolve
+// caret x/baseline/height and selection rects without DOM ratio math. Additive
+// only — the v1 selection/caret entry points remain unchanged.
+export { collectSegmentGeometry } from './neutral-segment-geometry.js';
+export type { CollectSegmentGeometryOptions } from './neutral-segment-geometry.js';
 
 // Position-hit types and helpers (re-exported from position-hit.ts)
 export type {

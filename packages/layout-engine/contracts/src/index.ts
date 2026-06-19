@@ -119,6 +119,21 @@ export type {
   LayoutStoryLocator,
 } from './layout-identity.js';
 import type { LayoutSourceIdentity } from './layout-identity.js';
+
+// Editor-neutral measured segment-geometry substrate (Phase 1 / 001).
+// Additive only — promotes per-line / per-segment geometry the measure/layout
+// pipeline already computes to a first-class neutral output. See
+// `segment-geometry.ts`.
+export { LAYOUT_SEGMENT_GEOMETRY_SCHEMA } from './segment-geometry.js';
+export type {
+  NeutralTextDirection,
+  NeutralSegmentGeometry,
+  NeutralLineGeometryFlags,
+  NeutralLineGeometry,
+  NeutralGeometryDiagnostic,
+  NeutralFragmentGeometry,
+  NeutralSegmentGeometryReadback,
+} from './segment-geometry.js';
 export {
   cloneColumnLayout,
   columnLayoutsEqual,
@@ -1949,6 +1964,17 @@ export type LineSegment = {
   fromChar: number;
   toChar: number;
   width: number;
+  /**
+   * Explicit line-content-relative x override (px), set by the measurer only for
+   * tab-aligned segments. When omitted, the segment flows immediately after the
+   * previous one (cumulative measured widths from the line content start).
+   *
+   * This stays optional on the producer type on purpose: it is an override
+   * channel, not a resolved coordinate. The editor-neutral substrate resolves it
+   * (together with indent + alignment) into a load-bearing absolute
+   * {@link NeutralSegmentGeometry.x}, so hosts consume the resolved value and
+   * never need fallback positioning logic. See `segment-geometry.ts`.
+   */
   x?: number;
   /** End x for an immediately preceding tab when it differs from this segment's paint x. */
   precedingTabEndX?: number;

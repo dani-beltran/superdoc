@@ -7,7 +7,8 @@
 // `editorVersion: 2` is requested without an integration.
 //
 // The integration is the only seam through which a V2 editor runtime reaches
-// public SuperDoc. A production V2 package can expose the same shape later.
+// public SuperDoc. The private `@superdoc/v2` package exposes this same shape
+// for product and proof hosts.
 
 import { defineComponent, h, onMounted } from 'vue';
 

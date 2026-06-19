@@ -2178,7 +2178,10 @@ export class DomPainter {
     } else {
       container.style.width = `calc(100% - ${marginLeft + marginRight}px)`;
     }
-    container.style.pointerEvents = 'none';
+    // Header/footer stories are directly hit-tested by the v2 editable bridge.
+    // Keep the container targetable so `elementsFromPoint()` can reach the
+    // stamped fragment node instead of falling through to the page background.
+    container.style.pointerEvents = 'auto';
     container.style.height = `${effectiveHeight}px`;
     container.style.top = `${Math.max(0, effectiveOffset)}px`;
     container.style.zIndex = '1';
@@ -2592,7 +2595,10 @@ export class DomPainter {
     }
     if (freshStart == null || !Number.isFinite(freshStart)) return;
 
-    const elements = [fragmentEl, ...Array.from(fragmentEl.querySelectorAll<HTMLElement>('[data-pm-start], [data-pm-end]'))];
+    const elements = [
+      fragmentEl,
+      ...Array.from(fragmentEl.querySelectorAll<HTMLElement>('[data-pm-start], [data-pm-end]')),
+    ];
     let paintedStart = Infinity;
     for (const el of elements) {
       const start = Number(el.dataset.pmStart);

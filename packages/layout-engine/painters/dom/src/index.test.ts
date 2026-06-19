@@ -5221,6 +5221,7 @@ describe('DomPainter', () => {
 
     const headerEl = mount.querySelector('.superdoc-page-header');
     expect(headerEl).toBeTruthy();
+    expect((headerEl as HTMLElement | null)?.style.pointerEvents).toBe('auto');
     expect(headerEl?.textContent).toBe('Page 1 of 1');
   });
 
@@ -6246,6 +6247,7 @@ describe('DomPainter', () => {
 
       const footerEl = mount.querySelector('.superdoc-page-footer');
       expect(footerEl).toBeTruthy();
+      expect((footerEl as HTMLElement | null)?.style.pointerEvents).toBe('auto');
       expect(footerEl?.textContent).toBe('Footer: 3');
     });
 

@@ -21,7 +21,12 @@ const makeParagraph = (color: string): ParagraphBlock => ({
   ],
 });
 
-const derive = (block: ParagraphBlock) => deriveParagraphBlockVersion(block, () => '', () => '');
+const derive = (block: ParagraphBlock) =>
+  deriveParagraphBlockVersion(
+    block,
+    () => '',
+    () => '',
+  );
 
 describe('deriveParagraphBlockVersion - tracked-change colors', () => {
   it('changes when only the tracked-change author color changes', () => {

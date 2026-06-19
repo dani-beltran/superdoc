@@ -1150,7 +1150,10 @@ const textSelectorSchema = objectSchema(
     },
     caseSensitive: { type: 'boolean', description: 'Case-sensitive matching. Default: false.' },
     wholeWord: { type: 'boolean', description: 'Require word-boundary matches. Default: false.' },
-    includeDeletedText: { type: 'boolean', description: 'When true, includes text from pending tracked deletions. Default: false.' },
+    includeDeletedText: {
+      type: 'boolean',
+      description: 'When true, includes text from pending tracked deletions. Default: false.',
+    },
   },
   ['type', 'pattern'],
 );
@@ -1160,11 +1163,13 @@ const planTextSelectorSchema = objectSchema(
     type: { const: 'text', description: "Must be 'text' for text pattern search." },
     pattern: {
       type: 'string',
-      description: 'Text to match. In regex mode, patterns are validated for syntax, maximum length, and safety before execution.',
+      description:
+        'Text to match. In regex mode, patterns are validated for syntax, maximum length, and safety before execution.',
     },
     mode: {
       enum: ['contains', 'regex'],
-      description: "Match mode: 'contains' (literal substring, recommended for literal text) or 'regex' (validated regular expression).",
+      description:
+        "Match mode: 'contains' (literal substring, recommended for literal text) or 'regex' (validated regular expression).",
     },
     caseSensitive: { type: 'boolean', description: 'Case-sensitive matching. Default: false.' },
     wholeWord: { type: 'boolean', description: 'Require word-boundary matches. Default: false.' },
