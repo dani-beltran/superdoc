@@ -38,6 +38,7 @@
     "reset": "pnpm run clean:packages && find . -name 'node_modules' -type d -prune -exec rm -rf {} + && find . -name 'package-lock.json' -type f -delete && pnpm install",
     "publish": "node scripts/publish-superdoc.cjs",
     "format": "prettier --write \"**/*.{js,jsx,ts,tsx,vue,css,scss,json}\"",
+    "format:staged": "prettier --write --ignore-unknown",
     "format:check": "prettier --check \"**/*.{js,jsx,ts,tsx,vue,css,scss,json}\"",
     "lint": "eslint --ext .js,.ts,.tsx --ignore-pattern \"**/{test,tests,__tests__}/**\" --ignore-pattern \"**/*.test.*\" --ignore-pattern \"**/*.spec.*\" --ignore-pattern \"**/*.vue\" packages shared scripts",
     "lint:fix": "eslint --fix --ext .js,.ts,.tsx --ignore-pattern \"**/{test,tests,__tests__}/**\" --ignore-pattern \"**/*.test.*\" --ignore-pattern \"**/*.spec.*\" --ignore-pattern \"**/*.vue\" packages shared scripts",
