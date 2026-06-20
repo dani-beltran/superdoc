@@ -60,6 +60,7 @@ export type {
 } from './headerFooterUtils';
 export {
   layoutHeaderFooterWithCache,
+  invalidateHeaderFooterMeasureCache,
   type HeaderFooterBatchResult,
   getBucketForPageNumber,
   getBucketRepresentative,
@@ -80,7 +81,7 @@ export type {
   SectionAwareHeaderFooterMeasurementGroup,
 } from './sectionAwareHeaderFooter';
 export { incrementalLayout, measureCache, normalizeMargin } from './incrementalLayout';
-export type { HeaderFooterLayoutResult, IncrementalLayoutResult } from './incrementalLayout';
+export type { HeaderFooterLayoutResult, IncrementalLayoutResult, FootnoteReserveSeed } from './incrementalLayout';
 export {
   collectFootnoteLedgers,
   getPreferredReserveCandidates,
@@ -1015,12 +1016,7 @@ export function selectionToRects(
                   pushEmptyLineSelectionBand(rects, {
                     x: fragment.x + contentOffsetX + cellX + padding.left,
                     yBase:
-                      fragment.y +
-                      contentOffsetY +
-                      rowOffset +
-                      blockTopCursor +
-                      effectiveSpacingBeforePx +
-                      pageTopY,
+                      fragment.y + contentOffsetY + rowOffset + blockTopCursor + effectiveSpacingBeforePx + pageTopY,
                     width: cellMeasure.width - padding.left - padding.right,
                     lineHeight: line.lineHeight,
                     pageIndex,

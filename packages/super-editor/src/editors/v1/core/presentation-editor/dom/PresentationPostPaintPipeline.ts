@@ -22,7 +22,7 @@ type ImageLayerLike = Pick<ImageInteractionLayer, 'setContainer' | 'apply' | 'cl
 type StructuredContentLayerLike = Pick<StructuredContentInteractionLayer, 'setContainer' | 'apply' | 'clear'>;
 type CommentHighlightDecoratorLike = Pick<
   CommentHighlightDecorator,
-  'setContainer' | 'setActiveComment' | 'apply' | 'destroy'
+  'setContainer' | 'setActiveComment' | 'setActiveTrackChangeIds' | 'apply' | 'destroy'
 >;
 type DecorationBridgeLike = Pick<
   DecorationBridge,
@@ -88,6 +88,10 @@ export class PresentationPostPaintPipeline {
 
   setActiveComment(commentId: string | null): boolean {
     return this.#commentHighlightDecorator.setActiveComment(commentId);
+  }
+
+  setActiveTrackChangeIds(ids: readonly string[]): boolean {
+    return this.#commentHighlightDecorator.setActiveTrackChangeIds(ids);
   }
 
   recordDecorationTransaction(transaction?: Transaction): void {

@@ -11,6 +11,7 @@ import {
   buildTrackedChangeCanonicalIdMap,
   groupTrackedChanges,
   resolveTrackedChange,
+  resolveTrackedChangeNavigationSelection,
   resolveTrackedChangeType,
   toCanonicalTrackedChangeId,
 } from './tracked-change-resolver.js';
@@ -431,6 +432,129 @@ describe('resolveTrackedChange', () => {
   it('returns null for unknown ids', () => {
     vi.mocked(getTrackChanges).mockReturnValue([] as never);
     expect(resolveTrackedChange(makeEditor(), 'unknown')).toBeNull();
+  });
+});
+
+describe('resolveTrackedChangeNavigationSelection', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('prefers the matching text node in the document over raw mark ranges', () => {
+    const mark = makeTrackMark(TrackInsertMarkName, 'command-1', { sourceId: '132' });
+    vi.mocked(getTrackChanges).mockReturnValue([
+      { ...mark, node: { text: 'fallback', marks: [mark.mark] }, from: 1847, to: 1853 },
+    ] as never);
+    const editor = makeEditor();
+    const nodesBetween = vi.fn((_from: number, _to: number, callback: (node: unknown, pos: number) => void) => {
+      callback({ isText: true, text: 'Buying', marks: [mark.mark] }, 1847);
+    });
+    (editor.state.doc as unknown as { nodesBetween: typeof nodesBetween }).nodesBetween = nodesBetween;
+
+    expect(resolveTrackedChangeNavigationSelection(editor, `word:${TrackInsertMarkName}:132`)).toEqual({
+      from: 1848,
+      to: 1848,
+    });
+    expect(nodesBetween).toHaveBeenCalledWith(1847, 1853, expect.any(Function));
+  });
+
+  it('chooses the requested adjacent Word revision instead of a neighboring boundary mark', () => {
+    const first = makeTrackMark(TrackInsertMarkName, 'command-1', { sourceId: '132' });
+    const second = makeTrackMark(TrackInsertMarkName, 'command-2', { sourceId: '133' });
+    vi.mocked(getTrackChanges).mockReturnValue([
+      { ...first, node: { text: 'Buy', marks: [first.mark] }, from: 10, to: 13 },
+      { ...second, node: { text: 'ing', marks: [second.mark] }, from: 13, to: 16 },
+    ] as never);
+    const editor = makeEditor();
+    (editor.state.doc as unknown as { nodesBetween: unknown }).nodesBetween = vi.fn(
+      (_from: number, _to: number, callback: (node: unknown, pos: number) => boolean | void) => {
+        callback({ isText: true, text: 'Buy', marks: [first.mark] }, 10);
+        callback({ isText: true, text: 'ing', marks: [second.mark] }, 13);
+      },
+    );
+
+    expect(resolveTrackedChangeNavigationSelection(editor, `word:${TrackInsertMarkName}:133`)).toEqual({
+      from: 14,
+      to: 14,
+    });
+  });
+
+  it('chooses the requested overlapping child revision when parent and child share text', () => {
+    const parent = makeTrackMark(TrackInsertMarkName, 'parent-overlap', { sourceId: '132' });
+    const child = makeTrackMark(TrackDeleteMarkName, 'child-overlap', {
+      sourceId: '133',
+      overlapParentId: 'parent-overlap',
+    });
+    const node = { text: 'review', marks: [parent.mark, child.mark] };
+    vi.mocked(getTrackChanges).mockReturnValue([
+      { ...parent, node, from: 20, to: 26 },
+      { ...child, node, from: 20, to: 26 },
+    ] as never);
+    const editor = makeEditor();
+    (editor.state.doc as unknown as { nodesBetween: unknown }).nodesBetween = vi.fn(
+      (_from: number, _to: number, callback: (node: unknown, pos: number) => boolean | void) => {
+        callback(node, 20);
+      },
+    );
+
+    expect(resolveTrackedChangeNavigationSelection(editor, `word:${TrackDeleteMarkName}:133`)).toEqual({
+      from: 21,
+      to: 21,
+    });
+  });
+
+  it('uses an interior collapsed caret for multi-character text changes', () => {
+    const mark = makeTrackMark(TrackInsertMarkName, 'tc-1', { sourceId: '132' });
+    vi.mocked(getTrackChanges).mockReturnValue([
+      { ...mark, node: { text: 'review', marks: [mark.mark] }, from: 1847, to: 1853 },
+    ] as never);
+
+    expect(resolveTrackedChangeNavigationSelection(makeEditor(), `word:${TrackInsertMarkName}:132`)).toEqual({
+      from: 1848,
+      to: 1848,
+    });
+  });
+
+  it('falls back to the raw mark range when no document text node matches', () => {
+    const mark = makeTrackMark(TrackInsertMarkName, 'tc-1', { sourceId: '132' });
+    vi.mocked(getTrackChanges).mockReturnValue([{ ...mark, from: 1847, to: 1853 }] as never);
+    const editor = makeEditor();
+    (editor.state.doc as unknown as { nodesBetween: unknown }).nodesBetween = vi.fn();
+
+    expect(resolveTrackedChangeNavigationSelection(editor, `word:${TrackInsertMarkName}:132`)).toEqual({
+      from: 1848,
+      to: 1848,
+    });
+  });
+
+  it('uses a non-empty text selection for one-character text changes', () => {
+    const mark = makeTrackMark(TrackInsertMarkName, 'tc-1');
+    vi.mocked(getTrackChanges).mockReturnValue([
+      { ...mark, node: { text: 'x', marks: [mark.mark] }, from: 10, to: 11 },
+    ] as never);
+
+    expect(resolveTrackedChangeNavigationSelection(makeEditor(), 'tc-1')).toEqual({ from: 10, to: 11 });
+  });
+
+  it('returns null for structural changes so rendered-element fallback can handle them', () => {
+    vi.mocked(getTrackChanges).mockReturnValue([] as never);
+    vi.mocked(enumerateStructuralRowChanges).mockReturnValueOnce([
+      {
+        id: 'logical-1',
+        side: 'insertion',
+        subtype: 'table-insert',
+        tableFrom: 10,
+        tableTo: 40,
+        tablePos: 10,
+        wholeTable: true,
+        decidable: true,
+        rows: [],
+        author: 'Alice',
+        sourceId: '7',
+      },
+    ] as never);
+
+    expect(resolveTrackedChangeNavigationSelection(makeEditor(), 'word:structural:7')).toBeNull();
   });
 });
 

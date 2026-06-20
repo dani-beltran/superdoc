@@ -99,6 +99,7 @@ export type {
   ToolbarHandle,
   ToolbarSnapshotSlice,
   TrackChangeInfo,
+  TrackChangePointHit,
   TrackChangesHandle,
   TrackChangesItem,
   TrackChangesListResult,

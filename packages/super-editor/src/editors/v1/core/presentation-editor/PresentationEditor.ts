@@ -85,6 +85,16 @@ function serializePerIdNumbering(
   return parts.join(';');
 }
 
+type PresentationNavigationOptions = {
+  behavior?: ScrollBehavior;
+  block?: 'start' | 'center' | 'end' | 'nearest';
+  shouldContinue?: () => boolean;
+};
+
+function shouldContinueNavigation(options: PresentationNavigationOptions): boolean {
+  return options.shouldContinue?.() !== false;
+}
+
 import { safeCleanup } from './utils/SafeCleanup.js';
 import { createHiddenHost } from './dom/HiddenHost.js';
 import {
@@ -108,11 +118,17 @@ import {
 import { computeSelectionVirtualizationPins } from './selection/SelectionVirtualizationPins.js';
 import { debugLog, updateSelectionDebugHud, type SelectionDebugHudState } from './selection/SelectionDebug.js';
 import { renderCellSelectionOverlay } from './selection/CellSelectionOverlay.js';
-import { renderCaretOverlay, renderSelectionRects } from './selection/LocalSelectionOverlayRendering.js';
+import {
+  createCaretElement,
+  renderCaretOverlay,
+  renderSelectionRects,
+} from './selection/LocalSelectionOverlayRendering.js';
 import { computeCaretLayoutRectGeometry as computeCaretLayoutRectGeometryFromHelper } from './selection/CaretGeometry.js';
 import { shouldUseNativeCaretFallback } from './selection/native-caret-fallback.js';
 import {
+  computeCaretRectFromPmPosition as computeCaretRectFromPmPositionFromHelper,
   computeCaretRectFromVisibleTextOffset as computeCaretRectFromVisibleTextOffsetFromHelper,
+  computeSelectionRectsFromPmRange as computeSelectionRectsFromPmRangeFromHelper,
   computeSelectionRectsFromVisibleTextOffsets as computeSelectionRectsFromVisibleTextOffsetsFromHelper,
   measureVisibleTextOffset as measureVisibleTextOffsetFromHelper,
   measureVisibleTextOffsetInContainers as measureVisibleTextOffsetInContainersFromHelper,
@@ -141,6 +157,8 @@ import type {
 } from './story-session/StoryPresentationSessionManager.js';
 import type { StoryPresentationSession } from './story-session/types.js';
 import { resolveStoryRuntime } from '../../document-api-adapters/story-runtime/resolve-story-runtime.js';
+import { parseRenderedNoteTarget, type RenderedNoteTarget } from './notes/note-target.js';
+import { NoteSessionCoordinator } from './notes/NoteSessionCoordinator.js';
 import { BODY_STORY_KEY, buildStoryKey, parseStoryKey } from '../../document-api-adapters/story-runtime/story-key.js';
 import { createStoryEditor } from '../story-editor-factory.js';
 import { buildEndnoteBlocks } from './layout/EndnotesBuilder.js';
@@ -177,6 +195,7 @@ import type {
   HeaderFooterType,
   PositionHit,
   TableHitResult,
+  FootnoteReserveSeed,
 } from '@superdoc/layout-bridge';
 
 import { measureBlock } from '@superdoc/measuring-dom';
@@ -239,11 +258,6 @@ type ThreadAnchorScrollPlan = {
   applyScroll: (behavior: ScrollBehavior) => void;
 };
 
-type RenderedNoteTarget = {
-  storyType: 'footnote' | 'endnote';
-  noteId: string;
-};
-
 type UnifiedHistoryDebugGlobal = typeof globalThis & {
   __SD_DEBUG_UNIFIED_HISTORY__?: boolean;
 };
@@ -284,28 +298,6 @@ type RenderedNoteFragmentHit = {
   pageIndex: number;
 };
 
-function parseRenderedNoteTarget(blockId: string): RenderedNoteTarget | null {
-  if (typeof blockId !== 'string' || blockId.length === 0) {
-    return null;
-  }
-
-  if (blockId.startsWith('footnote-')) {
-    const noteId = blockId.slice('footnote-'.length).split('-')[0] ?? '';
-    return noteId ? { storyType: 'footnote', noteId } : null;
-  }
-
-  if (blockId.startsWith('__sd_semantic_footnote-')) {
-    const noteId = blockId.slice('__sd_semantic_footnote-'.length).split('-')[0] ?? '';
-    return noteId ? { storyType: 'footnote', noteId } : null;
-  }
-
-  if (blockId.startsWith('endnote-')) {
-    const noteId = blockId.slice('endnote-'.length).split('-')[0] ?? '';
-    return noteId ? { storyType: 'endnote', noteId } : null;
-  }
-
-  return null;
-}
 import { splitRunsAtDecorationBoundaries } from './layout/SplitRunsAtDecorationBoundaries.js';
 import { DOM_CLASS_NAMES } from '@superdoc/dom-contract';
 import {
@@ -332,6 +324,7 @@ import {
 import {
   resolveTrackedChange,
   resolveTrackedChangeInStory,
+  resolveTrackedChangeNavigationSelection,
 } from '../../document-api-adapters/helpers/tracked-change-resolver.js';
 import { makeTrackedChangeAnchorKey } from '../../document-api-adapters/helpers/tracked-change-runtime-ref.js';
 import { getTrackedChangeIndex } from '../../document-api-adapters/tracked-changes/tracked-change-index.js';
@@ -425,6 +418,16 @@ const DEFAULT_HORIZONTAL_PAGE_GAP = 20;
 const MULTI_CLICK_TIME_THRESHOLD_MS = 400;
 /** Maximum distance between clicks to register as multi-click (pixels) */
 const MULTI_CLICK_DISTANCE_THRESHOLD_PX = 5;
+/**
+ * AIDEV-NOTE: Navigated caret repair uses three complementary paths: immediate selection render,
+ * scroll-linked settle render, and fixed viewport-coordinate retries. Smooth scrolling plus
+ * virtualization can skip any one signal, so keep the tuned values named and co-located.
+ */
+const NAVIGATED_CARET_REPAIR_DELAYS_MS = [120, 360, 900, 1300] as const;
+const NAVIGATED_CARET_DRIFT_TOLERANCE_PX = 3;
+const NAVIGATED_CARET_MAX_REPAIR_ATTEMPTS = 3;
+const SELECTION_SCROLL_SETTLE_RENDER_DELAY_MS = 120;
+const SELECTION_SCROLL_SETTLE_FINALIZE_DELAY_MS = 900;
 
 /** Debug flag for performance logging - enable with SD_DEBUG_LAYOUT env variable */
 const layoutDebugEnabled =
@@ -511,6 +514,8 @@ export class PresentationEditor extends EventEmitter {
   #painterHost: HTMLElement;
   #selectionOverlay: HTMLElement;
   #permissionOverlay: HTMLElement | null = null;
+  /** SD-3400: highlight + smart-scroll + emptied-note commit for the open note session. */
+  #noteSessionCoordinator: NoteSessionCoordinator | null = null;
   #hiddenHost: HTMLElement;
   /** Scroll-isolating wrapper around #hiddenHost. Append/remove this from the DOM. */
   #hiddenHostWrapper: HTMLElement;
@@ -523,6 +528,13 @@ export class PresentationEditor extends EventEmitter {
    * prior pass invalidates previous-measure reuse (that reuse fast path bypasses the cache key).
    */
   #layoutFontSignature = '';
+  /**
+   * SD-3432: the previous render's footnote reserve fixed point, used to
+   * warm-start the next render's convergence loop (validated, never trusted
+   * — see FootnoteReserveSeed). Private: deliberately NOT part of LayoutState
+   * (that payload is emitted publicly via onLayoutUpdated).
+   */
+  #footnoteReserveSeed: FootnoteReserveSeed | null = null;
   #layoutLookupBlocks: FlowBlock[] = [];
   #layoutLookupMeasures: Measure[] = [];
   /** Cache for incremental toFlowBlocks conversion */
@@ -546,8 +558,21 @@ export class PresentationEditor extends EventEmitter {
   #renderScheduled = false;
   #pendingDocChange = false;
   #focusScrollRafId: number | null = null;
+  #selectionScrollSettleCleanup: (() => void) | null = null;
+  #selectionNavigationToken = 0;
+  #activeSelectionNavigation: {
+    token: number;
+    targetPos: number;
+    scrollSettled: boolean;
+    repairAttempts: number;
+  } | null = null;
   #pendingMapping: Mapping | null = null;
   #isRerendering = false;
+  /** SD-2368: while true, #flushRerenderQueue defers visible repaints until composition ends. */
+  #isComposing = false;
+  #compositionDeferralCleanup: Array<() => void> = [];
+  #compositionTargetCleanup: Array<() => void> = [];
+  #compositionTargetDom: HTMLElement | null = null;
   #selectionSync = new SelectionSyncCoordinator();
   /** Load-before-measure gate: awaits required fonts before measurement, reflows on late load. */
   #fontGate: FontReadinessGate | null = null;
@@ -1087,6 +1112,8 @@ export class PresentationEditor extends EventEmitter {
       this.#setupPointerHandlers();
       this.#setupDragHandlers();
       this.#setupInputBridge();
+      this.#setupCompositionDeferral();
+      this.#refreshCompositionDeferralTarget();
       this.#syncTrackedChangesPreferences();
       this.#syncHeaderFooterTrackedChangesRenderConfig();
       this.#setupSemanticResizeObserver();
@@ -3250,6 +3277,9 @@ export class PresentationEditor extends EventEmitter {
    */
   #requestFontReflow(): void {
     this.#layoutState = { ...this.#layoutState, blocks: [], measures: [], layout: null };
+    // SD-3432: font metrics changed; the footnote fixed point is stale (the
+    // seed's fontSignature guard would reject it anyway).
+    this.#footnoteReserveSeed = null;
     this.#pendingDocChange = true;
     this.#scheduleRerender();
   }
@@ -4199,6 +4229,7 @@ export class PresentationEditor extends EventEmitter {
             options.ifNeeded && targetEl && this.#isElementFullyVisibleInScrollContainer(targetEl)
               ? 'nearest'
               : requestedBlock;
+          this.#startSelectionNavigation(clampedPos);
           elToScroll.scrollIntoView({ block, inline: 'nearest', behavior });
           // AIDEV-NOTE: SD-3045. Search nav (and any other caller of
           // scrollToPosition) places the viewport intentionally — usually
@@ -4234,6 +4265,7 @@ export class PresentationEditor extends EventEmitter {
               elToScroll.scrollIntoView({ block, inline: 'nearest', behavior });
               this.#shouldScrollSelectionIntoView = false;
               this.#suppressSelectionScrollUntilRaf = false;
+              this.#scheduleSelectionUpdateAfterScrollSettles();
             });
           }
           return true;
@@ -4364,6 +4396,187 @@ export class PresentationEditor extends EventEmitter {
     };
   }
 
+  #startSelectionNavigation(targetPos: number): number {
+    const token = ++this.#selectionNavigationToken;
+    this.#activeSelectionNavigation = { token, targetPos, scrollSettled: false, repairAttempts: 0 };
+    return token;
+  }
+
+  #markSelectionNavigationScrollSettled(): void {
+    if (this.#activeSelectionNavigation) {
+      this.#activeSelectionNavigation.scrollSettled = true;
+    }
+  }
+
+  #finishSelectionNavigation(token?: number): void {
+    if (token != null && this.#activeSelectionNavigation?.token !== token) return;
+    this.#activeSelectionNavigation = null;
+  }
+
+  /**
+   * Programmatic navigation currently scrolls browser-owned document content
+   * while the caret/selection overlay is painted in a separate presentation
+   * layer. That means scroll position and overlay geometry can briefly disagree,
+   * especially while smooth scroll, page mounting, or layout refresh settles.
+   *
+   * This repair path keeps the navigated caret visually aligned with the
+   * scrolled content. The cleaner long-term architecture is to paint the caret
+   * in the same browser-scrolled layer as the document content, so scrolling
+   * moves both together without post-scroll synchronization.
+   */
+  #scheduleNavigatedSelectionRender(targetPos: number): void {
+    this.#startSelectionNavigation(targetPos);
+    this.#scheduleSelectionUpdateAfterScrollSettles();
+    this.#scheduleSelectionUpdate({ immediate: true });
+    this.#scheduleNavigatedCaretViewportRepairs(targetPos);
+  }
+
+  #scheduleNavigatedCaretViewportRepairs(targetPos: number): void {
+    const win = this.#visibleHost.ownerDocument?.defaultView;
+    if (!win) return;
+
+    for (const delay of NAVIGATED_CARET_REPAIR_DELAYS_MS) {
+      win.setTimeout(() => {
+        if (!this.#localSelectionLayer?.isConnected) return;
+        const selection = this.getActiveEditor()?.state?.selection;
+        if (!selection || selection.from !== targetPos || selection.to !== targetPos) return;
+        this.#rebuildDomPositionIndex();
+        this.#renderNavigatedCaretFromViewportCoords(targetPos);
+      }, delay);
+    }
+  }
+
+  #queueSelectionNavigationCaretRepair(
+    caretPos: number,
+    navigation: { token: number; repairAttempts: number },
+  ): boolean {
+    if (this.#activeSelectionNavigation?.token !== navigation.token) return false;
+
+    const caretEl = this.#localSelectionLayer.querySelector('.presentation-editor__selection-caret');
+    if (!(caretEl instanceof HTMLElement)) return false;
+
+    const expected = this.coordsAtPos(caretPos);
+    if (!expected) return false;
+
+    const actual = caretEl.getBoundingClientRect();
+    if (Math.abs(actual.top - expected.top) <= NAVIGATED_CARET_DRIFT_TOLERANCE_PX) return false;
+    if (navigation.repairAttempts >= NAVIGATED_CARET_MAX_REPAIR_ATTEMPTS) return false;
+
+    navigation.repairAttempts += 1;
+    const win = this.#visibleHost.ownerDocument?.defaultView;
+    const repair = () => {
+      if (this.#activeSelectionNavigation?.token !== navigation.token) return;
+      this.#rebuildDomPositionIndex();
+      this.#scheduleSelectionUpdate({ immediate: true });
+    };
+    if (win) {
+      win.requestAnimationFrame(repair);
+    } else {
+      repair();
+    }
+    return true;
+  }
+
+  #renderNavigatedCaretFromViewportCoords(caretPos: number): boolean {
+    const coords = this.coordsAtPos(caretPos);
+    if (!coords) return false;
+
+    const zoom =
+      Number.isFinite(this.#layoutOptions.zoom) && this.#layoutOptions.zoom > 0 ? this.#layoutOptions.zoom : 1;
+    const layerRect = this.#localSelectionLayer.getBoundingClientRect();
+    const caretEl = createCaretElement(this.#localSelectionLayer.ownerDocument, {
+      left: (coords.left - layerRect.left) / zoom,
+      top: (coords.top - layerRect.top) / zoom,
+      height: coords.height / zoom,
+    });
+    if (!caretEl) return false;
+
+    this.#localSelectionLayer.innerHTML = '';
+    this.#localSelectionLayer.appendChild(caretEl);
+    return true;
+  }
+
+  #scheduleSelectionUpdateAfterScrollSettles(): void {
+    const win = this.#visibleHost.ownerDocument?.defaultView;
+    if (!win) {
+      this.#scheduleSelectionUpdate();
+      return;
+    }
+
+    this.#selectionScrollSettleCleanup?.();
+
+    const scrollTarget =
+      this.#scrollContainer instanceof Window || this.#scrollContainer instanceof Element ? this.#scrollContainer : win;
+    let timeoutId: number | null = null;
+    let finalTimeoutId: number | null = null;
+    let scrollRenderRafId: number | null = null;
+    let cleanedUp = false;
+
+    const cleanup = () => {
+      if (cleanedUp) return;
+      cleanedUp = true;
+      scrollTarget.removeEventListener('scroll', onScroll);
+      scrollTarget.removeEventListener('scrollend', finalizeRender);
+      if (timeoutId != null) {
+        win.clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      if (finalTimeoutId != null) {
+        win.clearTimeout(finalTimeoutId);
+        finalTimeoutId = null;
+      }
+      if (scrollRenderRafId != null) {
+        win.cancelAnimationFrame(scrollRenderRafId);
+        scrollRenderRafId = null;
+      }
+      if (this.#selectionScrollSettleCleanup === cleanup) {
+        this.#selectionScrollSettleCleanup = null;
+      }
+    };
+
+    const renderAfterPause = () => {
+      timeoutId = null;
+      this.#scheduleSelectionUpdate({ immediate: true });
+    };
+
+    const finalizeRender = () => {
+      if (cleanedUp) return;
+      this.#markSelectionNavigationScrollSettled();
+      cleanup();
+      this.#scheduleSelectionUpdate({ immediate: true });
+    };
+
+    const queueRender = () => {
+      if (timeoutId != null) win.clearTimeout(timeoutId);
+      timeoutId = win.setTimeout(renderAfterPause, SELECTION_SCROLL_SETTLE_RENDER_DELAY_MS);
+    };
+
+    const queueFinalize = () => {
+      if (finalTimeoutId != null) win.clearTimeout(finalTimeoutId);
+      finalTimeoutId = win.setTimeout(finalizeRender, SELECTION_SCROLL_SETTLE_FINALIZE_DELAY_MS);
+    };
+
+    const requestScrollRender = () => {
+      if (scrollRenderRafId != null) return;
+      scrollRenderRafId = win.requestAnimationFrame(() => {
+        scrollRenderRafId = null;
+        this.#scheduleSelectionUpdate({ immediate: true });
+      });
+    };
+
+    const onScroll = () => {
+      requestScrollRender();
+      queueRender();
+      queueFinalize();
+    };
+
+    scrollTarget.addEventListener('scroll', onScroll, { passive: true });
+    scrollTarget.addEventListener('scrollend', finalizeRender, { passive: true });
+    this.#selectionScrollSettleCleanup = cleanup;
+    queueRender();
+    queueFinalize();
+  }
+
   /**
    * Find the DOM element containing a specific document position.
    * Returns the most specific (smallest range) matching element.
@@ -4421,8 +4634,11 @@ export class PresentationEditor extends EventEmitter {
       behavior?: ScrollBehavior;
       ifNeeded?: boolean;
       suppressSelectionSyncScroll?: boolean;
+      shouldContinue?: () => boolean;
     } = {},
   ): Promise<boolean> {
+    if (!shouldContinueNavigation(options)) return false;
+
     // Fast path: try sync scroll first (works if page already mounted)
     if (this.scrollToPosition(pos, options)) {
       return true;
@@ -4452,6 +4668,8 @@ export class PresentationEditor extends EventEmitter {
     }
     if (pageIndex == null) return false;
 
+    if (!shouldContinueNavigation(options)) return false;
+
     // Trigger virtualization to render the page
     this.#scrollPageIntoView(pageIndex);
 
@@ -4463,6 +4681,8 @@ export class PresentationEditor extends EventEmitter {
       console.warn(`[PresentationEditor] scrollToPositionAsync: Page ${pageIndex} failed to mount within timeout`);
       return false;
     }
+
+    if (!shouldContinueNavigation(options)) return false;
 
     // Retry now that page is mounted. Reaching this path means the target was on an unmounted
     // (off-screen) page at call time, and #scrollPageIntoView above only scrolled the page into
@@ -4806,6 +5026,13 @@ export class PresentationEditor extends EventEmitter {
       }, 'Focus scroll RAF');
     }
 
+    if (this.#selectionScrollSettleCleanup) {
+      safeCleanup(() => {
+        this.#selectionScrollSettleCleanup?.();
+      }, 'Selection scroll settle');
+    }
+    this.#finishSelectionNavigation();
+
     // Cancel pending decoration sync RAF
     if (this.#decorationSyncRafHandle != null) {
       safeCleanup(() => {
@@ -4882,6 +5109,7 @@ export class PresentationEditor extends EventEmitter {
     this.#inputBridge?.notifyTargetChanged();
     this.#inputBridge?.destroy();
     this.#inputBridge = null;
+    this.#teardownCompositionDeferral();
 
     if (this.#a11ySelectionAnnounceTimeout != null) {
       clearTimeout(this.#a11ySelectionAnnounceTimeout);
@@ -5091,6 +5319,14 @@ export class PresentationEditor extends EventEmitter {
     this.#postPaintPipeline.applyCommentHighlights();
   }
 
+  setActiveTrackChangeIds(ids: readonly string[]): boolean {
+    const didChange = this.#postPaintPipeline.setActiveTrackChangeIds(ids);
+    if (didChange) {
+      this.#syncInlineStyleLayers();
+    }
+    return didChange;
+  }
+
   /**
    * Applies every inline style layer that decorates painter-owned DOM elements.
    *
@@ -5223,7 +5459,7 @@ export class PresentationEditor extends EventEmitter {
         this.#editorInputManager?.clearCellAnchor();
       }
     };
-    const handleSelection = () => {
+    const handleSelection = ({ transaction }: { transaction?: Transaction } = {}) => {
       // User-initiated selection change — scroll caret/head into view once, except during
       // pointer drag: EditorInputManager edge auto-scroll must not fight #scrollActiveEndIntoView.
       if (!this.#editorInputManager?.isDragging) {
@@ -5235,7 +5471,13 @@ export class PresentationEditor extends EventEmitter {
       // setDocEpoch → cancelScheduledRender. Immediate rendering is safe here:
       // if layout is updating (due to a concurrent doc change), flushNow()
       // is a no-op and the render will be picked up after layout completes.
-      this.#scheduleSelectionUpdate({ immediate: true });
+      //
+      // SD-3400: NOT safe for doc-changing transactions. 'selectionUpdate'
+      // fires BEFORE 'update', so the epoch/layout gates are not armed yet
+      // and an immediate flush renders the caret against the PRE-change
+      // paint (visibly stale caret on every Enter/Backspace). Defer those to
+      // the post-paint flush.
+      this.#scheduleSelectionUpdate({ immediate: !transaction?.docChanged });
       // Update local cursor in awareness for collaboration
       // This bypasses y-prosemirror's focus check which may fail for hidden PM views
       this.#updateLocalAwarenessCursor();
@@ -5422,6 +5664,9 @@ export class PresentationEditor extends EventEmitter {
       // previous-measure reuse. Benign if left stale (it only over-invalidates reuse), but resetting
       // here states the intent and starts the swap from a clean signature.
       this.#layoutFontSignature = '';
+      // SD-3432: the prior document's footnote fixed point is meaningless for
+      // the new one (validation would discard it anyway; reset states intent).
+      this.#footnoteReserveSeed = null;
       this.#fontController.applyInitialConfig(this.#options.fontAssets);
       // Register the NEW document's embedded fonts (the swap's `reset()` released the old ones), before
       // the rerender below runs the first font plan for this document.
@@ -5824,7 +6069,10 @@ export class PresentationEditor extends EventEmitter {
       this.#visibleHost,
       () => this.#getActiveDomTarget(),
       () => !this.#isViewLocked(),
-      () => this.#editorInputManager?.notifyTargetChanged(),
+      () => {
+        this.#refreshCompositionDeferralTarget();
+        this.#editorInputManager?.notifyTargetChanged();
+      },
       {
         useWindowFallback: true,
         getTargetEditor: () => this.getActiveEditor(),
@@ -5939,13 +6187,15 @@ export class PresentationEditor extends EventEmitter {
       onSurfaceTransaction: ({ sourceEditor, surface, headerId, sectionType, transaction, duration }) => {
         const documentTransaction =
           transaction && typeof transaction === 'object' ? (transaction as { docChanged?: boolean }) : null;
-        if (documentTransaction?.docChanged && headerId) {
-          this.#invalidateTrackedChangesForStory({
-            kind: 'story',
-            storyType: 'headerFooterPart',
-            refId: headerId,
-          });
-          this.#headerFooterSession?.invalidateLayoutForRefs([headerId]);
+        if (documentTransaction?.docChanged) {
+          if (headerId) {
+            this.#invalidateTrackedChangesForStory({
+              kind: 'story',
+              storyType: 'headerFooterPart',
+              refId: headerId,
+            });
+            this.#headerFooterSession?.invalidateLayoutForRefs([headerId]);
+          }
           this.#flowBlockCache.setHasExternalChanges?.(true);
           this.#pendingDocChange = true;
           this.#selectionSync.onLayoutStart();
@@ -6102,7 +6352,17 @@ export class PresentationEditor extends EventEmitter {
   }
 
   #syncActiveStorySessionDocumentMode(session: StoryPresentationSession | null): void {
-    if (!session || session.kind !== 'note') {
+    if (!session) {
+      return;
+    }
+
+    if (session.kind === 'headerFooter') {
+      this.#headerFooterSession?.setDocumentMode(this.#documentMode);
+      this.#headerFooterSession?.syncEditorDocumentMode(session.editor);
+      return;
+    }
+
+    if (session.kind !== 'note') {
       return;
     }
 
@@ -6801,6 +7061,97 @@ export class PresentationEditor extends EventEmitter {
     this.#scheduleRerender();
   }
 
+  #beginCompositionDeferral(): void {
+    this.#isComposing = true;
+  }
+
+  #endCompositionDeferral(): void {
+    if (!this.#isComposing) return;
+    this.#isComposing = false;
+
+    if (this.#pendingDocChange && !this.#renderScheduled && !this.#isRerendering) {
+      this.#scheduleRerender();
+    }
+  }
+
+  #resetCompositionDeferral(): void {
+    this.#isComposing = false;
+  }
+
+  #handleNonComposingInputForCompositionDeferral = (event: Event): void => {
+    if ('isComposing' in event && (event as InputEvent).isComposing === false) {
+      this.#endCompositionDeferral();
+    }
+  };
+
+  /**
+   * SD-2368: defer visible layout repaints while an IME composition is active.
+   * Visible-host listeners are permanent; the active hidden target's listeners
+   * are swapped by #refreshCompositionDeferralTarget() on target changes.
+   */
+  #setupCompositionDeferral(): void {
+    this.#teardownCompositionDeferral();
+
+    const add = (target: EventTarget | null | undefined, type: string, handler: EventListener) => {
+      if (!target) return;
+      target.addEventListener(type, handler);
+      this.#compositionDeferralCleanup.push(() => target.removeEventListener(type, handler));
+    };
+
+    const begin = () => this.#beginCompositionDeferral();
+    const end = () => this.#endCompositionDeferral();
+
+    add(this.#visibleHost, 'compositionstart', begin);
+    add(this.#visibleHost, 'compositionend', end);
+    add(this.#visibleHost, 'input', this.#handleNonComposingInputForCompositionDeferral);
+    add(this.#visibleHost, 'beforeinput', this.#handleNonComposingInputForCompositionDeferral);
+  }
+
+  #teardownCompositionDeferral(): void {
+    this.#compositionTargetCleanup.forEach((cleanup) => cleanup());
+    this.#compositionTargetCleanup = [];
+    this.#compositionTargetDom = null;
+    this.#compositionDeferralCleanup.forEach((cleanup) => cleanup());
+    this.#compositionDeferralCleanup = [];
+    this.#resetCompositionDeferral();
+  }
+
+  /**
+   * Re-points composition deferral listeners at the current active hidden editor
+   * DOM (body, header/footer, or story session). The input bridge dispatches a
+   * synthetic compositionend to the old target before this runs, so pending
+   * deferred work resumes before listeners move.
+   */
+  #refreshCompositionDeferralTarget(): void {
+    const nextTarget = this.#getActiveDomTarget();
+    if (nextTarget === this.#compositionTargetDom) return;
+
+    this.#compositionTargetCleanup.forEach((cleanup) => cleanup());
+    this.#compositionTargetCleanup = [];
+    this.#compositionTargetDom = nextTarget;
+
+    if (!nextTarget) {
+      this.#endCompositionDeferral();
+      return;
+    }
+
+    const begin = () => this.#beginCompositionDeferral();
+    const end = () => this.#endCompositionDeferral();
+
+    nextTarget.addEventListener('compositionstart', begin);
+    nextTarget.addEventListener('compositionend', end);
+    nextTarget.addEventListener('blur', end);
+    nextTarget.addEventListener('focusout', end);
+    nextTarget.addEventListener('beforeinput', this.#handleNonComposingInputForCompositionDeferral);
+    this.#compositionTargetCleanup.push(() => nextTarget.removeEventListener('compositionstart', begin));
+    this.#compositionTargetCleanup.push(() => nextTarget.removeEventListener('compositionend', end));
+    this.#compositionTargetCleanup.push(() => nextTarget.removeEventListener('blur', end));
+    this.#compositionTargetCleanup.push(() => nextTarget.removeEventListener('focusout', end));
+    this.#compositionTargetCleanup.push(() =>
+      nextTarget.removeEventListener('beforeinput', this.#handleNonComposingInputForCompositionDeferral),
+    );
+  }
+
   #scheduleRerender() {
     if (this.#renderScheduled) {
       return;
@@ -6821,6 +7172,11 @@ export class PresentationEditor extends EventEmitter {
       return;
     }
     if (!this.#pendingDocChange) {
+      return;
+    }
+    // SD-2368: keep #pendingDocChange/#pendingMapping intact while composing;
+    // #endCompositionDeferral() schedules the post-composition rerender.
+    if (this.#isComposing) {
       return;
     }
     this.#pendingDocChange = false;
@@ -7190,7 +7546,11 @@ export class PresentationEditor extends EventEmitter {
           // Same context object the measure callback uses, so the cache signature and the resolver
           // cannot drift (the two-channel split is retired here).
           { fontContext: fontMeasureContext, previousFontSignature },
+          // SD-3432: warm-start the footnote convergence with the previous
+          // render's fixed point; the layout run re-validates it in full.
+          { footnoteReserveSeed: this.#footnoteReserveSeed },
         );
+        this.#footnoteReserveSeed = result?.footnoteReserveSeed ?? null;
         const incrementalLayoutEnd = perfNow();
         perfLog(`[Perf] incrementalLayout: ${(incrementalLayoutEnd - incrementalLayoutStart).toFixed(2)}ms`);
 
@@ -7359,6 +7719,10 @@ export class PresentationEditor extends EventEmitter {
       const payload = { layout, blocks: blocksForLayout, measures, metrics };
       this.emit('layoutUpdated', payload);
       this.emit('paginationUpdate', payload);
+
+      // SD-3400: fragments are rebuilt on every paint — re-apply the active
+      // note highlight and complete any pending scroll-to-note.
+      this.#noteSessionCoordinator?.onPaint();
 
       // Emit fresh comment positions after layout completes.
       // Always emit — even when empty — so the store can clear stale positions
@@ -7993,9 +8357,27 @@ export class PresentationEditor extends EventEmitter {
 
     if (from === to || isDragDropIndicatorActive) {
       const caretPos = this.#dragDropIndicatorPos ?? from;
+      const activeNavigation = this.#activeSelectionNavigation;
+      const isRenderingNavigatedCaret = activeNavigation?.targetPos === caretPos;
+      if (isRenderingNavigatedCaret) {
+        this.#rebuildDomPositionIndex();
+      } else if (activeNavigation) {
+        this.#finishSelectionNavigation(activeNavigation.token);
+      }
+      if (
+        isRenderingNavigatedCaret &&
+        activeNavigation?.scrollSettled &&
+        this.#renderNavigatedCaretFromViewportCoords(caretPos)
+      ) {
+        this.#finishSelectionNavigation(activeNavigation.token);
+        return;
+      }
       const caretLayout = this.#computeCaretLayoutRect(caretPos);
       if (!caretLayout) {
-        // Keep existing cursor visible rather than clearing it
+        if (isRenderingNavigatedCaret) {
+          this.#localSelectionLayer.innerHTML = '';
+        }
+        // Outside programmatic navigation, keep the existing cursor visible rather than clearing it.
         return;
       }
       // Only clear old cursor after successfully computing new position
@@ -8006,6 +8388,13 @@ export class PresentationEditor extends EventEmitter {
           caretLayout,
           convertPageLocalToOverlayCoords: (pageIndex, x, y) => this.#convertPageLocalToOverlayCoords(pageIndex, x, y),
         });
+        const queuedNavigationRepair =
+          isRenderingNavigatedCaret && activeNavigation
+            ? this.#queueSelectionNavigationCaretRepair(caretPos, activeNavigation)
+            : false;
+        if (isRenderingNavigatedCaret && activeNavigation?.scrollSettled && !queuedNavigationRepair) {
+          this.#finishSelectionNavigation(activeNavigation?.token);
+        }
       } catch (error) {
         // DOM manipulation can fail if element is detached or in invalid state
         if (process.env.NODE_ENV === 'development') {
@@ -8018,8 +8407,21 @@ export class PresentationEditor extends EventEmitter {
       return;
     }
 
+    const activeNavigation = this.#activeSelectionNavigation;
+    const selectionContainsNavigationTarget =
+      activeNavigation != null && activeNavigation.targetPos >= from && activeNavigation.targetPos <= to;
+    if (activeNavigation && !selectionContainsNavigationTarget) {
+      this.#finishSelectionNavigation(activeNavigation.token);
+    }
+    if (selectionContainsNavigationTarget) {
+      this.#rebuildDomPositionIndex();
+    }
+
     const domRects = this.#computeSelectionRectsFromDom(from, to);
     if (domRects == null) {
+      if (selectionContainsNavigationTarget) {
+        this.#localSelectionLayer.innerHTML = '';
+      }
       // DOM-derived selection failed; keep last known-good overlay instead of drifting.
       debugLog('warn', 'Local selection: DOM rect computation failed', { from, to });
       return;
@@ -8050,6 +8452,9 @@ export class PresentationEditor extends EventEmitter {
           pageGap: this.#layoutState.layout?.pageGap ?? 0,
           convertPageLocalToOverlayCoords: (pageIndex, x, y) => this.#convertPageLocalToOverlayCoords(pageIndex, x, y),
         });
+        if (selectionContainsNavigationTarget && activeNavigation?.scrollSettled) {
+          this.#finishSelectionNavigation(activeNavigation?.token);
+        }
       }
     } catch (error) {
       // DOM manipulation can fail if element is detached or in invalid state
@@ -9034,7 +9439,7 @@ export class PresentationEditor extends EventEmitter {
 
   #activateRenderedNoteSession(
     target: RenderedNoteTarget,
-    options: { clientX: number; clientY: number; pageIndex?: number },
+    options: { clientX?: number; clientY?: number; pageIndex?: number },
   ): boolean {
     if ((this.#headerFooterSession?.session?.mode ?? 'body') !== 'body') {
       this.#headerFooterSession?.exitMode();
@@ -9070,22 +9475,52 @@ export class PresentationEditor extends EventEmitter {
       },
     );
 
-    const hit = this.hitTest(options.clientX, options.clientY);
     const doc = session.editor.state?.doc;
-    if (hit && doc) {
-      try {
-        const selection = this.#createCollapsedSelectionNearInlineContent(doc, hit.pos);
-        const tr = session.editor.state.tr.setSelection(selection);
-        session.editor.view?.dispatch(tr);
-      } catch {
-        // Ignore stale pointer hits during activation races.
+    // SD-3400: pointer activation places the caret at the click position;
+    // programmatic activation (no coords, e.g. insert-footnote focus) leaves the
+    // caret at the note's default start so the user can type from the beginning.
+    if (typeof options.clientX === 'number' && typeof options.clientY === 'number' && doc) {
+      const hit = this.hitTest(options.clientX, options.clientY);
+      if (hit) {
+        try {
+          const selection = this.#createCollapsedSelectionNearInlineContent(doc, hit.pos);
+          const tr = session.editor.state.tr.setSelection(selection);
+          session.editor.view?.dispatch(tr);
+        } catch {
+          // Ignore stale pointer hits during activation races.
+        }
       }
     }
 
     session.editor.view?.focus();
     this.#shouldScrollSelectionIntoView = true;
     this.#scheduleSelectionUpdate({ immediate: true });
+
+    // SD-3400: highlight the note, watch for the user emptying it, and bring
+    // it into view (see NoteSessionCoordinator for the full UX contract).
+    this.#ensureNoteSessionCoordinator().onActivated(target, session);
     return true;
+  }
+
+  #ensureNoteSessionCoordinator(): NoteSessionCoordinator {
+    if (!this.#noteSessionCoordinator) {
+      this.#noteSessionCoordinator = new NoteSessionCoordinator({
+        getHost: () => this.#painterHost ?? this.#visibleHost,
+        getScrollContainer: () => this.#scrollContainer,
+        hasActiveSession: () => Boolean(this.#getActiveStorySession()),
+        exitActiveSession: () => this.#exitActiveStorySession(),
+      });
+    }
+    return this.#noteSessionCoordinator;
+  }
+  /**
+   * SD-3400: programmatically open a footnote/endnote note session without a
+   * pointer. Focuses the note and scrolls it into view with the caret at the
+   * note's start. Used by insert-footnote (and any non-pointer navigation) so
+   * the user can immediately type in the new note.
+   */
+  activateNoteSession(target: RenderedNoteTarget): boolean {
+    return this.#activateRenderedNoteSession(target, {});
   }
 
   #exitActiveStorySession(): void {
@@ -9093,6 +9528,8 @@ export class PresentationEditor extends EventEmitter {
     if (!session) {
       return;
     }
+
+    this.#noteSessionCoordinator?.onExit();
 
     this.#storySessionManager?.exit();
     this.#pendingDocChange = true;
@@ -9406,10 +9843,7 @@ export class PresentationEditor extends EventEmitter {
    *   `'smooth'` at its own boundary. `block` defaults to `'center'`.
    * @returns Promise resolving to true if navigation succeeded.
    */
-  async navigateTo(
-    target: NavigableAddress,
-    options: { behavior?: ScrollBehavior; block?: 'start' | 'center' | 'end' | 'nearest' } = {},
-  ): Promise<boolean> {
+  async navigateTo(target: NavigableAddress, options: PresentationNavigationOptions = {}): Promise<boolean> {
     if (!target) return false;
 
     try {
@@ -9444,7 +9878,7 @@ export class PresentationEditor extends EventEmitter {
 
   async #navigateToBlock(
     target: BlockNavigationAddress,
-    options: { behavior?: ScrollBehavior; block?: 'start' | 'center' | 'end' | 'nearest' } = {},
+    options: PresentationNavigationOptions = {},
   ): Promise<boolean> {
     const editor = this.#editor;
     if (!editor) return false;
@@ -9478,7 +9912,7 @@ export class PresentationEditor extends EventEmitter {
   async #scrollToBlockCandidate(
     editor: Editor,
     candidate: { pos: number },
-    options: { behavior?: ScrollBehavior; block?: 'start' | 'center' | 'end' | 'nearest' } = {},
+    options: PresentationNavigationOptions = {},
   ): Promise<boolean> {
     const blockNode = editor.state.doc.nodeAt(candidate.pos);
     let contentPos = candidate.pos + 1;
@@ -9494,18 +9928,17 @@ export class PresentationEditor extends EventEmitter {
     const scrolled = await this.scrollToPositionAsync(contentPos, {
       behavior: options.behavior ?? 'auto',
       block: options.block ?? 'center',
+      shouldContinue: options.shouldContinue,
     });
     if (!scrolled) return false;
+    if (!shouldContinueNavigation(options)) return false;
 
     editor.commands?.setTextSelection?.({ from: contentPos, to: contentPos });
     editor.view?.focus?.();
     return true;
   }
 
-  async #navigateToComment(
-    entityId: string,
-    options: { behavior?: ScrollBehavior; block?: 'start' | 'center' | 'end' | 'nearest' } = {},
-  ): Promise<boolean> {
+  async #navigateToComment(entityId: string, options: PresentationNavigationOptions = {}): Promise<boolean> {
     const editor = this.#editor;
     if (!editor) return false;
 
@@ -9521,8 +9954,9 @@ export class PresentationEditor extends EventEmitter {
     await this.scrollToPositionAsync(editor.state.selection.from, {
       behavior: options.behavior ?? 'auto',
       block: options.block ?? 'center',
+      shouldContinue: options.shouldContinue,
     });
-    return true;
+    return shouldContinueNavigation(options);
   }
 
   async #navigateToBookmark(target: BookmarkAddress): Promise<boolean> {
@@ -9560,7 +9994,7 @@ export class PresentationEditor extends EventEmitter {
     entityId: string,
     storyKey?: string,
     preferredPageIndex?: number,
-    options: { behavior?: ScrollBehavior; block?: 'start' | 'center' | 'end' | 'nearest' } = {},
+    options: PresentationNavigationOptions = {},
   ): Promise<boolean> {
     const editor = this.#editor;
     if (!editor) return false;
@@ -9568,17 +10002,21 @@ export class PresentationEditor extends EventEmitter {
     const behavior = options.behavior ?? 'auto';
     const block = options.block ?? 'center';
     const navigationIds = this.#resolveTrackedChangeNavigationIds(entityId, storyKey);
+    if (!shouldContinueNavigation(options)) return false;
 
     if (storyKey && storyKey !== BODY_STORY_KEY) {
       for (const id of navigationIds) {
+        if (!shouldContinueNavigation(options)) return false;
         if (this.#navigateToActiveStoryTrackedChange(id, storyKey)) {
           return true;
         }
       }
 
       for (const id of navigationIds) {
-        if (await this.#activateTrackedChangeStorySurface(id, storyKey, preferredPageIndex)) {
+        if (await this.#activateTrackedChangeStorySurface(id, storyKey, preferredPageIndex, options)) {
+          if (!shouldContinueNavigation(options)) return false;
           for (const activeId of navigationIds) {
+            if (!shouldContinueNavigation(options)) return false;
             if (this.#navigateToActiveStoryTrackedChange(activeId, storyKey)) {
               return true;
             }
@@ -9587,20 +10025,54 @@ export class PresentationEditor extends EventEmitter {
       }
 
       for (const id of navigationIds) {
-        if (await this.#scrollToRenderedTrackedChange(id, storyKey, preferredPageIndex, { behavior, block })) {
+        if (!shouldContinueNavigation(options)) return false;
+        if (
+          await this.#scrollToRenderedTrackedChange(id, storyKey, preferredPageIndex, {
+            behavior,
+            block,
+            shouldContinue: options.shouldContinue,
+          })
+        ) {
           return true;
         }
       }
       return false;
     }
 
+    this.exitActiveStorySurface();
+
     const setCursorById = editor.commands?.setCursorById;
+
+    for (const id of navigationIds) {
+      if (!shouldContinueNavigation(options)) return false;
+      const selection = resolveTrackedChangeNavigationSelection(editor, id);
+      if (!selection) continue;
+      const setTextSelection = editor.commands?.setTextSelection;
+      const scrolled = await this.scrollToPositionAsync(selection.from, {
+        behavior,
+        block,
+        shouldContinue: options.shouldContinue,
+      });
+      if (!scrolled || !shouldContinueNavigation(options)) return false;
+      if (typeof setTextSelection !== 'function' || setTextSelection(selection) !== true) continue;
+      editor.view?.focus?.();
+      this.#scheduleNavigatedSelectionRender(selection.from);
+      return true;
+    }
 
     // Try direct cursor placement, then scroll to the new selection.
     if (typeof setCursorById === 'function') {
       for (const id of navigationIds) {
+        if (!shouldContinueNavigation(options)) return false;
         if (setCursorById(id, { preferredActiveThreadId: id })) {
-          await this.scrollToPositionAsync(editor.state.selection.from, { behavior, block });
+          const scrolled = await this.scrollToPositionAsync(editor.state.selection.from, {
+            behavior,
+            block,
+            shouldContinue: options.shouldContinue,
+          });
+          if (!scrolled || !shouldContinueNavigation(options)) return false;
+          editor.view?.focus?.();
+          this.#scheduleNavigatedSelectionRender(editor.state.selection.from);
           return true;
         }
       }
@@ -9610,7 +10082,13 @@ export class PresentationEditor extends EventEmitter {
     const resolved = navigationIds.map((id) => resolveTrackedChange(editor, id)).find(Boolean);
     if (!resolved) {
       for (const id of navigationIds) {
-        if (await this.#scrollToRenderedTrackedChange(id, undefined, preferredPageIndex, { behavior, block })) {
+        if (
+          await this.#scrollToRenderedTrackedChange(id, undefined, preferredPageIndex, {
+            behavior,
+            block,
+            shouldContinue: options.shouldContinue,
+          })
+        ) {
           return true;
         }
       }
@@ -9619,8 +10097,16 @@ export class PresentationEditor extends EventEmitter {
 
     // Try with the raw ID (tracked changes may use a different internal ID).
     if (typeof setCursorById === 'function' && resolved.rawId !== entityId) {
+      if (!shouldContinueNavigation(options)) return false;
       if (setCursorById(resolved.rawId, { preferredActiveThreadId: resolved.rawId })) {
-        await this.scrollToPositionAsync(editor.state.selection.from, { behavior, block });
+        const scrolled = await this.scrollToPositionAsync(editor.state.selection.from, {
+          behavior,
+          block,
+          shouldContinue: options.shouldContinue,
+        });
+        if (!scrolled || !shouldContinueNavigation(options)) return false;
+        editor.view?.focus?.();
+        this.#scheduleNavigatedSelectionRender(editor.state.selection.from);
         return true;
       }
     }
@@ -9629,11 +10115,13 @@ export class PresentationEditor extends EventEmitter {
     const scrolled = await this.scrollToPositionAsync(resolved.from, {
       behavior,
       block,
+      shouldContinue: options.shouldContinue,
     });
-    if (!scrolled) return false;
+    if (!scrolled || !shouldContinueNavigation(options)) return false;
 
     editor.commands?.setTextSelection?.({ from: resolved.from, to: resolved.from });
     editor.view?.focus?.();
+    this.#scheduleNavigatedSelectionRender(resolved.from);
     return true;
   }
 
@@ -9680,6 +10168,7 @@ export class PresentationEditor extends EventEmitter {
     entityId: string,
     storyKey: string,
     preferredPageIndex?: number,
+    options: PresentationNavigationOptions = {},
   ): Promise<boolean> {
     let locator: StoryLocator | null = null;
     try {
@@ -9691,19 +10180,23 @@ export class PresentationEditor extends EventEmitter {
     if (!locator || locator.storyType === 'body') {
       return false;
     }
+    if (!shouldContinueNavigation(options)) return false;
 
     const candidate = this.#findRenderedTrackedChangeElement(entityId, storyKey, preferredPageIndex);
     if (!candidate) {
       return false;
     }
+    if (!shouldContinueNavigation(options)) return false;
 
     const rect = candidate.getBoundingClientRect();
     const clientX = rect.left + Math.max(rect.width / 2, 1);
     const clientY = rect.top + Math.max(rect.height / 2, 1);
     const pageIndex = this.#resolveRenderedPageIndexForElement(candidate);
+    if (!shouldContinueNavigation(options)) return false;
 
     if (locator.storyType === 'footnote' || locator.storyType === 'endnote') {
       try {
+        if (!shouldContinueNavigation(options)) return false;
         if (
           !this.#activateRenderedNoteSession(
             {
@@ -9719,7 +10212,7 @@ export class PresentationEditor extends EventEmitter {
         return false;
       }
 
-      return this.#waitForTrackedChangeStorySurface(storyKey);
+      return this.#waitForTrackedChangeStorySurface(storyKey, undefined, options);
     }
 
     if (locator.storyType !== 'headerFooterPart') {
@@ -9733,6 +10226,7 @@ export class PresentationEditor extends EventEmitter {
     if (!region) {
       return false;
     }
+    if (!shouldContinueNavigation(options)) return false;
 
     this.#activateHeaderFooterRegion(region, {
       clientX,
@@ -9740,19 +10234,29 @@ export class PresentationEditor extends EventEmitter {
       pageIndex,
       source: 'programmatic',
     });
-    return this.#waitForTrackedChangeStorySurface(storyKey);
+    return this.#waitForTrackedChangeStorySurface(storyKey, undefined, options);
   }
 
-  async #waitForTrackedChangeStorySurface(storyKey: string, timeoutMs = 500): Promise<boolean> {
+  async #waitForTrackedChangeStorySurface(
+    storyKey: string,
+    timeoutMs = 500,
+    options: PresentationNavigationOptions = {},
+  ): Promise<boolean> {
     const deadline = Date.now() + timeoutMs;
 
     while (Date.now() < deadline) {
+      if (!shouldContinueNavigation(options)) {
+        return false;
+      }
       if (this.#getActiveTrackedChangeStorySurface()?.storyKey === storyKey) {
         return true;
       }
       await new Promise((resolve) => setTimeout(resolve, 16));
     }
 
+    if (!shouldContinueNavigation(options)) {
+      return false;
+    }
     return this.#getActiveTrackedChangeStorySurface()?.storyKey === storyKey;
   }
 
@@ -9967,6 +10471,17 @@ export class PresentationEditor extends EventEmitter {
 
     const sessionEditor = activeSurface.editor;
     const setCursorById = sessionEditor.commands?.setCursorById;
+    const navigationSelection = resolveTrackedChangeNavigationSelection(sessionEditor, entityId);
+    const setTextSelection = sessionEditor.commands?.setTextSelection;
+
+    if (
+      navigationSelection &&
+      typeof setTextSelection === 'function' &&
+      setTextSelection(navigationSelection) === true
+    ) {
+      this.#focusAndRevealActiveStorySelection(sessionEditor);
+      return true;
+    }
 
     if (typeof setCursorById === 'function' && setCursorById(entityId, { preferredActiveThreadId: entityId })) {
       this.#focusAndRevealActiveStorySelection(sessionEditor);
@@ -10021,10 +10536,13 @@ export class PresentationEditor extends EventEmitter {
     entityId: string,
     storyKey?: string,
     preferredPageIndex?: number,
-    options: { behavior?: ScrollBehavior; block?: 'start' | 'center' | 'end' | 'nearest' } = {},
+    options: PresentationNavigationOptions = {},
   ): Promise<boolean> {
     const candidate = this.#findRenderedTrackedChangeElement(entityId, storyKey, preferredPageIndex);
     if (!candidate) {
+      return false;
+    }
+    if (!shouldContinueNavigation(options)) {
       return false;
     }
 
@@ -10293,14 +10811,36 @@ export class PresentationEditor extends EventEmitter {
       return null;
     }
 
-    const startOffset = this.#measureActiveEditorVisibleTextOffset(Math.min(from, to));
-    const endOffset = this.#measureActiveEditorVisibleTextOffset(Math.max(from, to));
-    if (startOffset == null || endOffset == null) {
+    const noteFragments = this.#getRenderedNoteFragmentElements(this.#collectNoteBlockIds(context));
+    if (!noteFragments.length) {
       return null;
     }
 
-    const noteFragments = this.#getRenderedNoteFragmentElements(this.#collectNoteBlockIds(context));
-    if (!noteFragments.length) {
+    const geometryOptions = {
+      containers: noteFragments,
+      zoom: this.#layoutOptions.zoom ?? 1,
+      pageHeight: this.#getBodyPageHeight(),
+      pageGap: layout.pageGap ?? this.#getEffectivePageGap(),
+    };
+
+    // Same block-anchored pm-first strategy as #computeNoteDomCaretRect (SD-3400).
+    const pmRects = computeSelectionRectsFromPmRangeFromHelper(geometryOptions, from, to, {
+      from: this.#resolveNoteBlockAnchor(from),
+      to: this.#resolveNoteBlockAnchor(to),
+    });
+    if (pmRects != null) {
+      return pmRects;
+    }
+
+    // Same in-flight-rerender guard as #computeNoteDomCaretRect (SD-3400).
+    if (this.#renderScheduled || this.#isRerendering || this.#pendingDocChange) {
+      this.#scheduleSelectionUpdate({ immediate: false });
+      return null;
+    }
+
+    const startOffset = this.#measureActiveEditorVisibleTextOffset(Math.min(from, to));
+    const endOffset = this.#measureActiveEditorVisibleTextOffset(Math.max(from, to));
+    if (startOffset == null || endOffset == null) {
       return null;
     }
 
@@ -10308,12 +10848,7 @@ export class PresentationEditor extends EventEmitter {
     const renderedEndOffset = this.#toRenderedNoteVisibleTextOffset(noteFragments, endOffset);
 
     return computeSelectionRectsFromVisibleTextOffsetsFromHelper(
-      {
-        containers: noteFragments,
-        zoom: this.#layoutOptions.zoom ?? 1,
-        pageHeight: this.#getBodyPageHeight(),
-        pageGap: layout.pageGap ?? this.#getEffectivePageGap(),
-      },
+      geometryOptions,
       renderedStartOffset,
       renderedEndOffset,
     );
@@ -10334,6 +10869,46 @@ export class PresentationEditor extends EventEmitter {
     return selectionToRects(layout, context.blocks, context.measures, from, to, this.#pageGeometryHelper ?? undefined);
   }
 
+  /**
+   * Anchors a session position to its paragraph block for stale-tolerant
+   * caret resolution (SD-3400): painted pm ranges of unchanged note
+   * paragraphs drift after edits, but block identity (sdBlockId) plus the
+   * block's current first-leaf position let the geometry helper translate
+   * into the fragment's coordinate space.
+   */
+  #resolveNoteBlockAnchor(pos: number): { sdBlockId: string; currentStart: number } | null {
+    const doc = this.getActiveEditor()?.state?.doc;
+    if (!doc || !Number.isFinite(pos)) return null;
+    try {
+      const clamped = Math.max(0, Math.min(pos, doc.content.size));
+      const $pos = doc.resolve(clamped);
+      let blockDepth = 0;
+      for (let depth = $pos.depth; depth >= 1; depth -= 1) {
+        if ($pos.node(depth).isBlock) blockDepth = depth;
+      }
+      if (!blockDepth) return null;
+      const blockNode = $pos.node(blockDepth);
+      const sdBlockId = blockNode.attrs?.sdBlockId;
+      if (typeof sdBlockId !== 'string' || !sdBlockId) return null;
+      const blockPos = $pos.before(blockDepth);
+      let currentStart: number | null = null;
+      doc.nodesBetween(blockPos, blockPos + blockNode.nodeSize, (node, nodePos) => {
+        if (currentStart != null) return false;
+        if (node.isInline && (node.isLeaf || node.isText)) {
+          currentStart = nodePos;
+          return false;
+        }
+        return true;
+      });
+      // Empty paragraph: no inline leaf exists, its only caret position is
+      // the block's content start. The painted placeholder line anchors there.
+      if (currentStart == null) currentStart = blockPos + 1;
+      return { sdBlockId, currentStart };
+    } catch {
+      return null;
+    }
+  }
+
   #computeNoteDomCaretRect(context: NoteLayoutContext, pos: number): LayoutRect | null {
     const layout = this.#layoutState.layout;
     if (!layout) {
@@ -10345,27 +10920,48 @@ export class PresentationEditor extends EventEmitter {
       return null;
     }
 
-    const textOffset = this.#measureActiveEditorVisibleTextOffset(pos);
-    if (textOffset == null) {
-      return null;
-    }
-
     const noteFragments = this.#getRenderedNoteFragmentElements(noteBlockIds);
     if (!noteFragments.length) {
       return null;
     }
 
+    const geometryOptions = {
+      containers: noteFragments,
+      zoom: this.#layoutOptions.zoom ?? 1,
+      pageHeight: this.#getBodyPageHeight(),
+      pageGap: layout.pageGap ?? this.#getEffectivePageGap(),
+    };
+
+    // Resolve by block identity first (stale-tolerant), then by global pm
+    // ranges. Painted pm ranges of unchanged note paragraphs drift after
+    // edits, so absolute resolution alone picks wrong lines (SD-3400).
+    const anchor = this.#resolveNoteBlockAnchor(pos);
+    const anchoredRect = anchor ? computeCaretRectFromPmPositionFromHelper(geometryOptions, pos, anchor) : null;
+    if (anchoredRect) {
+      return anchoredRect;
+    }
+    const pmRect = computeCaretRectFromPmPositionFromHelper(geometryOptions, pos);
+    if (pmRect) {
+      return pmRect;
+    }
+
+    // Position not painted yet (fresh paragraph) while a rerender is in
+    // flight: bridging now would measure STALE paint and the wrong caret
+    // would stick until the next selection change. Defer to the post-paint
+    // flush instead (SD-3400).
+    if (this.#renderScheduled || this.#isRerendering || this.#pendingDocChange) {
+      this.#scheduleSelectionUpdate({ immediate: false });
+      return null;
+    }
+
+    const textOffset = this.#measureActiveEditorVisibleTextOffset(pos);
+    if (textOffset == null) {
+      return null;
+    }
+
     const renderedTextOffset = this.#toRenderedNoteVisibleTextOffset(noteFragments, textOffset);
 
-    return computeCaretRectFromVisibleTextOffsetFromHelper(
-      {
-        containers: noteFragments,
-        zoom: this.#layoutOptions.zoom ?? 1,
-        pageHeight: this.#getBodyPageHeight(),
-        pageGap: layout.pageGap ?? this.#getEffectivePageGap(),
-      },
-      renderedTextOffset,
-    );
+    return computeCaretRectFromVisibleTextOffsetFromHelper(geometryOptions, renderedTextOffset);
   }
 
   #computeNoteCaretRect(pos: number): LayoutRect | null {
@@ -10973,6 +11569,8 @@ export class PresentationEditor extends EventEmitter {
   #handleLayoutError(phase: LayoutError['phase'], error: Error) {
     console.error('[PresentationEditor] Layout error', error);
     this.#layoutError = { phase, error, timestamp: Date.now() };
+    // SD-3432: a failed render leaves no trustworthy footnote fixed point.
+    this.#footnoteReserveSeed = null;
 
     // Update error state based on phase
     if (phase === 'initialization') {

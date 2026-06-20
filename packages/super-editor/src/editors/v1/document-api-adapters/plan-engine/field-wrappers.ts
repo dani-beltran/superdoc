@@ -59,6 +59,32 @@ function receiptApplied(receipt: ReturnType<typeof executeDomainCommand>): boole
   return receipt.steps[0]?.effect === 'changed';
 }
 
+function rejectUnsupportedInsertOptions(input: FieldInsertInput): void {
+  const unsupported: string[] = [];
+  const legacyInput = input as FieldInsertInput & {
+    serialization?: unknown;
+    complexFormatting?: unknown;
+  };
+
+  if (input.cachedResultText !== undefined || input.updatePolicy === 'preserveCached') {
+    unsupported.push('cachedResultText/updatePolicy: "preserveCached"');
+  }
+  if (legacyInput.serialization === 'simple') {
+    unsupported.push('serialization: "simple"');
+  }
+  if (legacyInput.complexFormatting !== undefined) {
+    unsupported.push('complexFormatting');
+  }
+
+  if (unsupported.length > 0) {
+    throw new DocumentApiAdapterError(
+      'CAPABILITY_UNAVAILABLE',
+      `fields.insert does not support ${unsupported.join(', ')} in the v1 runtime.`,
+      { unsupported },
+    );
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Read operations
 // ---------------------------------------------------------------------------
@@ -102,6 +128,7 @@ export function fieldsInsertWrapper(
   if (input.mode !== 'raw') {
     throw new DocumentApiAdapterError('INVALID_INPUT', 'fields.insert requires mode: "raw".');
   }
+  rejectUnsupportedInsertOptions(input);
 
   const address: FieldAddress = {
     kind: 'field',

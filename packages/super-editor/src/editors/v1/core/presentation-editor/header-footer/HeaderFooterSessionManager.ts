@@ -772,6 +772,11 @@ export class HeaderFooterSessionManager {
     }
   }
 
+  syncEditorDocumentMode(editor: Editor | null): void {
+    if (!editor) return;
+    this.#applyChildEditorDocumentMode(editor, this.#documentMode);
+  }
+
   setTrackedChangesRenderConfig(config: HeaderFooterTrackedChangesRenderConfig): void {
     const nextConfig: HeaderFooterTrackedChangesRenderConfig = {
       mode: config.mode,

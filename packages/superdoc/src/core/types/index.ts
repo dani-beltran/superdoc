@@ -1085,6 +1085,8 @@ export interface FindReplaceConfig {
   ignoreDiacriticsAriaLabel?: string;
   /** Whether replace is available (default: true). */
   replaceEnabled?: boolean;
+  /** When true, search includes text from pending tracked deletions. Defaults to false. */
+  includeDeletedText?: boolean;
   /** Vue component to render as custom find/replace content. Mutually exclusive with `render`. */
   component?: unknown;
   /** Extra props passed to the custom Vue component. */
@@ -2076,6 +2078,20 @@ export interface Config {
    * path in that case.
    */
   useLayoutEngine?: boolean;
+  /**
+   * Opt-in switch for the injected v2 DOCX editor path inside the existing
+   * SuperDoc shell. `1` preserves the current public v1 editor behavior.
+   * `2` activates the injected v2 shell path for DOCX documents only; PDF and
+   * HTML continue to use their existing viewers.
+   */
+  editorVersion?: 1 | 2;
+  /**
+   * Opaque editor integration object or factory supplied by the host product.
+   * Public SuperDoc does not bundle the v2 runtime; it resolves the editor,
+   * ruler, and shell bridge factories from this injected seam when
+   * `editorVersion: 2` is enabled.
+   */
+  editorIntegration?: unknown;
   /**
    * Zoom behavior: the initial zoom level and optional fit-width
    * policy. See `SuperDocZoomConfig`.

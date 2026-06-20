@@ -889,6 +889,7 @@ import {
   type SuperDocUIState,
   type TextTarget as UITextTarget,
   type TrackChangeInfo as UITrackChangeInfo,
+  type TrackChangePointHit,
   type TrackChangesHandle,
   type TrackChangesItem,
   type TrackChangesListResult as UITrackChangesListResult,
@@ -1045,6 +1046,22 @@ function testSuperDocUISubEntry() {
     void result;
   }
   void exerciseCommandDiscovery;
+
+  // SD-3469: point hit-test + UI-active activation on the track-changes handle.
+  function exerciseTrackChangePointHit(ui: SuperDocUI): void {
+    const hit: TrackChangePointHit | null = ui.trackChanges.getAt({ x: 100, y: 200 });
+    if (hit) {
+      const id: string = hit.id;
+      const item: TrackChangesItem = hit.item;
+      void id;
+      void item;
+      const setActive: boolean = ui.trackChanges.setActive(hit.id);
+      void setActive;
+    }
+    const cleared: boolean = ui.trackChanges.setActive(null);
+    void cleared;
+  }
+  void exerciseTrackChangePointHit;
 }
 
 export {

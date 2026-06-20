@@ -43,7 +43,13 @@ import {
 import { debugLog } from '../selection/SelectionDebug.js';
 import { DOM_CLASS_NAMES, buildAnnotationSelector, DRAGGABLE_SELECTOR } from '@superdoc/dom-contract';
 import { applyEditableSlotAtInlineBoundary } from '@helpers/ensure-editable-slot-inline-boundary.js';
-import { isSemanticFootnoteBlockId } from '../semantic-flow-constants.js';
+import {
+  isRenderedNoteBlockId,
+  isSameRenderedNoteTarget,
+  parseRenderedNoteTarget,
+  type RenderedNoteTarget,
+} from '../notes/note-target.js';
+import { resolveNoteReferenceAtPointer } from './note-reference-hit.js';
 import { CommentsPluginKey } from '@extensions/comment/comments-plugin.js';
 import {
   findStructuredContentBlockAtPos,
@@ -89,57 +95,6 @@ type CommentThreadHit = {
   isAmbiguous: boolean;
   threadId: string | null;
 };
-
-/**
- * Block IDs for note content use `footnote-{id}-` / `endnote-{id}-` prefixes.
- * Semantic footnote blocks use the {@link isSemanticFootnoteBlockId} helper from
- * shared constants — it matches both heading and body footnote block IDs.
- */
-function isRenderedNoteBlockId(blockId: string): boolean {
-  return (
-    typeof blockId === 'string' &&
-    (blockId.startsWith('footnote-') || blockId.startsWith('endnote-') || isSemanticFootnoteBlockId(blockId))
-  );
-}
-
-type RenderedNoteTarget = {
-  storyType: 'footnote' | 'endnote';
-  noteId: string;
-};
-
-function parseRenderedNoteTarget(blockId: string): RenderedNoteTarget | null {
-  if (typeof blockId !== 'string' || blockId.length === 0) {
-    return null;
-  }
-
-  if (blockId.startsWith('footnote-')) {
-    const noteId = blockId.slice('footnote-'.length).split('-')[0] ?? '';
-    return noteId ? { storyType: 'footnote', noteId } : null;
-  }
-
-  if (blockId.startsWith('__sd_semantic_footnote-')) {
-    const noteId = blockId.slice('__sd_semantic_footnote-'.length).split('-')[0] ?? '';
-    return noteId ? { storyType: 'footnote', noteId } : null;
-  }
-
-  if (blockId.startsWith('endnote-')) {
-    const noteId = blockId.slice('endnote-'.length).split('-')[0] ?? '';
-    return noteId ? { storyType: 'endnote', noteId } : null;
-  }
-
-  return null;
-}
-
-function isSameRenderedNoteTarget(
-  left: RenderedNoteTarget | null | undefined,
-  right: RenderedNoteTarget | null | undefined,
-): boolean {
-  if (!left || !right) {
-    return false;
-  }
-
-  return left.storyType === right.storyType && left.noteId === right.noteId;
-}
 
 function isOutsidePageBodyContent(layout: Layout, x: number, pageIndex?: number, pageLocalY?: number): boolean {
   if (!Number.isFinite(x) || !Number.isFinite(pageIndex) || !Number.isFinite(pageLocalY)) {
@@ -602,6 +557,7 @@ export class EditorInputManager {
 
   // Image selection state
   #lastSelectedImageBlockId: string | null = null;
+  #lastSelectedTextboxBlockId: string | null = null;
 
   // Focus suppression (for draggable annotations)
   #suppressFocusInFromDraggable = false;
@@ -1597,6 +1553,40 @@ export class EditorInputManager {
       event.preventDefault();
     }
 
+    const textboxBorderSelection = this.#resolveTextboxBorderSelection({
+      event,
+      editor,
+      doc,
+      hitPos: hit?.pos ?? null,
+      rawHitPos: rawHit?.pos ?? null,
+      pageIndex: normalizedPoint.pageIndex,
+    });
+    if (textboxBorderSelection) {
+      const { editor: selectionEditor, fragmentEl, shapeContainerPos, blockId } = textboxBorderSelection;
+      try {
+        const tr = selectionEditor.state.tr.setSelection(NodeSelection.create(doc, shapeContainerPos));
+        selectionEditor.view?.dispatch(tr);
+
+        if (this.#lastSelectedImageBlockId) {
+          this.#callbacks.emit?.('imageDeselected', { blockId: this.#lastSelectedImageBlockId });
+          this.#lastSelectedImageBlockId = null;
+        }
+        if (this.#lastSelectedTextboxBlockId && this.#lastSelectedTextboxBlockId !== blockId) {
+          this.#callbacks.emit?.('textboxDeselected', { blockId: this.#lastSelectedTextboxBlockId });
+        }
+
+        this.#callbacks.emit?.('textboxSelected', { element: fragmentEl, blockId });
+        this.#lastSelectedTextboxBlockId = blockId;
+      } catch (error) {
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('[EditorInputManager] Failed to create NodeSelection for textbox container:', error);
+        }
+      }
+
+      this.#callbacks.focusEditorAfterImageSelection?.();
+      return;
+    }
+
     // Handle click outside text content — keep cursor and scroll position unchanged.
     if (!rawHit) {
       this.#focusEditor();
@@ -1647,6 +1637,10 @@ export class EditorInputManager {
     if (this.#lastSelectedImageBlockId) {
       this.#callbacks.emit?.('imageDeselected', { blockId: this.#lastSelectedImageBlockId });
       this.#lastSelectedImageBlockId = null;
+    }
+    if (this.#lastSelectedTextboxBlockId) {
+      this.#callbacks.emit?.('textboxDeselected', { blockId: this.#lastSelectedTextboxBlockId });
+      this.#lastSelectedTextboxBlockId = null;
     }
 
     // Handle shift+click to extend selection
@@ -1944,6 +1938,25 @@ export class EditorInputManager {
     this.#callbacks.clearHoverRegion?.();
   }
 
+  /**
+   * SD-3400: resolve a double-clicked BODY footnote/endnote reference marker to
+   * its note target so navigation can open the corresponding note. Delegates to
+   * the pure {@link resolveNoteReferenceAtPointer} helper.
+   */
+  #resolveFootnoteReferenceTargetAtPointer(
+    target: HTMLElement | null,
+    clientX: number,
+    clientY: number,
+  ): RenderedNoteTarget | null {
+    return resolveNoteReferenceAtPointer({
+      target,
+      clientX,
+      clientY,
+      doc: this.#deps?.getEditor()?.state?.doc,
+      ownerDocument: this.#deps?.getViewportHost()?.ownerDocument ?? document,
+    });
+  }
+
   #handleDoubleClick(event: MouseEvent): void {
     if (!this.#deps) return;
     if (event.button !== 0) return;
@@ -1965,6 +1978,21 @@ export class EditorInputManager {
 
     const normalized = this.#callbacks.normalizeClientPoint?.(event.clientX, event.clientY);
     if (!normalized) return;
+
+    // SD-3400: double-clicking a BODY footnote/endnote reference marker navigates
+    // to its note content. Activating the note session focuses the note and scrolls
+    // its selection into view, so the user lands on the corresponding note.
+    const footnoteRefTarget = this.#resolveFootnoteReferenceTargetAtPointer(target, event.clientX, event.clientY);
+    if (footnoteRefTarget) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.#callbacks.activateRenderedNoteSession?.(footnoteRefTarget, {
+        clientX: event.clientX,
+        clientY: event.clientY,
+        pageIndex: normalized.pageIndex,
+      });
+      return;
+    }
 
     const clickedNoteTarget = this.#resolveRenderedNoteTargetAtPointer(target, event.clientX, event.clientY);
     if (clickedNoteTarget) {
@@ -2098,6 +2126,13 @@ export class EditorInputManager {
     const href = linkEl.getAttribute('href') ?? '';
     const isAnchorLink = href.startsWith('#') && href.length > 1;
 
+    // SD-3400: links painted inside footnote/endnote fragments carry
+    // STORY-LOCAL pm positions. Flag the note context on the event so
+    // downstream handlers never resolve those positions against the body doc
+    // (which caused caret jumps and a silent wrong-body-link popover).
+    const noteBlockId = linkEl.closest('[data-block-id]')?.getAttribute('data-block-id') ?? '';
+    const noteTarget = parseRenderedNoteTarget(noteBlockId);
+
     // SD-2495: route any internal-anchor click (`#<bookmark>`) to in-document
     // navigation. Covers TOC entries, heading/bookmark cross-references
     // (REF fields with `\h`), and any other internal-hyperlink case — they all
@@ -2105,8 +2140,23 @@ export class EditorInputManager {
     if (isAnchorLink) {
       event.preventDefault();
       event.stopPropagation();
+      // Bookmark anchors resolve by NAME against the BODY doc; exit any
+      // active story session first so the caret lands in the body story.
+      this.#callbacks.exitActiveStorySession?.();
       this.#callbacks.goToAnchor?.(href);
       return;
+    }
+
+    // A BODY link clicked while a story session is active is a body
+    // interaction: exit the session (this early-returning link path used to
+    // skip every session-exit branch). Note links keep their session. The
+    // exit COMMITS the session — an emptied note removes its body markers —
+    // so painted pm positions may be stale afterwards; flag that so the
+    // handler resolves the caret from coordinates instead.
+    let bodyPositionsMayBeStale = false;
+    if (!noteTarget) {
+      bodyPositionsMayBeStale = this.#getActiveRenderedNoteTarget() != null;
+      this.#callbacks.exitActiveStorySession?.();
     }
 
     // Dispatch link click event
@@ -2124,6 +2174,11 @@ export class EditorInputManager {
         element: linkEl,
         clientX: event.clientX,
         clientY: event.clientY,
+        // SD-3400 (additive, backward compatible): note context + modifiers.
+        noteTarget,
+        bodyPositionsMayBeStale,
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
       },
     });
     linkEl.dispatchEvent(linkClickEvent);
@@ -2507,6 +2562,10 @@ export class EditorInputManager {
     if (this.#lastSelectedImageBlockId && this.#lastSelectedImageBlockId !== newSelectionId) {
       this.#callbacks.emit?.('imageDeselected', { blockId: this.#lastSelectedImageBlockId });
     }
+    if (this.#lastSelectedTextboxBlockId && this.#lastSelectedTextboxBlockId !== newSelectionId) {
+      this.#callbacks.emit?.('textboxDeselected', { blockId: this.#lastSelectedTextboxBlockId });
+      this.#lastSelectedTextboxBlockId = null;
+    }
 
     const editor = this.#deps?.getEditor();
     try {
@@ -2555,6 +2614,10 @@ export class EditorInputManager {
       if (this.#lastSelectedImageBlockId && this.#lastSelectedImageBlockId !== fragmentHit.fragment.blockId) {
         this.#callbacks.emit?.('imageDeselected', { blockId: this.#lastSelectedImageBlockId });
       }
+      if (this.#lastSelectedTextboxBlockId) {
+        this.#callbacks.emit?.('textboxDeselected', { blockId: this.#lastSelectedTextboxBlockId });
+        this.#lastSelectedTextboxBlockId = null;
+      }
 
       if (fragmentHit.fragment.kind === 'image') {
         const targetElement =
@@ -2578,6 +2641,164 @@ export class EditorInputManager {
 
     this.#callbacks.focusEditorAfterImageSelection?.();
     return true;
+  }
+
+  #resolveTextboxBorderSelection({
+    event,
+    editor,
+    doc,
+    hitPos,
+    rawHitPos,
+    pageIndex,
+  }: {
+    event: PointerEvent;
+    editor: Editor;
+    doc: ProseMirrorNode | null | undefined;
+    hitPos: number | null;
+    rawHitPos: number | null;
+    pageIndex?: number;
+  }): { editor: Editor; fragmentEl: HTMLElement; shapeContainerPos: number; blockId: string | null } | null {
+    if (!doc) {
+      return null;
+    }
+
+    const fragmentEl = this.#resolveTextboxFragmentElement(event.target, event.clientX, event.clientY, pageIndex);
+    if (!fragmentEl) {
+      return null;
+    }
+
+    const BORDER_HIT_MARGIN = 6;
+    const rect = fragmentEl.getBoundingClientRect();
+    const isNearBorder =
+      event.clientX - rect.left <= BORDER_HIT_MARGIN ||
+      rect.right - event.clientX <= BORDER_HIT_MARGIN ||
+      event.clientY - rect.top <= BORDER_HIT_MARGIN ||
+      rect.bottom - event.clientY <= BORDER_HIT_MARGIN;
+    if (!isNearBorder) {
+      return null;
+    }
+
+    const shapeContainerPos = this.#resolveShapeContainerPos(doc, fragmentEl, [hitPos, rawHitPos]);
+    if (shapeContainerPos == null) {
+      return null;
+    }
+
+    return {
+      editor,
+      fragmentEl,
+      shapeContainerPos,
+      blockId: fragmentEl.dataset.blockId ?? null,
+    };
+  }
+
+  #resolveTextboxFragmentElement(
+    target: EventTarget | null,
+    clientX: number,
+    clientY: number,
+    pageIndex?: number,
+  ): HTMLElement | null {
+    const candidates: HTMLElement[] = [];
+    const seen = new Set<HTMLElement>();
+    const addCandidate = (element: HTMLElement | null): void => {
+      if (!element || seen.has(element)) {
+        return;
+      }
+      seen.add(element);
+      candidates.push(element);
+    };
+
+    const resolveCandidate = (element: Element | null): HTMLElement | null => {
+      if (!(element instanceof HTMLElement)) {
+        return null;
+      }
+
+      const pageLevelFragment = element.closest<HTMLElement>('.superdoc-drawing-fragment');
+      if (pageLevelFragment) {
+        return pageLevelFragment;
+      }
+
+      const tableDrawing = element.closest<HTMLElement>('.superdoc-table-drawing');
+      if (tableDrawing?.parentElement instanceof HTMLElement && tableDrawing.parentElement.dataset.blockId) {
+        return tableDrawing.parentElement;
+      }
+
+      const blockWrapper = element.closest<HTMLElement>('[data-block-id]');
+      return blockWrapper ?? null;
+    };
+
+    addCandidate(resolveCandidate(target as Element | null));
+
+    const ownerDocument = target instanceof Element ? target.ownerDocument : document;
+    if (typeof ownerDocument.elementsFromPoint === 'function') {
+      for (const element of ownerDocument.elementsFromPoint(clientX, clientY)) {
+        addCandidate(resolveCandidate(element));
+      }
+    }
+
+    if (Number.isFinite(pageIndex)) {
+      const pageElement = this.#deps
+        ?.getViewportHost()
+        ?.querySelector(`[data-page-index="${pageIndex}"]`) as HTMLElement | null;
+      const pageCandidates = pageElement?.querySelectorAll<HTMLElement>('[data-block-id]');
+      if (pageCandidates) {
+        for (const candidate of Array.from(pageCandidates)) {
+          const rect = candidate.getBoundingClientRect();
+          if (clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom) {
+            addCandidate(candidate);
+          }
+        }
+      }
+    }
+
+    for (const candidate of candidates) {
+      if (
+        candidate.classList.contains('superdoc-textbox-shape') ||
+        candidate.querySelector('.superdoc-textbox-shape') != null
+      ) {
+        return candidate;
+      }
+    }
+
+    return null;
+  }
+
+  #resolveShapeContainerPos(
+    doc: ProseMirrorNode,
+    fragmentEl: HTMLElement,
+    candidatePositions: Array<number | null | undefined>,
+  ): number | null {
+    const fragmentPmStart = fragmentEl.querySelector<HTMLElement>('[data-pm-start]')?.dataset.pmStart;
+    const positions = [...candidatePositions];
+    if (fragmentPmStart != null) {
+      positions.push(Number(fragmentPmStart));
+    }
+
+    for (const pos of positions) {
+      if (!Number.isFinite(pos)) {
+        continue;
+      }
+      const resolvedPos = this.#findAncestorShapeContainerPos(doc, Number(pos));
+      if (resolvedPos != null) {
+        return resolvedPos;
+      }
+    }
+
+    return null;
+  }
+
+  #findAncestorShapeContainerPos(doc: ProseMirrorNode, pos: number): number | null {
+    try {
+      const $pos = doc.resolve(pos);
+      for (let depth = $pos.depth; depth >= 0; depth -= 1) {
+        if ($pos.node(depth).type.name === 'shapeContainer') {
+          return $pos.before(depth);
+        }
+      }
+    } catch {
+      return null;
+    }
+
+    return null;
   }
 
   #handleShiftClick(event: PointerEvent, headPos: number): void {

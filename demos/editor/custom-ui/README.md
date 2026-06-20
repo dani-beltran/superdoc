@@ -59,6 +59,7 @@ SuperDocUIProvider                one controller per app
     ├── SelectionPopover          ui.selection.getAnchorRect, bubble menu over the selection
     ├── ContextMenu               ui.viewport.contextAt + ui.commands.getContextMenuItems(context) + item.invoke()
     ├── ContextMenuRegistrations  ui.commands.register({ contextMenu: { when } })
+    ├── TrackedChangeActivation   ui.trackChanges.getAt + setActive for document-click review focus
     ├── CitationHighlights        ui.metadata.getRect, painted overlay across cited spans
     ├── CitationPopover           ui.viewport.entityAt + metadata.get, hover preview
     └── ActivitySidebar           ui.comments + ui.trackChanges + ui.selection (Activity tab)
@@ -84,7 +85,7 @@ The `Insert clause here` handler reads `context.position.target` (a collapsed `S
 
 Right-click on plain text where no item matches falls through to the browser's native menu. The handler deliberately doesn't `preventDefault` when `getContextMenuItems(context)` returns nothing, so the user gets Copy / Paste / Inspect from the browser instead of a dead right-click.
 
-## The four custom-UI patterns
+## The custom-UI patterns
 
 1. **Toolbar controls.** `useSuperDocCommand(id)` binds each button to one command. `useSuperDocFontOptions()` gives the font-family picker its built-in defaults plus fonts used by the active document. Apply a selected font with `ui.toolbar.execute('font-family', option.value)`. See `Toolbar.tsx`.
 
@@ -92,9 +93,11 @@ Right-click on plain text where no item matches falls through to the browser's n
 
 3. **Right-click context menu.** Set `disableContextMenu` on `<SuperDocEditor>` to suppress the built-in. On `contextmenu`, call `ui.viewport.contextAt({ x, y })` to get the bundle, then `ui.commands.getContextMenuItems(context)` to get items contributed via `register({ contextMenu })`. Each item carries `invoke()`, which fires the registered `execute({ context })` with the bundle bound, so handlers act on the click target without the menu component threading payloads. Scope the listener with `ui.viewport.getHost()` instead of a CSS class. See `ContextMenu.tsx` and `ContextMenuRegistrations.tsx`.
 
-4. **Custom command + keyboard shortcut.** Declare `shortcut: 'Mod-Shift-C'` on the registration. The controller installs a single bubble-phase keydown listener scoped to the painted host; matched shortcuts dispatch through the same path the toolbar button uses. No per-command keymap wiring. See `InsertClauseButton.tsx`.
+4. **Tracked-change review focus.** On document pointerdown, `ui.trackChanges.getAt({ x, y })` returns the public tracked-change item under the cursor; `ui.trackChanges.setActive(hit.id)` highlights the matching Activity card without scrolling or moving selection. Sidebar card clicks call `scrollTo(id)` for document movement and caret placement, then `setActive(id)` so overlapping synthetic comments do not steal the card highlight after navigation. See `TrackedChangeActivation.tsx` and `ActivitySidebar.tsx`.
 
-5. **Composer capture + restore.** `ui.selection.capture()` on open holds the selection across focus moves. `ui.comments.createFromCapture(captured, { text })` posts the comment using the frozen target. `ui.selection.restore(captured)` puts the visible selection back so the user keeps their place. See `CommentComposer.tsx`.
+5. **Custom command + keyboard shortcut.** Declare `shortcut: 'Mod-Shift-C'` on the registration. The controller installs a single bubble-phase keydown listener scoped to the painted host; matched shortcuts dispatch through the same path the toolbar button uses. No per-command keymap wiring. See `InsertClauseButton.tsx`.
+
+6. **Composer capture + restore.** `ui.selection.capture()` on open holds the selection across focus moves. `ui.comments.createFromCapture(captured, { text })` posts the comment using the frozen target. `ui.selection.restore(captured)` puts the visible selection back so the user keeps their place. See `CommentComposer.tsx`.
 
 ## Adapting this to your stack
 
