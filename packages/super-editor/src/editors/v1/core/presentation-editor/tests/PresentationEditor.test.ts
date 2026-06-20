@@ -109,6 +109,13 @@ const {
             size: 10,
           },
           textBetween: vi.fn(() => 'Lazy note session'),
+          // Mirror the real PM doc contract: this stub doc reports text via
+          // textBetween, so descendants must walk a matching text node (the
+          // note-session empty watch inspects it via isNoteContentEmpty).
+          descendants: vi.fn((cb: (node: unknown) => boolean | void) => {
+            cb({ isText: false, isAtom: false, type: { name: 'paragraph' } });
+            cb({ isText: true, isAtom: true, text: 'Lazy note session', type: { name: 'text' } });
+          }),
         },
       },
       options: {},
@@ -224,6 +231,12 @@ const bookmarkResolverMocks = vi.hoisted(() => ({
   resolveBookmarkTarget: vi.fn(),
 }));
 
+const trackedChangeResolverMocks = vi.hoisted(() => ({
+  resolveTrackedChange: vi.fn(() => null),
+  resolveTrackedChangeInStory: vi.fn(() => null),
+  resolveTrackedChangeNavigationSelection: vi.fn(() => null),
+}));
+
 // Mock PositionHitResolver
 vi.mock('../input/PositionHitResolver.js', () => ({
   resolvePointerPositionHit: (...args: unknown[]) => mockResolvePointerPositionHit(...args),
@@ -280,10 +293,19 @@ vi.mock('../../Editor', () => {
           },
         },
         view: {
-          dom: {
-            dispatchEvent: vi.fn(() => true),
-            focus: vi.fn(),
-          },
+          // Real element (matching createSectionEditor) so addEventListener-based
+          // wiring such as SD-2368 composition deferral works; dispatchEvent stays
+          // a spy but performs real dispatch so attached listeners fire.
+          dom: (() => {
+            const dom = document.createElement('div');
+            // The bridge refuses to forward to disconnected targets; pretend the
+            // hidden editor DOM is mounted without attaching it (keeps dispatched
+            // events from bubbling to the bridge's window-fallback listeners).
+            Object.defineProperty(dom, 'isConnected', { value: true });
+            vi.spyOn(dom, 'dispatchEvent');
+            vi.spyOn(dom, 'focus').mockImplementation(() => {});
+            return dom;
+          })(),
           focus: vi.fn(),
           dispatch: vi.fn(),
         },
@@ -400,6 +422,17 @@ vi.mock('../../../document-api-adapters/helpers/bookmark-resolver.js', async (im
   };
 });
 
+vi.mock('../../../document-api-adapters/helpers/tracked-change-resolver.js', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../../../document-api-adapters/helpers/tracked-change-resolver.js')>();
+  return {
+    ...actual,
+    resolveTrackedChange: trackedChangeResolverMocks.resolveTrackedChange,
+    resolveTrackedChangeInStory: trackedChangeResolverMocks.resolveTrackedChangeInStory,
+    resolveTrackedChangeNavigationSelection: trackedChangeResolverMocks.resolveTrackedChangeNavigationSelection,
+  };
+});
+
 vi.mock('../../header-footer/EditorOverlayManager', () => ({
   EditorOverlayManager: mockEditorOverlayManager,
 }));
@@ -466,6 +499,12 @@ describe('PresentationEditor', () => {
     bookmarkResolverMocks.findAllBookmarksInDocument.mockReset();
     bookmarkResolverMocks.findAllBookmarksInDocument.mockImplementation(() => []);
     bookmarkResolverMocks.resolveBookmarkTarget.mockReset();
+    trackedChangeResolverMocks.resolveTrackedChange.mockReset();
+    trackedChangeResolverMocks.resolveTrackedChange.mockImplementation(() => null);
+    trackedChangeResolverMocks.resolveTrackedChangeInStory.mockReset();
+    trackedChangeResolverMocks.resolveTrackedChangeInStory.mockImplementation(() => null);
+    trackedChangeResolverMocks.resolveTrackedChangeNavigationSelection.mockReset();
+    trackedChangeResolverMocks.resolveTrackedChangeNavigationSelection.mockImplementation(() => null);
 
     // Reset static instances
     (PresentationEditor as typeof PresentationEditor & { instances: Map<string, unknown> }).instances = new Map();
@@ -2275,6 +2314,149 @@ describe('PresentationEditor', () => {
     });
   });
 
+  describe('IME composition rerender deferral (SD-2368)', () => {
+    let rafSpy: ReturnType<typeof vi.spyOn> | null = null;
+
+    beforeEach(() => {
+      rafSpy = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb: FrameRequestCallback) => {
+        cb(0);
+        return 1;
+      });
+    });
+
+    afterEach(() => {
+      rafSpy?.mockRestore();
+      rafSpy = null;
+    });
+
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
+
+    /**
+     * Creates the editor, waits for the initial layout pass to finish, and
+     * returns a doc-change trigger (the registered pageStyleUpdate handler,
+     * which sets pendingDocChange and schedules a rerender).
+     */
+    const setupSettledEditor = async () => {
+      editor = new PresentationEditor({
+        element: container,
+        documentId: 'test-doc',
+      });
+
+      await vi.waitFor(() => expect(mockIncrementalLayout).toHaveBeenCalled());
+      await settle();
+
+      const mockEditorInstance = getLastEditorInstance();
+      const onCalls = mockEditorInstance.on as unknown as Mock;
+      const pageStyleUpdateCall = onCalls.mock.calls.find((call) => call[0] === 'pageStyleUpdate');
+      expect(pageStyleUpdateCall).toBeDefined();
+      const handlePageStyleUpdate = pageStyleUpdateCall![1] as (payload: {
+        pageMargins?: unknown;
+        pageStyles?: unknown;
+      }) => void;
+      const triggerDocChange = () =>
+        handlePageStyleUpdate({ pageMargins: { left: 1.5, right: 1.5, top: 1, bottom: 1 }, pageStyles: {} });
+
+      mockIncrementalLayout.mockClear();
+      return { mockEditorInstance, triggerDocChange };
+    };
+
+    it('defers pending rerender while composition is active', async () => {
+      const { triggerDocChange } = await setupSettledEditor();
+
+      container.dispatchEvent(new CompositionEvent('compositionstart', { data: 'n', bubbles: true }));
+      triggerDocChange();
+      await settle();
+
+      expect(mockIncrementalLayout).not.toHaveBeenCalled();
+    });
+
+    it('flushes deferred rerender once after compositionend', async () => {
+      const { triggerDocChange } = await setupSettledEditor();
+
+      container.dispatchEvent(new CompositionEvent('compositionstart', { data: 'n', bubbles: true }));
+      triggerDocChange();
+      triggerDocChange();
+      triggerDocChange();
+      await settle();
+      expect(mockIncrementalLayout).not.toHaveBeenCalled();
+
+      container.dispatchEvent(new CompositionEvent('compositionend', { data: '你好', bubbles: true }));
+      await settle();
+
+      expect(mockIncrementalLayout).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not drop pendingDocChange when composition defers a flush', async () => {
+      const { triggerDocChange } = await setupSettledEditor();
+
+      container.dispatchEvent(new CompositionEvent('compositionstart', { data: 'n', bubbles: true }));
+      // The synchronous RAF stub runs the flush immediately; it must
+      // early-return without consuming the pending doc change.
+      triggerDocChange();
+      await settle();
+      expect(mockIncrementalLayout).not.toHaveBeenCalled();
+
+      container.dispatchEvent(new CompositionEvent('compositionend', { data: '你', bubbles: true }));
+      await vi.waitFor(() => expect(mockIncrementalLayout).toHaveBeenCalledTimes(1));
+    });
+
+    it('compositionend without pending doc changes does not schedule rerender', async () => {
+      await setupSettledEditor();
+
+      container.dispatchEvent(new CompositionEvent('compositionstart', { data: 'n', bubbles: true }));
+      container.dispatchEvent(new CompositionEvent('compositionend', { data: '', bubbles: true }));
+      await settle();
+
+      expect(mockIncrementalLayout).not.toHaveBeenCalled();
+    });
+
+    it('recovers from a lost compositionend via blur on the hidden editor', async () => {
+      const { mockEditorInstance, triggerDocChange } = await setupSettledEditor();
+      const hiddenDom = mockEditorInstance.view.dom as HTMLElement;
+
+      hiddenDom.dispatchEvent(new CompositionEvent('compositionstart', { data: 'n', bubbles: true }));
+      triggerDocChange();
+      await settle();
+      expect(mockIncrementalLayout).not.toHaveBeenCalled();
+
+      // User clicks away mid-composition; the browser never delivers compositionend.
+      hiddenDom.dispatchEvent(new FocusEvent('blur'));
+
+      await vi.waitFor(() => expect(mockIncrementalLayout).toHaveBeenCalledTimes(1));
+    });
+
+    it('recovers from a lost compositionend via a non-composing beforeinput', async () => {
+      const { triggerDocChange } = await setupSettledEditor();
+
+      container.dispatchEvent(new CompositionEvent('compositionstart', { data: 'n', bubbles: true }));
+      triggerDocChange();
+      await settle();
+      expect(mockIncrementalLayout).not.toHaveBeenCalled();
+
+      const event = new InputEvent('beforeinput', { inputType: 'insertText', data: 'a', bubbles: true });
+      Object.defineProperty(event, 'isComposing', { value: false, writable: false });
+      container.dispatchEvent(event);
+
+      await vi.waitFor(() => expect(mockIncrementalLayout).toHaveBeenCalledTimes(1));
+    });
+
+    it('recovers from a lost compositionend via non-composing beforeinput on the hidden editor', async () => {
+      const { mockEditorInstance, triggerDocChange } = await setupSettledEditor();
+      const hiddenDom = mockEditorInstance.view.dom as HTMLElement;
+
+      hiddenDom.dispatchEvent(new CompositionEvent('compositionstart', { data: 'n', bubbles: true }));
+      triggerDocChange();
+      await settle();
+      expect(mockIncrementalLayout).not.toHaveBeenCalled();
+
+      const event = new InputEvent('beforeinput', { inputType: 'insertText', data: 'a', bubbles: true });
+      Object.defineProperty(event, 'isComposing', { value: false, writable: false });
+      hiddenDom.dispatchEvent(event);
+
+      await vi.waitFor(() => expect(mockIncrementalLayout).toHaveBeenCalledTimes(1));
+    });
+  });
+
   describe('editable state integration', () => {
     it('should pass documentMode to Editor constructor', () => {
       editor = new PresentationEditor({
@@ -2923,6 +3105,81 @@ describe('PresentationEditor', () => {
       boundingSpy.mockRestore();
     });
 
+    it('does not activate a header story for stale tracked-change navigation', async () => {
+      mockIncrementalLayout.mockResolvedValueOnce(buildLayoutResult());
+
+      editor = new PresentationEditor({
+        element: container,
+        documentId: 'test-doc',
+      });
+
+      await vi.waitFor(() => expect(mockIncrementalLayout).toHaveBeenCalled());
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      const viewport = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+      vi.spyOn(viewport, 'getBoundingClientRect').mockReturnValue({
+        left: 0,
+        top: 0,
+        width: 800,
+        height: 1000,
+        right: 800,
+        bottom: 1000,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      } as DOMRect);
+
+      const page = document.createElement('div');
+      page.className = 'superdoc-page';
+      page.dataset.pageIndex = '0';
+      vi.spyOn(page, 'getBoundingClientRect').mockReturnValue({
+        left: 0,
+        top: 0,
+        width: 612,
+        height: 792,
+        right: 612,
+        bottom: 792,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      } as DOMRect);
+
+      const renderedChange = document.createElement('span');
+      renderedChange.dataset.trackChangeId = 'tc-header-1';
+      renderedChange.dataset.storyKey = 'hf:part:rId-header-default';
+      vi.spyOn(renderedChange, 'getBoundingClientRect').mockReturnValue({
+        left: 120,
+        top: 50,
+        width: 20,
+        height: 12,
+        right: 140,
+        bottom: 62,
+        x: 120,
+        y: 50,
+        toJSON: () => ({}),
+      } as DOMRect);
+      page.appendChild(renderedChange);
+      viewport.appendChild(page);
+
+      // Let navigation reach the header story path, then go stale before activation.
+      let guardCallsRemaining = 4;
+      const shouldContinue = vi.fn(() => guardCallsRemaining-- > 0);
+
+      const didNavigate = await editor.navigateTo(
+        {
+          kind: 'entity',
+          entityType: 'trackedChange',
+          entityId: 'tc-header-1',
+          story: { kind: 'story', storyType: 'headerFooterPart', refId: 'rId-header-default' },
+        },
+        { shouldContinue },
+      );
+
+      expect(didNavigate).toBe(false);
+      expect(mockCreateHeaderFooterEditor).not.toHaveBeenCalled();
+      expect(createdSectionEditors.length).toBe(0);
+    });
+
     it('re-emits live header/footer child editor updates and transactions', async () => {
       mockIncrementalLayout.mockResolvedValueOnce(buildLayoutResult());
 
@@ -3231,6 +3488,101 @@ describe('PresentationEditor', () => {
       expect(bookmarkResolverMocks.findAllBookmarksInDocument).toHaveBeenCalled();
       expect(bookmarkResolverMocks.resolveBookmarkTarget).not.toHaveBeenCalled();
       expect(errorSpy).not.toHaveBeenCalled();
+    });
+
+    it('scrolls before placing a body tracked-change caret so the selection overlay uses mounted page geometry', async () => {
+      mockIncrementalLayout.mockResolvedValueOnce(buildLayoutResult());
+      trackedChangeResolverMocks.resolveTrackedChangeNavigationSelection.mockReturnValueOnce({ from: 42, to: 42 });
+      const order: string[] = [];
+
+      editor = new PresentationEditor({
+        element: container,
+        documentId: 'test-doc',
+      });
+
+      await vi.waitFor(() => expect(mockIncrementalLayout).toHaveBeenCalled());
+
+      const editorInstance = getLastEditorInstance();
+      editorInstance.commands = {
+        ...(editorInstance.commands ?? {}),
+        setTextSelection: vi.fn(() => {
+          order.push('setTextSelection');
+          return true;
+        }),
+      };
+      vi.spyOn(editor, 'scrollToPositionAsync').mockImplementation(async () => {
+        order.push('scroll');
+        return true;
+      });
+
+      const didNavigate = await editor.navigateTo({
+        kind: 'entity',
+        entityType: 'trackedChange',
+        entityId: 'word:trackInsert:132',
+      });
+
+      expect(didNavigate).toBe(true);
+      expect(editor.scrollToPositionAsync).toHaveBeenCalledWith(
+        42,
+        expect.objectContaining({ behavior: 'auto', block: 'center' }),
+      );
+      expect(editorInstance.commands.setTextSelection).toHaveBeenCalledWith({ from: 42, to: 42 });
+      expect(editorInstance.view.focus).toHaveBeenCalled();
+      expect(order).toEqual(['scroll', 'setTextSelection']);
+    });
+
+    it('exits active header mode before navigating to a body tracked change', async () => {
+      mockIncrementalLayout.mockResolvedValue(buildLayoutResult());
+      trackedChangeResolverMocks.resolveTrackedChangeNavigationSelection.mockReturnValueOnce({ from: 42, to: 42 });
+
+      editor = new PresentationEditor({
+        element: container,
+        documentId: 'test-doc',
+      });
+
+      await vi.waitFor(() => expect(mockIncrementalLayout).toHaveBeenCalled());
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      const pagesHost = container.querySelector('.presentation-editor__pages') as HTMLElement;
+      const mockPage = document.createElement('div');
+      mockPage.setAttribute('data-page-index', '0');
+      pagesHost.appendChild(mockPage);
+
+      const viewport = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+      vi.spyOn(viewport, 'getBoundingClientRect').mockReturnValue({
+        left: 0,
+        top: 0,
+        width: 800,
+        height: 1000,
+        right: 800,
+        bottom: 1000,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      } as DOMRect);
+
+      viewport.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, clientX: 120, clientY: 50, button: 0 }));
+      await vi.waitFor(() => expect(createdSectionEditors.length).toBeGreaterThan(0));
+
+      const headerEditor = editor.getActiveEditor();
+      const bodyEditor = (Editor as unknown as MockedEditor).mock.results[0].value;
+      bodyEditor.commands = {
+        ...(bodyEditor.commands ?? {}),
+        setTextSelection: vi.fn(() => true),
+      };
+      vi.spyOn(editor, 'scrollToPositionAsync').mockResolvedValue(true);
+      expect(headerEditor).not.toBe(bodyEditor);
+
+      const didNavigate = await editor.navigateTo({
+        kind: 'entity',
+        entityType: 'trackedChange',
+        entityId: 'word:trackInsert:132',
+      });
+
+      expect(didNavigate).toBe(true);
+      expect(editor.getActiveEditor()).toBe(bodyEditor);
+      expect(headerEditor.commands.setTextSelection).not.toHaveBeenCalledWith({ from: 42, to: 42 });
+      expect(bodyEditor.commands.setTextSelection).toHaveBeenCalledWith({ from: 42, to: 42 });
     });
 
     it('exits active header mode before navigating to a body bookmark', async () => {
@@ -4737,6 +5089,48 @@ describe('PresentationEditor', () => {
         handleSelection();
 
         // Should NOT use RAF because immediate rendering handles it synchronously
+        expect(rafSpy).not.toHaveBeenCalled();
+
+        rafSpy.mockRestore();
+      });
+
+      it('defers the selection overlay render for doc-changing transactions (SD-3400)', async () => {
+        // Editor emits 'selectionUpdate' BEFORE 'update', so for a transaction
+        // that changed the doc the epoch/layout gates are not armed yet: an
+        // immediate flush renders the caret against the PRE-change paint
+        // (stale caret on every Enter/Backspace). Doc-changing transactions
+        // must defer to the post-paint flush; selection-only changes keep the
+        // immediate path (collab-cancellation rationale).
+        const layoutResult = {
+          layout: { pages: [] },
+          measures: [],
+        };
+        mockIncrementalLayout.mockResolvedValue(layoutResult);
+
+        editor = new PresentationEditor({
+          element: container,
+          documentId: 'test-doc',
+        });
+
+        const mockEditorInstance = (Editor as unknown as MockedEditor).mock.results[
+          (Editor as unknown as MockedEditor).mock.results.length - 1
+        ].value;
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
+        const rafSpy = vi.spyOn(window, 'requestAnimationFrame');
+        const onCalls = mockEditorInstance.on as unknown as Mock;
+        const selectionUpdateCall = onCalls.mock.calls.find((call) => call[0] === 'selectionUpdate');
+        const handleSelection = selectionUpdateCall![1] as (payload?: {
+          transaction?: { docChanged?: boolean };
+        }) => void;
+
+        // Doc-changing transaction: must NOT render synchronously (RAF-deferred).
+        handleSelection({ transaction: { docChanged: true } });
+        expect(rafSpy).toHaveBeenCalled();
+
+        // Selection-only transaction: immediate path, no RAF needed.
+        rafSpy.mockClear();
+        handleSelection({ transaction: { docChanged: false } });
         expect(rafSpy).not.toHaveBeenCalled();
 
         rafSpy.mockRestore();

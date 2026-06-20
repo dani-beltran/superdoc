@@ -520,6 +520,42 @@ describe('HeaderFooterSessionManager', () => {
     expect(activeEditor.view.dom.getAttribute('documentmode')).toBe('suggesting');
   });
 
+  it('syncs a provided header/footer editor to the current document mode', () => {
+    manager = new HeaderFooterSessionManager({
+      painterHost,
+      visibleHost,
+      selectionOverlay,
+      editor: createMainEditorStub(),
+      defaultPageSize: { w: 612, h: 792 },
+      defaultMargins: {
+        top: 72,
+        right: 72,
+        bottom: 72,
+        left: 72,
+        header: 36,
+        footer: 36,
+      },
+    });
+    const storyEditor = createHeaderFooterEditorStub(document.createElement('div')) as unknown as {
+      commands: {
+        disableTrackChangesShowOriginal: ReturnType<typeof vi.fn>;
+        enableTrackChanges: ReturnType<typeof vi.fn>;
+      };
+      setOptions: ReturnType<typeof vi.fn>;
+      setEditable: ReturnType<typeof vi.fn>;
+      view: { dom: HTMLElement };
+    };
+
+    manager.setDocumentMode('suggesting');
+    manager.syncEditorDocumentMode(storyEditor as unknown as Editor);
+
+    expect(storyEditor.commands.disableTrackChangesShowOriginal).toHaveBeenCalledTimes(1);
+    expect(storyEditor.commands.enableTrackChanges).toHaveBeenCalledTimes(1);
+    expect(storyEditor.setOptions).toHaveBeenCalledWith({ documentMode: 'suggesting' });
+    expect(storyEditor.setEditable).toHaveBeenCalledWith(true);
+    expect(storyEditor.view.dom.getAttribute('documentmode')).toBe('suggesting');
+  });
+
   it('exits the active story session when leaving header/footer mode', async () => {
     const pageElement = document.createElement('div');
     pageElement.dataset.pageIndex = '0';

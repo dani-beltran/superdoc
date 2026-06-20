@@ -29,6 +29,7 @@ import type {
   CommentsHandle,
   CommentsSlice,
   TrackChangesHandle,
+  TrackChangePointHit,
   TrackChangesSlice,
   ContentControlsHandle,
   ContentControlsSlice,
@@ -76,6 +77,7 @@ const _real_FontSizeOption: AssertNotAny<FontSizeOption> = true;
 const _real_CommentsHandle: AssertNotAny<CommentsHandle> = true;
 const _real_CommentsSlice: AssertNotAny<CommentsSlice> = true;
 const _real_TrackChangesHandle: AssertNotAny<TrackChangesHandle> = true;
+const _real_TrackChangePointHit: AssertNotAny<TrackChangePointHit> = true;
 const _real_TrackChangesSlice: AssertNotAny<TrackChangesSlice> = true;
 const _real_ContentControlsHandle: AssertNotAny<ContentControlsHandle> = true;
 const _real_ContentControlsSlice: AssertNotAny<ContentControlsSlice> = true;

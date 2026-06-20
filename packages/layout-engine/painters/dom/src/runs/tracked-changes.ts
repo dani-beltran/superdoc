@@ -16,8 +16,6 @@ const TRACK_CHANGE_BASE_CLASS: Record<TrackedChangeKind, string> = {
 };
 const TRACK_CHANGE_OVERLAP_INSERT_DELETE_CLASS = 'track-overlap-insert-delete-dec';
 
-/** Alpha (0-255) applied to an author color to derive the resting background. */
-const TRACK_CHANGE_BACKGROUND_ALPHA = 0x22;
 /** Alpha (0-255) applied to an author color to derive the focused background. */
 const TRACK_CHANGE_BACKGROUND_FOCUSED_ALPHA = 0x44;
 
@@ -37,13 +35,13 @@ const expandHexColor = (hex: string): string | null => {
 
 /**
  * Derives a translucent background from a base color by appending an 8-digit
- * hex alpha. Falls back to the base color unchanged when it is not a hex string
- * the painter can extend (e.g. `rgb(...)`, named colors) — the border/text
- * still carry the author color in that case.
+ * hex alpha. Returns null when it is not a hex string the painter can safely
+ * extend (e.g. `rgb(...)`, named colors); the border/text still carry the
+ * author color in that case.
  */
-const colorWithAlpha = (color: string, alpha: number): string => {
+const colorWithAlpha = (color: string, alpha: number): string | null => {
   const expanded = color.trim().startsWith('#') ? expandHexColor(color.trim()) : null;
-  if (!expanded) return color;
+  if (!expanded) return null;
   const alphaHex = Math.max(0, Math.min(255, alpha)).toString(16).padStart(2, '0');
   return `#${expanded}${alphaHex}`;
 };
@@ -56,29 +54,31 @@ const setColorVar = (elem: HTMLElement, name: string, value: string): void => {
  * Stamps the element-scoped CSS variable family for a single tracked-change
  * layer from its resolved `meta.color`. The painter reads only `meta.color`;
  * color resolution (overrides / resolver / fallback) happened upstream in
- * pm-adapter. Backgrounds are derived from the base color with alpha.
+ * layout-adapter. Backgrounds are derived from the base color with alpha.
  */
 const applyAuthorColorVariables = (elem: HTMLElement, layer: TrackedChangeMeta): void => {
   const color = layer.color;
   if (!color) return;
-  const background = colorWithAlpha(color, TRACK_CHANGE_BACKGROUND_ALPHA);
   const backgroundFocused = colorWithAlpha(color, TRACK_CHANGE_BACKGROUND_FOCUSED_ALPHA);
   switch (layer.kind) {
     case 'insert':
       setColorVar(elem, '--sd-tracked-changes-insert-border', color);
-      setColorVar(elem, '--sd-tracked-changes-insert-background', background);
-      setColorVar(elem, '--sd-tracked-changes-insert-background-focused', backgroundFocused);
+      if (backgroundFocused) {
+        setColorVar(elem, '--sd-tracked-changes-insert-background-focused', backgroundFocused);
+      }
       break;
     case 'delete':
       setColorVar(elem, '--sd-tracked-changes-delete-border', color);
-      setColorVar(elem, '--sd-tracked-changes-delete-background', background);
-      setColorVar(elem, '--sd-tracked-changes-delete-background-focused', backgroundFocused);
+      if (backgroundFocused) {
+        setColorVar(elem, '--sd-tracked-changes-delete-background-focused', backgroundFocused);
+      }
       setColorVar(elem, '--sd-tracked-changes-delete-text', color);
       break;
     case 'format':
       setColorVar(elem, '--sd-tracked-changes-format-border', color);
-      setColorVar(elem, '--sd-tracked-changes-format-background', background);
-      setColorVar(elem, '--sd-tracked-changes-format-background-focused', backgroundFocused);
+      if (backgroundFocused) {
+        setColorVar(elem, '--sd-tracked-changes-format-background-focused', backgroundFocused);
+      }
       break;
     default:
       break;
@@ -254,6 +254,9 @@ export const applyTrackedChangeDecorations = (
   }
   if (meta.authorImage) {
     elem.dataset.trackChangeAuthorImage = meta.authorImage;
+  }
+  if (meta.color) {
+    elem.dataset.trackChangeAuthorColor = meta.color;
   }
   if (meta.date) {
     elem.dataset.trackChangeDate = meta.date;

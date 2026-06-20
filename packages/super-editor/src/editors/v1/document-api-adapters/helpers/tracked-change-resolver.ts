@@ -51,6 +51,8 @@ export type GroupedTrackedChange = {
   structural?: { side: 'insertion' | 'deletion'; subtype: InternalTrackChangeSubtype };
 };
 
+export type TrackedChangeNavigationSelection = { from: number; to: number };
+
 export type TrackedChangeProjectedSide = 'inserted' | 'deleted';
 
 type ChangeTypeInput = Pick<GroupedTrackedChange, 'hasInsert' | 'hasDelete' | 'hasFormat' | 'structural'>;
@@ -306,6 +308,108 @@ function getTrackedMarkText(editor: Editor, item: RawTrackedMark): string {
   const nodeText = item.node?.text;
   if (typeof nodeText === 'string') return nodeText;
   return editor.state.doc.textBetween(item.from, item.to, ' ', '\ufffc');
+}
+
+function rawMarkMatchesChange(mark: RawTrackedMark, change: GroupedTrackedChange): boolean {
+  return trackedMarkMatchesChange(mark.mark, change);
+}
+
+function trackedMarkMatchesChange(
+  mark: { type: { name: string }; attrs?: Record<string, unknown> },
+  change: GroupedTrackedChange,
+): boolean {
+  const attrs = mark.attrs ?? {};
+  const rawId = toNonEmptyString(attrs.id);
+  if (!rawId) return false;
+
+  const markType = mark.type.name;
+  const groupKey = getTrackedChangeGroupKey(attrs, markType, rawId);
+  return groupKey === change.rawId || groupKey === change.id || rawId === change.commandRawId || rawId === change.id;
+}
+
+function findMarkedTextNodeNavigationSelection(
+  editor: Editor,
+  change: GroupedTrackedChange,
+): TrackedChangeNavigationSelection | null {
+  let multiCharacterSelection: TrackedChangeNavigationSelection | null = null;
+  let singleCharacterSelection: TrackedChangeNavigationSelection | null = null;
+
+  try {
+    editor.state.doc.nodesBetween(change.from, change.to, (node, pos) => {
+      if (multiCharacterSelection) return false;
+      if (!node.isText) return true;
+      const marks = Array.isArray(node.marks) ? node.marks : [];
+      if (!marks.some((mark) => trackedMarkMatchesChange(mark, change))) return false;
+
+      const textLength = typeof node.text === 'string' ? node.text.length : node.nodeSize;
+      if (textLength > 1) {
+        const caret = pos + 1;
+        multiCharacterSelection = { from: caret, to: caret };
+        return false;
+      }
+      if (!singleCharacterSelection && textLength > 0) {
+        singleCharacterSelection = { from: pos, to: pos + textLength };
+      }
+      return false;
+    });
+  } catch {
+    return null;
+  }
+
+  return multiCharacterSelection ?? singleCharacterSelection;
+}
+
+/**
+ * Resolve a tracked-change navigation target to a text-backed PM selection.
+ *
+ * Generic comment/thread cursor placement can land on an unstable outer wrapper,
+ * which may jump outside the text-backed change. Track-change navigation can do
+ * better because the resolver owns the raw mark ranges:
+ * - multi-character text changes use a collapsed caret inside the first text
+ *   node rather than at the tracked-change boundary;
+ * - one-character changes use the marked range itself, since there is no stable
+ *   interior collapsed caret;
+ * - structural revisions return `null` so callers can use rendered-element
+ *   fallback.
+ */
+export function resolveTrackedChangeNavigationSelection(
+  editor: Editor,
+  id: string,
+): TrackedChangeNavigationSelection | null {
+  const change = resolveTrackedChange(editor, id);
+  if (!change || change.structural) return null;
+
+  const markedTextSelection = findMarkedTextNodeNavigationSelection(editor, change);
+  if (markedTextSelection) return markedTextSelection;
+
+  const matchingMarks = getRawTrackedMarks(editor)
+    .filter((mark) => rawMarkMatchesChange(mark, change))
+    .filter((mark) => Number.isFinite(mark.from) && Number.isFinite(mark.to) && mark.to > mark.from)
+    .sort((a, b) => {
+      if (a.from !== b.from) return a.from - b.from;
+      return a.to - b.to;
+    });
+
+  const multiCharacterMark = matchingMarks.find((mark) => mark.to - mark.from > 1);
+  if (multiCharacterMark) {
+    const pos = multiCharacterMark.from + 1;
+    return { from: pos, to: pos };
+  }
+
+  const singleCharacterMark = matchingMarks[0];
+  if (singleCharacterMark) {
+    return { from: singleCharacterMark.from, to: singleCharacterMark.to };
+  }
+
+  if (change.to > change.from) {
+    if (change.to - change.from > 1) {
+      const pos = change.from + 1;
+      return { from: pos, to: pos };
+    }
+    return { from: change.from, to: change.to };
+  }
+
+  return null;
 }
 
 export function groupTrackedChanges(editor: Editor): GroupedTrackedChange[] {

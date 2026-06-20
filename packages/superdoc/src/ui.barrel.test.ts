@@ -73,3 +73,9 @@ describe('superdoc/ui public barrel font picker types', () => {
     }
   });
 });
+
+describe('superdoc/ui public barrel tracked-change point hits', () => {
+  it('re-exports TrackChangePointHit', () => {
+    expect(BARREL_TEXT).toMatch(/type\s+TrackChangePointHit\b/);
+  });
+});

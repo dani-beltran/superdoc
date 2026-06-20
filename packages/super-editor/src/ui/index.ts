@@ -126,6 +126,7 @@ export type {
   // Track changes
   TrackChangesHandle,
   TrackChangesItem,
+  TrackChangePointHit,
   TrackChangesSlice,
 
   // Content controls (SD-3157)

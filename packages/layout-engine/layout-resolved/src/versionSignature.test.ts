@@ -76,6 +76,41 @@ describe('deriveBlockVersion - bidi', () => {
   });
 });
 
+describe('deriveBlockVersion - tracked-change colors', () => {
+  const makeParagraph = (color: string): ParagraphBlock => ({
+    kind: 'paragraph',
+    id: 'tracked-color',
+    attrs: {},
+    runs: [
+      {
+        text: 'Tracked',
+        fontFamily: 'Arial',
+        fontSize: 16,
+        trackedChange: {
+          kind: 'insert',
+          id: 'tc-1',
+          author: 'Alice',
+          color,
+        },
+      },
+    ],
+  });
+
+  it('changes when only the tracked-change author color changes', () => {
+    const purple = deriveBlockVersion(makeParagraph('#8250df'));
+    const blue = deriveBlockVersion(makeParagraph('#1f6feb'));
+
+    expect(blue).not.toBe(purple);
+  });
+
+  it('is stable when the tracked-change author color is identical', () => {
+    const a = deriveBlockVersion(makeParagraph('#8250df'));
+    const b = deriveBlockVersion(makeParagraph('#8250df'));
+
+    expect(a).toBe(b);
+  });
+});
+
 describe('deriveBlockVersion - tab underline', () => {
   const makeTabParagraph = (underline?: { style?: string; color?: string }): FlowBlock => ({
     kind: 'paragraph',

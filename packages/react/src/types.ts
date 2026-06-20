@@ -150,6 +150,17 @@ type ExplicitCallbackProps =
   | 'onViewportChange';
 
 /**
+ * Explicitly typed editor implementation props.
+ */
+interface EditorImplementationProps {
+  /** Select the DOCX editor implementation. @default 1 */
+  editorVersion?: 1 | 2;
+
+  /** Private editor integration object or factory. Required when editorVersion is 2. */
+  editorIntegration?: unknown;
+}
+
+/**
  * Explicitly typed callback props to ensure proper TypeScript inference.
  * These override any loosely-typed callbacks from SuperDocConfig.
  */
@@ -215,8 +226,12 @@ interface ReactProps {
  * Callback props are explicitly typed to ensure proper TypeScript inference.
  */
 export interface SuperDocEditorProps
-  extends Omit<SuperDocConfig, InternalProps | OptionalInReact | ExplicitCallbackProps>,
+  extends Omit<
+      SuperDocConfig,
+      InternalProps | OptionalInReact | ExplicitCallbackProps | keyof EditorImplementationProps
+    >,
     Partial<Pick<SuperDocConfig, OptionalInReact>>,
+    EditorImplementationProps,
     CallbackProps,
     ReactProps {}
 

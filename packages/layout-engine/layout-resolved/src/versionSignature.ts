@@ -76,6 +76,7 @@ const trackedChangeVersion = (run: TextRun): string =>
         trackedChange.author ?? '',
         trackedChange.authorEmail ?? '',
         trackedChange.authorImage ?? '',
+        trackedChange.color ?? '',
         trackedChange.date ?? '',
         trackedChange.before ? JSON.stringify(trackedChange.before) : '',
         trackedChange.after ? JSON.stringify(trackedChange.after) : '',
@@ -471,6 +472,8 @@ export const deriveBlockVersion = (block: FlowBlock): string => {
         vector.geometry.flipH ? 1 : 0,
         vector.geometry.flipV ? 1 : 0,
         drawingTextVersion(vector),
+        block.anchor?.offsetH ?? '',
+        block.anchor?.offsetV ?? '',
       ].join('|');
     }
     if (block.drawingKind === 'shapeGroup') {

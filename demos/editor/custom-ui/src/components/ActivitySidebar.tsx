@@ -22,16 +22,24 @@ type ActivityItem =
   | { kind: 'comment'; id: string; comment: CommentItem }
   | { kind: 'change'; id: string; change: TrackChangeInfo };
 
+function isScrollableEditorElement(el: HTMLElement | null): boolean {
+  if (!el) return false;
+  const style = getComputedStyle(el);
+  const overflow = `${style.overflow}${style.overflowY}${style.overflowX}`;
+  return /(auto|scroll)/.test(overflow) && el.scrollHeight > el.clientHeight + 1;
+}
+
 function getEditorScrollContainer(): HTMLElement | null {
+  for (const selector of ['.super-editor-container', '.superdoc__sub-document', '.editor-shell']) {
+    const candidate = document.querySelector<HTMLElement>(selector);
+    if (isScrollableEditorElement(candidate)) return candidate;
+  }
+
   const canvas = document.querySelector<HTMLElement>('.editor-canvas');
-  let el = canvas?.parentElement ?? null;
+  let el: HTMLElement | null = canvas?.parentElement ?? null;
 
   while (el && el !== document.body) {
-    const style = getComputedStyle(el);
-    const overflow = `${style.overflow}${style.overflowY}${style.overflowX}`;
-    if (/(auto|scroll)/.test(overflow) && el.scrollHeight > el.clientHeight) {
-      return el;
-    }
+    if (isScrollableEditorElement(el)) return el;
     el = el.parentElement;
   }
 
@@ -56,6 +64,8 @@ function scrollRectIntoEditorView(rect: { top: number; height: number }) {
 }
 
 function activateCommentFromSidebar(ui: SuperDocUIHandle, commentId: string) {
+  ui.trackChanges.setActive(null);
+
   const rect = ui.viewport.getRect({
     target: { kind: 'entity', entityType: 'comment', entityId: commentId },
   });
@@ -67,6 +77,11 @@ function activateCommentFromSidebar(ui: SuperDocUIHandle, commentId: string) {
   }
 
   ui.comments.scrollTo(commentId);
+}
+
+async function activateTrackedChangeFromSidebar(ui: SuperDocUIHandle, trackedChangeId: string) {
+  ui.trackChanges.setActive(trackedChangeId);
+  await ui.trackChanges.scrollTo(trackedChangeId);
 }
 
 interface Props {
@@ -91,7 +106,9 @@ interface Props {
  * Active-card highlight is driven by the document selection: clicking
  * a comment or tracked change in the editor surfaces the matching id
  * via `ui.selection.activeCommentIds` / `activeChangeIds`, and the
- * panel highlights that card and scrolls it into view.
+ * panel highlights that card and scrolls it into view. Review navigation
+ * falls back to `ui.trackChanges.activeId` because a collapsed caret at
+ * the start boundary of a tracked change may not report an active mark.
  */
 export function ActivitySidebar({ composeOpen, onCloseComposer, decided }: Props) {
   const ui = useSuperDocUI();
@@ -104,13 +121,6 @@ export function ActivitySidebar({ composeOpen, onCloseComposer, decided }: Props
   // through the same `decideChange` and the Resolved audit row shows
   // up regardless of which surface fired the decision.
   const { decidedChanges, decideChange } = decided;
-
-  // Track which entity (if any) is currently under the editor cursor.
-  const activeEntityId = useMemo<string | null>(() => {
-    if (selection.activeCommentIds.length > 0) return selection.activeCommentIds[0]!;
-    if (selection.activeChangeIds.length > 0) return selection.activeChangeIds[0]!;
-    return null;
-  }, [selection.activeCommentIds, selection.activeChangeIds]);
 
   // Merge the two slices into a single local feed. Comments are
   // emitted in `comments.list()` order, then tracked changes in
@@ -147,6 +157,17 @@ export function ActivitySidebar({ composeOpen, onCloseComposer, decided }: Props
     for (const tc of trackChanges.items) items.push({ kind: 'change', id: tc.id, change: tc.change });
     return items;
   }, [comments.items, trackChanges.items]);
+
+  // Track which entity (if any) is currently under the editor cursor.
+  const activeEntityId = useMemo<string | null>(() => {
+    const cardIds = new Set(feed.map((item) => item.id));
+    if (trackChanges.activeId && cardIds.has(trackChanges.activeId)) return trackChanges.activeId;
+    const activeCommentId = selection.activeCommentIds.find((id) => cardIds.has(id));
+    if (activeCommentId) return activeCommentId;
+    const activeChangeId = selection.activeChangeIds.find((id) => cardIds.has(id));
+    if (activeChangeId) return activeChangeId;
+    return null;
+  }, [feed, selection.activeCommentIds, selection.activeChangeIds, trackChanges.activeId]);
 
   // Partition the feed into active vs resolved-comment buckets, and
   // fold reply comments under their parent. Word/Google Docs thread a
@@ -205,12 +226,29 @@ export function ActivitySidebar({ composeOpen, onCloseComposer, decided }: Props
     return <div className="card">Loading editor…</div>;
   }
 
+  const navigateReview = (direction: 'next' | 'previous') => {
+    if (direction === 'next') {
+      ui.trackChanges.navigateNext();
+    } else {
+      ui.trackChanges.navigatePrevious();
+    }
+  };
+
   const decidedList = [...decidedChanges.values()].sort((a, b) => b.decidedAt - a.decidedAt);
   const resolvedCount = resolvedComments.length + decidedList.length;
   const empty = active.length === 0 && resolvedCount === 0 && !composeOpen;
 
   return (
     <div ref={containerRef} className="activity">
+      <div className="review-nav">
+        <button type="button" onClick={() => void navigateReview('previous')} disabled={trackChanges.total === 0}>
+          Previous
+        </button>
+        <button type="button" onClick={() => void navigateReview('next')} disabled={trackChanges.total === 0}>
+          Next
+        </button>
+      </div>
+
       {composeOpen && (
         <CommentComposer
           onCancel={onCloseComposer}
@@ -233,7 +271,7 @@ export function ActivitySidebar({ composeOpen, onCloseComposer, decided }: Props
               onDecideChange={decideChange}
               onClick={() => {
                 if (item.kind === 'comment') activateCommentFromSidebar(ui, item.id);
-                else ui.trackChanges.scrollTo(item.id);
+                else void activateTrackedChangeFromSidebar(ui, item.id);
               }}
             />
           ))}
@@ -435,9 +473,25 @@ function ChangeBody({
         <span className="author">{author}</span>
       </div>
       {change.excerpt ? <div className="quote">“{change.excerpt}”</div> : null}
-      <div className="card-actions" onClick={(e) => e.stopPropagation()}>
-        <button className="primary" onClick={() => onDecide('accepted')}>Accept</button>
-        <button className="danger" onClick={() => onDecide('rejected')}>Reject</button>
+      <div className="card-actions">
+        <button
+          className="primary"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDecide('accepted');
+          }}
+        >
+          Accept
+        </button>
+        <button
+          className="danger"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDecide('rejected');
+          }}
+        >
+          Reject
+        </button>
       </div>
     </>
   );

@@ -205,6 +205,66 @@ describe('document-api contract catalog', () => {
     expect(textTarget.additionalProperties).toBe(false);
   });
 
+  it('publishes cached field insert inputs in the contract schema', () => {
+    const schemas = buildInternalContractSchemas();
+    const fieldsInsertInput = schemas.operations['fields.insert'].input as {
+      properties?: {
+        mode?: { const?: string };
+        at?: { $ref?: string };
+        instruction?: { type?: string };
+        cachedResultText?: { type?: string };
+        updatePolicy?: { enum?: string[] };
+      };
+      required?: string[];
+      additionalProperties?: boolean;
+    };
+
+    expect(fieldsInsertInput.properties?.mode?.const).toBe('raw');
+    expect(fieldsInsertInput.properties?.at?.$ref).toBe('#/$defs/TextTarget');
+    expect(fieldsInsertInput.properties?.instruction?.type).toBe('string');
+    expect(fieldsInsertInput.properties?.cachedResultText?.type).toBe('string');
+    expect(fieldsInsertInput.properties?.updatePolicy?.enum).toEqual(['rebuild', 'preserveCached']);
+    expect(fieldsInsertInput.required).toEqual(['mode', 'at', 'instruction']);
+    expect(fieldsInsertInput.additionalProperties).toBe(false);
+  });
+
+  it('publishes CommentTrackedChangeLink in shared defs for comments get/list outputs', () => {
+    const schemas = buildInternalContractSchemas();
+    const sharedLink = schemas.$defs?.CommentTrackedChangeLink as {
+      properties?: { trackedChangeType?: { enum?: string[] } };
+    };
+    const commentsGetOutput = schemas.operations['comments.get'].output as {
+      properties?: { trackedChangeLink?: { oneOf?: Array<{ $ref?: string; type?: string }> } };
+    };
+    const commentsListOutput = schemas.operations['comments.list'].output as {
+      properties?: {
+        items?: {
+          items?: {
+            properties?: {
+              trackedChangeLink?: { oneOf?: Array<{ $ref?: string; type?: string }> };
+            };
+          };
+        };
+      };
+    };
+    const getVariants = commentsGetOutput.properties?.trackedChangeLink?.oneOf ?? [];
+    const listVariants = commentsListOutput.properties?.items?.items?.properties?.trackedChangeLink?.oneOf ?? [];
+
+    expect(sharedLink.properties?.trackedChangeType?.enum).toEqual([
+      'insertion',
+      'deletion',
+      'replacement',
+      'formatting',
+      'move',
+      'structural',
+      'insert',
+      'delete',
+      'format',
+    ]);
+    expect(getVariants.some((variant) => variant.$ref === '#/$defs/CommentTrackedChangeLink')).toBe(true);
+    expect(listVariants.some((variant) => variant.$ref === '#/$defs/CommentTrackedChangeLink')).toBe(true);
+  });
+
   it('accepts both object and array SDFragment in structural insert content schema', () => {
     const schemas = buildInternalContractSchemas();
     const insertInput = schemas.operations.insert.input as { oneOf?: Array<{ properties?: Record<string, unknown> }> };
@@ -232,6 +292,51 @@ describe('document-api contract catalog', () => {
       expect(contentSchema.oneOf![0].type).toBe('object');
       expect(contentSchema.oneOf![1].type).toBe('array');
     }
+  });
+
+  it('accepts both legacy content and structured body for footnotes.insert', () => {
+    const schemas = buildInternalContractSchemas();
+    const insertInput = schemas.operations['footnotes.insert'].input as {
+      oneOf?: Array<{ properties?: Record<string, unknown>; required?: string[] }>;
+    };
+
+    expect(Array.isArray(insertInput.oneOf)).toBe(true);
+    expect(insertInput.oneOf).toHaveLength(2);
+
+    const [contentVariant, bodyVariant] = insertInput.oneOf!;
+    expect(Object.keys(contentVariant.properties ?? {}).sort()).toEqual(['at', 'content', 'type']);
+    expect(contentVariant.required).toEqual(['type', 'content']);
+
+    expect(Object.keys(bodyVariant.properties ?? {}).sort()).toEqual(['at', 'body', 'type']);
+    expect(bodyVariant.required).toEqual(['type', 'body']);
+
+    const bodySchema = bodyVariant.properties!.body as { oneOf?: Array<{ type?: string }> };
+    expect(Array.isArray(bodySchema.oneOf)).toBe(true);
+    expect(bodySchema.oneOf).toHaveLength(2);
+    expect(bodySchema.oneOf![0].type).toBe('object');
+    expect(bodySchema.oneOf![1].type).toBe('array');
+  });
+
+  it('accepts structured body patches for footnotes.update', () => {
+    const schemas = buildInternalContractSchemas();
+    const updateInput = schemas.operations['footnotes.update'].input as {
+      properties?: { patch?: { oneOf?: Array<{ properties?: Record<string, unknown>; required?: string[] }> } };
+    };
+    const patchVariants = updateInput.properties?.patch?.oneOf ?? [];
+
+    expect(patchVariants).toHaveLength(3);
+
+    const bodyVariant = patchVariants.find((variant) =>
+      Object.prototype.hasOwnProperty.call(variant.properties ?? {}, 'body'),
+    );
+    expect(bodyVariant).toBeDefined();
+    expect(bodyVariant?.required).toEqual(['body']);
+
+    const bodySchema = bodyVariant?.properties?.body as { oneOf?: Array<{ type?: string }> };
+    expect(Array.isArray(bodySchema.oneOf)).toBe(true);
+    expect(bodySchema.oneOf).toHaveLength(2);
+    expect(bodySchema.oneOf![0].type).toBe('object');
+    expect(bodySchema.oneOf![1].type).toBe('array');
   });
 
   it('allows null trackedChangeLink on comment read models', () => {
@@ -361,6 +466,37 @@ describe('document-api contract catalog', () => {
     // The contract must not over-declare codes the adapter cannot produce.
     const declared = [...(COMMAND_CATALOG['templates.apply'].possibleFailureCodes ?? [])].sort();
     expect(declared).toEqual([...TEMPLATES_APPLY_RECEIPT_FAILURE_CODES].sort());
+  });
+
+  it('publishes the full setFlowOptions paragraph flow booleans in the contract input schema', () => {
+    const schemas = buildInternalContractSchemas();
+    const setFlowOptionsInput = schemas.operations['format.paragraph.setFlowOptions'].input as {
+      properties?: Record<string, { type?: string }>;
+      anyOf?: Array<{ required?: string[] }>;
+    };
+
+    expect(setFlowOptionsInput.properties?.contextualSpacing?.type).toBe('boolean');
+    expect(setFlowOptionsInput.properties?.pageBreakBefore?.type).toBe('boolean');
+    expect(setFlowOptionsInput.properties?.suppressAutoHyphens?.type).toBe('boolean');
+    expect(setFlowOptionsInput.properties?.autoSpaceDE?.type).toBe('boolean');
+    expect(setFlowOptionsInput.properties?.autoSpaceDN?.type).toBe('boolean');
+    expect(setFlowOptionsInput.properties?.adjustRightInd?.type).toBe('boolean');
+    expect(setFlowOptionsInput.properties?.snapToGrid?.type).toBe('boolean');
+
+    const requiredSets = new Set(
+      (setFlowOptionsInput.anyOf ?? []).map((variant) => variant.required?.join('|') ?? '').filter(Boolean),
+    );
+    expect(requiredSets).toEqual(
+      new Set([
+        'target|contextualSpacing',
+        'target|pageBreakBefore',
+        'target|suppressAutoHyphens',
+        'target|autoSpaceDE',
+        'target|autoSpaceDN',
+        'target|adjustRightInd',
+        'target|snapToGrid',
+      ]),
+    );
   });
 
   it('includes every templates.apply receipt failure code in the generated failure schema', () => {

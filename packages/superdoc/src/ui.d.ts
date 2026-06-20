@@ -58,6 +58,7 @@ export {
   type ToolbarHandle,
   type ToolbarSnapshotSlice,
   type TrackChangeInfo,
+  type TrackChangePointHit,
   type TrackChangesHandle,
   type TrackChangesItem,
   type TrackChangesListResult,
