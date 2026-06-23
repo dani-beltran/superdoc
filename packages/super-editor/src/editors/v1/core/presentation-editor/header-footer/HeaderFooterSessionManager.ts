@@ -327,6 +327,8 @@ export type SessionManagerDependencies = {
   setPendingDocChange: () => void;
   /** Get total page count from body layout */
   getBodyPageCount: () => number;
+  /** Get current document mode from the owning presentation editor */
+  getDocumentMode?: () => 'editing' | 'viewing' | 'suggesting';
   /** Get the generic story-session manager when enabled */
   getStorySessionManager?: () => {
     activate: (locator: HeaderFooterPartStoryLocator, options?: Record<string, unknown>) => { editor: Editor };
@@ -375,6 +377,7 @@ export type SessionManagerCallbacks = {
 
 type HeaderFooterActivationOptions = {
   initialSelection?: 'end' | 'defer';
+  documentMode?: 'editing' | 'viewing' | 'suggesting';
 };
 
 // =============================================================================
@@ -779,6 +782,22 @@ export class HeaderFooterSessionManager {
   syncEditorDocumentMode(editor: Editor | null): void {
     if (!editor) return;
     this.#applyChildEditorDocumentMode(editor, this.#documentMode);
+  }
+
+  #getCurrentDocumentMode(): 'editing' | 'viewing' | 'suggesting' {
+    const editorMode = this.#options.editor?.options?.documentMode;
+    const mode =
+      (editorMode === 'editing' || editorMode === 'viewing' || editorMode === 'suggesting' ? editorMode : undefined) ??
+      this.#deps?.getDocumentMode?.() ??
+      this.#documentMode;
+    this.#documentMode = mode;
+    return mode;
+  }
+
+  #getParentDocumentMode(editor: Editor): 'editing' | 'viewing' | 'suggesting' | null {
+    const parent = (editor.options as { parentEditor?: Editor } | undefined)?.parentEditor;
+    const mode = parent?.options?.documentMode;
+    return mode === 'editing' || mode === 'viewing' || mode === 'suggesting' ? mode : null;
   }
 
   setTrackedChangesRenderConfig(config: HeaderFooterTrackedChangesRenderConfig): void {
@@ -1319,9 +1338,11 @@ export class HeaderFooterSessionManager {
       }
 
       const shouldRestoreInitialSelection = options?.initialSelection !== 'defer';
+      const documentMode =
+        options?.documentMode ?? this.#getParentDocumentMode(editor) ?? this.#getCurrentDocumentMode();
 
       try {
-        this.#applyChildEditorDocumentMode(editor, this.#documentMode);
+        this.#applyChildEditorDocumentMode(editor, documentMode);
 
         if (shouldRestoreInitialSelection) {
           this.#applyDefaultSelectionAtStoryEnd(editor, 'Could not set cursor to end');

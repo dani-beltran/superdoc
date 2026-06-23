@@ -5,11 +5,11 @@ import { parseOperationArgs } from '../../lib/operation-args';
 describe('parseOperationArgs target validation', () => {
   test('rejects legacy text-address target-json payloads for paragraph format operations', () => {
     expect(() =>
-      parseOperationArgs('doc.format.paragraph.setMarkRunProps', [
+      parseOperationArgs('doc.format.paragraph.setAlignment', [
         '--target-json',
         '{"kind":"text","blockId":"p1","range":{"start":0,"end":4}}',
-        '--mark-run-props-json',
-        '{"bold":true}',
+        '--alignment',
+        'center',
       ]),
     ).toThrow(CliError);
   });

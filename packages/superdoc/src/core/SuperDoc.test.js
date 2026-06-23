@@ -442,7 +442,7 @@ describe('SuperDoc core', () => {
     expect(instance.user).toEqual(expect.objectContaining({ name: 'Default SuperDoc user', email: null }));
   });
 
-  it('keeps legacy default-user behavior for an explicitly empty v1 user name', async () => {
+  it('keeps legacy default-user behavior for an explicitly empty user name', async () => {
     createAppHarness();
 
     const instance = new SuperDoc({
@@ -450,7 +450,6 @@ describe('SuperDoc core', () => {
       document: 'https://example.com/doc.docx',
       documents: [],
       modules: { comments: {}, toolbar: {} },
-      editorVersion: 1,
       user: { name: '', email: null },
     });
 
@@ -2849,10 +2848,9 @@ describe('SuperDoc core', () => {
       expect(mockPresentationEditor.setZoom).toHaveBeenCalledWith(1.25);
     });
 
-    it('activeZoom watcher routes to PresentationEditor in v1 mode and does not invoke v2 setZoom', async () => {
+    it('activeZoom watcher routes to PresentationEditor', async () => {
       const { superdocStore } = createAppHarness();
       const mockPresentationEditor = { zoom: 1, setZoom: vi.fn() };
-      const v2SetZoom = vi.fn();
 
       superdocStore.documents = [
         {
@@ -2863,23 +2861,16 @@ describe('SuperDoc core', () => {
       ];
 
       let activeZoom = 100;
-      const v2FacadeActive = false;
-      const v2PageMetrics = { setZoom: v2SetZoom };
       Object.defineProperty(superdocStore, 'activeZoom', {
         configurable: true,
         get: () => activeZoom,
         set: (value) => {
           activeZoom = value;
-          const zoomPercent = value ?? 100;
-          if (v2FacadeActive && v2PageMetrics?.setZoom) {
-            v2PageMetrics.setZoom(zoomPercent);
-          } else {
-            const zoomMultiplier = (value ?? 100) / 100;
-            superdocStore.documents.forEach((doc) => {
-              const presentationEditor = doc.getPresentationEditor?.();
-              presentationEditor?.setZoom?.(zoomMultiplier);
-            });
-          }
+          const zoomMultiplier = (value ?? 100) / 100;
+          superdocStore.documents.forEach((doc) => {
+            const presentationEditor = doc.getPresentationEditor?.();
+            presentationEditor?.setZoom?.(zoomMultiplier);
+          });
         },
       });
 
@@ -2892,7 +2883,6 @@ describe('SuperDoc core', () => {
       instance.setZoom(125);
       expect(mockPresentationEditor.setZoom).toHaveBeenCalledTimes(1);
       expect(mockPresentationEditor.setZoom).toHaveBeenCalledWith(1.25);
-      expect(v2SetZoom).not.toHaveBeenCalled();
     });
 
     it('setZoom warns and returns early for invalid values', async () => {
@@ -3435,57 +3425,6 @@ describe('SuperDoc core', () => {
     });
   });
 
-  // ui-phase2-001: public `editorVersion` flag — config normalization +
-  // surfacing on the SuperDoc instance.
-  describe('editorVersion', () => {
-    it('defaults editorVersion to 1 when omitted', async () => {
-      createAppHarness();
-      const instance = new SuperDoc({
-        selector: '#host',
-        document: 'https://example.com/doc.docx',
-      });
-      await flushMicrotasks();
-      expect(instance.editorVersion).toBe(1);
-      expect(instance.config.editorVersion).toBe(1);
-      expect(instance.v2).toBeNull();
-    });
-
-    it('accepts editorVersion: 1 explicitly', async () => {
-      createAppHarness();
-      const instance = new SuperDoc({
-        selector: '#host',
-        document: 'https://example.com/doc.docx',
-        editorVersion: 1,
-      });
-      await flushMicrotasks();
-      expect(instance.editorVersion).toBe(1);
-      expect(instance.config.editorVersion).toBe(1);
-      expect(instance.v2).toBeNull();
-    });
-
-    it('coerces invalid editorVersion values back to 1 with a console warning', async () => {
-      createAppHarness();
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      try {
-        for (const bad of ['2', true, 0, 3, null, {}, []]) {
-          const instance = new SuperDoc({
-            selector: '#host',
-            document: 'https://example.com/doc.docx',
-            // @ts-expect-error — testing runtime coercion of invalid input
-            editorVersion: bad,
-          });
-          await flushMicrotasks();
-          expect(instance.editorVersion).toBe(1);
-          expect(instance.config.editorVersion).toBe(1);
-          expect(instance.v2).toBeNull();
-        }
-        expect(warnSpy).toHaveBeenCalled();
-      } finally {
-        warnSpy.mockRestore();
-      }
-    });
-  });
-
   // ---------------------------------------------------------------------------
   // SD-2916 PR-B: lifecycle guards on ready-required methods
   // ---------------------------------------------------------------------------
@@ -3603,7 +3542,6 @@ describe('SuperDoc core', () => {
       const handlers = new Map();
       return {
         options: { documentId },
-        editorVersion: 1,
         state: {
           doc: { textBetween: () => selectionText },
           selection: { from: 0, to: selectionText.length, empty: selectionText.length === 0 },
@@ -3819,8 +3757,8 @@ describe('SuperDoc core', () => {
     });
 
     // The invariant SuperDoc owns: `activeEditor` is the active runtime's
-    // SUPPORTED v1 projection, or null when the active runtime has no supported
-    // legacy projection (cleared, or v2-shaped / command-incapable).
+    // command-capable projection, or null when the active runtime has no
+    // supported legacy projection.
     const expectActiveEditorInvariant = (instance) => {
       const runtime = instance.getActiveRuntime();
       const projection = runtime?.getLegacyEditorProjection?.() ?? null;
@@ -3828,7 +3766,6 @@ describe('SuperDoc core', () => {
         runtime?.kind === 'v1' &&
         !!projection &&
         typeof projection === 'object' &&
-        projection.editorVersion !== 2 &&
         !!projection.commands &&
         typeof projection.commands === 'object';
       expect(instance.activeEditor).toBe(supported ? projection : null);

@@ -6105,6 +6105,7 @@ export class PresentationEditor extends EventEmitter {
         this.#pendingDocChange = true;
       },
       getBodyPageCount: () => this.#layoutState?.layout?.pages?.length ?? 1,
+      getDocumentMode: () => this.#getEffectiveDocumentMode(),
       getStorySessionManager: () => this.#ensureStorySessionManager(),
     });
 
@@ -6362,21 +6363,63 @@ export class PresentationEditor extends EventEmitter {
       return;
     }
 
-    if (session.kind !== 'note') {
+    const editor = session.editor;
+    const mode = this.#getStoryEditorParentDocumentMode(editor) ?? this.#getEffectiveDocumentMode();
+    const isEditorHandledMode =
+      !editor.options?.isHeaderOrFooter &&
+      !editor.options?.isChildEditor &&
+      typeof editor.setDocumentMode === 'function';
+
+    if (isEditorHandledMode) {
+      session.editor.setDocumentMode(mode);
       return;
     }
 
-    // Story editors default to viewing mode at construction time. When a note
-    // session becomes the active presentation surface, it must inherit the
-    // current document mode so double-clicking produces an actually editable
-    // footnote/endnote surface.
-    if (typeof session.editor.setDocumentMode === 'function') {
-      session.editor.setDocumentMode(this.#documentMode);
-      return;
+    this.#applyStorySessionDocumentMode(editor, mode);
+  }
+
+  #getEffectiveDocumentMode(): 'editing' | 'viewing' | 'suggesting' {
+    const mode = this.#editor?.options?.documentMode;
+    if (mode === 'editing' || mode === 'viewing' || mode === 'suggesting') {
+      return mode;
+    }
+    return this.#documentMode;
+  }
+
+  #getActiveEditorDocumentMode(): 'editing' | 'viewing' | 'suggesting' | null {
+    const mode = this.getActiveEditor()?.options?.documentMode;
+    return mode === 'editing' || mode === 'viewing' || mode === 'suggesting' ? mode : null;
+  }
+
+  #getStoryEditorParentDocumentMode(editor: Editor): 'editing' | 'viewing' | 'suggesting' | null {
+    const parent = (editor.options as { parentEditor?: Editor } | undefined)?.parentEditor;
+    const mode = parent?.options?.documentMode;
+    return mode === 'editing' || mode === 'viewing' || mode === 'suggesting' ? mode : null;
+  }
+
+  #applyStorySessionDocumentMode(editor: Editor, mode: 'editing' | 'viewing' | 'suggesting'): void {
+    if (mode === 'viewing') {
+      editor.commands?.enableTrackChangesShowOriginal?.();
+      editor.setOptions?.({ documentMode: 'viewing' });
+      editor.setEditable?.(false);
+    } else if (mode === 'suggesting') {
+      editor.commands?.disableTrackChangesShowOriginal?.();
+      editor.commands?.enableTrackChanges?.();
+      editor.setOptions?.({ documentMode: 'suggesting' });
+      editor.setEditable?.(true);
+    } else {
+      editor.commands?.disableTrackChangesShowOriginal?.();
+      editor.commands?.disableTrackChanges?.();
+      editor.setOptions?.({ documentMode: 'editing' });
+      editor.setEditable?.(true);
     }
 
-    session.editor.setEditable?.(this.#documentMode !== 'viewing');
-    session.editor.setOptions?.({ documentMode: this.#documentMode });
+    const pm = editor.view?.dom ?? null;
+    if (pm instanceof HTMLElement) {
+      pm.setAttribute('aria-readonly', mode === 'viewing' ? 'true' : 'false');
+      pm.setAttribute('documentmode', mode);
+      pm.classList.toggle('view-mode', mode === 'viewing');
+    }
   }
 
   /**
@@ -8987,6 +9030,7 @@ export class PresentationEditor extends EventEmitter {
     const editor =
       (await this.#headerFooterSession?.activateRegion(region, {
         initialSelection: options ? 'defer' : 'end',
+        documentMode: this.#getActiveEditorDocumentMode() ?? this.#getEffectiveDocumentMode(),
       })) ?? null;
 
     if (!editor || !options) {
@@ -10338,6 +10382,7 @@ export class PresentationEditor extends EventEmitter {
 
     const activeEditor = await this.#headerFooterSession?.activateRegion(region, {
       initialSelection: 'defer',
+      documentMode: this.#getActiveEditorDocumentMode() ?? this.#getEffectiveDocumentMode(),
     });
     if (!activeEditor) {
       return null;

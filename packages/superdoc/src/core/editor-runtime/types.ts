@@ -1,7 +1,7 @@
 // Internal SuperDoc editor-runtime contract.
 //
 // This module defines the ONE internal surface shared shell code uses to talk
-// to any mounted editor (v1 today, v2 conformance later). It is shell-owned and
+// to any mounted v1 editor runtime. It is shell-owned and
 // NOT a public SDK API, NOT a shared document position model, and NOT a place to
 // re-export editor internals.
 //
@@ -10,17 +10,16 @@
 //     browser/platform types. It currently imports nothing.
 // It must NEVER import ProseMirror, `@superdoc/super-editor`,
 //     `PresentationEditor`, `EditorInputManager`, `PositionHit`,
-//     `TextSelection`/`NodeSelection`, the concrete v2 host implementation
-//     files, or `SDPosition`/`SDRange`/Document API internals.
+//     `TextSelection`/`NodeSelection`, or Document API internals.
 // Runtime positions are opaque handles. The shell may store and round-trip
 //     them, but must never interpret them. Adapters keep non-serializable
 //     internals in adapter-private maps keyed by `tokenId`.
 //
-// Outcome semantics are modeled to preserve the current v2 editor host posture:
+// Outcome semantics preserve the existing host posture:
 // commit,
 // history-commit, history-noop, receipt-failure, and named rejection  -  not a
 // boolean success/failure collapse. The shared contract defines NEUTRAL codes;
-// concrete v1/v2 adapters map their own codes onto these.
+// concrete adapters map their own codes onto these.
 
 // ---------------------------------------------------------------------------
 // Neutral JSON-safe helper types (package-local, no external imports)
@@ -40,7 +39,7 @@ export type RuntimeJsonObject = { [key: string]: RuntimeJsonValue };
 // ---------------------------------------------------------------------------
 
 /** Which editing architecture backs a mounted runtime. */
-export type EditorRuntimeKind = 'v1' | 'v2';
+export type EditorRuntimeKind = 'v1';
 
 /** Opaque, registry-unique identifier for a mounted runtime. */
 export type EditorRuntimeId = string;
@@ -49,8 +48,7 @@ export type EditorRuntimeId = string;
 export type EditorRuntimeDocumentMode = 'editing' | 'suggesting' | 'viewing';
 
 /**
- * Shell-level lifecycle state. Mirrors the current v2 editor host state machine
- * so the contract can describe v2 outcomes without importing v2 host types.
+ * Shell-level lifecycle state for the mounted editor runtime.
  */
 export type EditorRuntimeState =
   | 'opening'
@@ -70,8 +68,8 @@ export type EditorRuntimeState =
  *
  * The shell may store a token and send it back to the runtime that created it,
  * but must NEVER read `payload` internals, and must never construct a token to
- * mean a document location. v1 may wrap a PM position or `PositionHit`; v2 may
- * wrap an `SDPosition`; both keep the non-serializable internals in an
+ * mean a document location. The adapter may wrap a PM position or `PositionHit`
+ * and keeps the non-serializable internals in an
  * adapter-private map keyed by `tokenId`.
  *
  * Tokens are self-validating for staleness: a runtime that cannot prove a token
@@ -150,8 +148,8 @@ export type EditorRuntimeNoopReason =
   | 'empty-selection';
 
 /**
- * Neutral rejection codes. Adapters map their concrete v1/v2 codes onto this
- * set; the shared contract must not import v1/v2 code unions.
+ * Neutral rejection codes. Adapters map their concrete codes onto this set; the
+ * shared contract must not import implementation-specific code unions.
  */
 export type EditorRuntimeRejectionCode =
   | 'runtime-not-ready'
@@ -390,7 +388,7 @@ export interface EditorRuntimeCapabilities {
 /**
  * Runtime-owned events. The registry (the editor runtime boundary) owns active-runtime changes;
  * the runtime owns editor-specific state. Events carry shell-level snapshots,
- * not raw ProseMirror or v2 session objects.
+ * not raw ProseMirror session objects.
  */
 export type EditorRuntimeEvent =
   | { type: 'selection-change'; selection: EditorRuntimeSelectionSnapshot }
@@ -408,9 +406,7 @@ export type EditorRuntimeUnsubscribe = () => void;
 // ---------------------------------------------------------------------------
 
 /**
- * The shell-owned editor runtime contract. Implementable by the v1 adapter and
- * the current internal v2 host/facade without importing v2 host types into this
- * shared module.
+ * The shell-owned editor runtime contract implemented by the v1 adapter.
  *
  * Mutating operations return Promises (callers always await). Runtime-owned
  * snapshot reads (`getSelectedText`, `getSelectionSnapshot`,
@@ -432,9 +428,8 @@ export interface EditorRuntime {
 
   /**
    * Temporary compatibility path backing `SuperDoc.activeEditor`,
-   * `doc.getEditor()`, and existing public-ish callers. v1 may return the legacy
-   * editor; v2 may return its facade. New shell behavior must not route through
-   * this projection.
+   * `doc.getEditor()`, and existing public-ish callers. New shell behavior must
+   * not route through this projection.
    */
   getLegacyEditorProjection?(): unknown;
 

@@ -11,7 +11,6 @@ export * from './step-op-catalog.js';
 export {
   INTENT_GROUP_META,
   OPERATION_DEFINITIONS,
-  V1_RUNTIME_UNAVAILABLE_OPERATION_IDS,
   projectFromDefinitions,
   type IntentGroupMeta,
   type OperationDefinitionEntry,

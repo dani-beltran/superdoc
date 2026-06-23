@@ -38,9 +38,8 @@ export type EditorWithDoc = Editor & {
 };
 
 /**
- * Runtime-neutral opened-document contract used by CLI orchestrators and the
- * session pool. Engine specifics (v1 Editor / v2 SDDocumentSession) live
- * inside the implementation, not on this surface.
+ * Opened-document contract used by CLI orchestrators and the session pool.
+ * Engine specifics live inside the implementation, not on this surface.
  */
 export interface OpenedRuntimeDocument {
   runtime: DocumentRuntimeKind;
@@ -516,7 +515,6 @@ export async function openSessionDocument(
   } = {},
 ): Promise<OpenedRuntimeDocument> {
   const { executionMode, sessionPool, sessionId } = options;
-  const runtime: DocumentRuntimeKind = metadata.runtime ?? 'v1';
 
   // Host mode: always go through pool (local AND collab)
   if (executionMode === 'host' && sessionPool) {
@@ -524,7 +522,6 @@ export async function openSessionDocument(
     return sessionPool.acquire(
       resolvedSessionId,
       {
-        runtime,
         sessionType: metadata.sessionType,
         workingDocPath: metadata.workingDocPath ?? doc,
         metadataRevision: metadata.revision,
@@ -543,19 +540,6 @@ export async function openSessionDocument(
       }
     : undefined;
 
-  // v2 session reopen — runtime-specific path.
-  if (runtime === 'v2') {
-    if (metadata.sessionType === 'collab') {
-      if (!metadata.collaboration) {
-        throw new CliError('COMMAND_FAILED', 'Session is marked as collaborative but has no collaboration profile.');
-      }
-      const { openV2CollaborativeDocument } = await loadV2Runtime();
-      return openV2CollaborativeDocument(doc, io, metadata.collaboration, { user: metadata.user, editorOpenOptions });
-    }
-    const { openV2Document } = await loadV2Runtime();
-    return openV2Document(doc, io, { user: metadata.user, editorOpenOptions });
-  }
-
   // Oneshot mode: open fresh, caller is responsible for dispose
   if (metadata.sessionType === 'collab') {
     if (!metadata.collaboration) {
@@ -565,15 +549,6 @@ export async function openSessionDocument(
   }
 
   return openDocument(doc, io, { user: metadata.user, editorOpenOptions });
-}
-
-// Lazy loader so the CLI does not pull v2 engine bytes into the v1-only path.
-let v2RuntimeModulePromise: Promise<typeof import('./document-v2.js')> | null = null;
-export function loadV2Runtime(): Promise<typeof import('./document-v2.js')> {
-  if (!v2RuntimeModulePromise) {
-    v2RuntimeModulePromise = import('./document-v2.js');
-  }
-  return v2RuntimeModulePromise;
 }
 
 export async function getFileChecksum(path: string): Promise<string> {
@@ -604,8 +579,8 @@ export type OptionalExportResult = {
  * Attempts an optional session export, returning structured success/warning
  * data instead of throwing on failure.
  *
- * Runtime-neutral: uses {@link OpenedRuntimeDocument.exportToPath} so v1 and
- * v2 sessions both route through their own serializer.
+ * Uses {@link OpenedRuntimeDocument.exportToPath} so sessions route through
+ * their own serializer.
  *
  * @param opened - Runtime-neutral opened document
  * @param io - CLI I/O for diagnostic warnings

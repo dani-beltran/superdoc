@@ -34,9 +34,8 @@ export interface TrackedChangeCommentTarget {
   story?: StoryLocator;
 }
 /**
- * Labs/sdk-v2 shorthand for "anchor this comment to the first occurrence of
- * this text". Adapters normalize it to a concrete TextAddress/TextTarget
- * before mutation.
+ * Shorthand for "anchor this comment to the first occurrence of this text".
+ * Adapters normalize it to a concrete TextAddress/TextTarget before mutation.
  */
 export interface TextSearchCommentTarget {
   text: string;
@@ -110,8 +109,8 @@ export interface CommentInfo {
    * Compatibility aliases for consumers that predate `trackedChangeLink`.
    * `trackedChangeType` uses the legacy side vocabulary (`insert`,
    * `delete`, `format`) when there is a direct side equivalent, while the
-   * nested `trackedChangeLink.trackedChangeType` remains the canonical v2
-   * broad type.
+   * nested `trackedChangeLink.trackedChangeType` remains the canonical broad
+   * type.
    */
   trackedChange?: boolean;
   trackedChangeType?: TrackChangeType;
@@ -122,12 +121,11 @@ export interface CommentInfo {
   insertedText?: string;
   deletedText?: string;
   /**
-   * Source `w:id` provenance when v2 had to repair the imported id to
-   * mint a canonical, Word-compatible `commentId`. Per
-   * `comments-spec.md` §13.2 / §13.4: present when the source id was
-   * missing, malformed, duplicated, or non-Word-compatible. Omitted
-   * when the source id was already a valid unique Word id and v2 kept
-   * it unchanged.
+   * Source `w:id` provenance when import repaired the incoming id to mint a
+   * canonical, Word-compatible `commentId`. Per `comments-spec.md` §13.2 /
+   * §13.4: present when the source id was missing, malformed, duplicated, or
+   * non-Word-compatible. Omitted when the source id was already a valid unique
+   * Word id and was kept unchanged.
    */
   importedId?: string;
   parentCommentId?: string;
@@ -137,13 +135,11 @@ export interface CommentInfo {
   imported?: boolean;
   text?: string;
   /**
-   * @deprecated Legacy `sdcom:internal` compatibility residue. v2 does
-   * not treat internal/private comments as a supported product feature
-   * (`comments-spec.md` §7 / §14.6). The v2 adapter omits this field
-   * from `comments.list` / `comments.get` projections; the field is
-   * kept in the type for backward-compatibility with v1 consumers and
-   * MUST be ignored in new code. The v2 adapter makes
-   * `comments.patch({ isInternal })` fail with `CAPABILITY_UNAVAILABLE`.
+   * @deprecated Legacy `sdcom:internal` compatibility residue. Internal/private
+   * comments are not supported for new patch behavior (`comments-spec.md` §7 /
+   * §14.6). The field is kept in the type for backward-compatibility with v1
+   * consumers and MUST be ignored in new code. `comments.patch({ isInternal })`
+   * fails with `CAPABILITY_UNAVAILABLE`.
    */
   isInternal?: boolean;
   status: CommentStatus;
@@ -151,7 +147,7 @@ export interface CommentInfo {
   anchoredText?: string;
   /**
    * Creation timestamp in milliseconds. Omitted when the source had no
-   * `w:date` (`comments-spec.md` §3.1 / §13.2 — v2 MUST NOT fabricate).
+   * `w:date` (`comments-spec.md` §3.1 / §13.2).
    */
   createdTime?: number;
   creatorName?: string;
@@ -200,7 +196,7 @@ export interface CommentDomain {
   origin?: 'word' | 'google-docs' | 'superdoc' | 'custom' | 'unknown';
   imported?: boolean;
   text?: string;
-  /** @deprecated See {@link CommentInfo.isInternal}. Legacy compatibility residue; v2 omits it from projections. */
+  /** @deprecated See {@link CommentInfo.isInternal}. Legacy compatibility residue. */
   isInternal?: boolean;
   status: CommentStatus;
   target?: TextTarget;

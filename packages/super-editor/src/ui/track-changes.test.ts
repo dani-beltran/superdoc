@@ -217,19 +217,18 @@ describe('ui.trackChanges — snapshot', () => {
     ui.destroy();
   });
 
-  it('reads v2 active-editor Document API when toolbar routing has no routed editor', () => {
+  it('reads the active-editor Document API when toolbar routing has no routed editor', () => {
     const { superdoc, editor } = makeStubs({
       trackedChanges: [
-        { id: 'tc-v2-1', type: 'insert' },
-        { id: 'tc-v2-2', type: 'delete' },
+        { id: 'tc-active-1', type: 'insert' },
+        { id: 'tc-active-2', type: 'delete' },
       ],
     });
-    (editor as unknown as { editorVersion: number }).editorVersion = 2;
     editor.presentationEditor = null as never;
 
     const ui = createSuperDocUI({ superdoc });
 
-    expect(ui.trackChanges.getSnapshot().items.map((item) => item.id)).toEqual(['tc-v2-1', 'tc-v2-2']);
+    expect(ui.trackChanges.getSnapshot().items.map((item) => item.id)).toEqual(['tc-active-1', 'tc-active-2']);
 
     ui.destroy();
   });

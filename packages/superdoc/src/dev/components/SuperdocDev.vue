@@ -35,6 +35,9 @@ const sidebarInstanceKey = ref(0);
 const compareInput = ref(null);
 
 const urlParams = new URLSearchParams(window.location.search);
+const wordBaselineServiceUrl = 'http://127.0.0.1:9185';
+const clampOpacity = (v) => Math.min(1, Math.max(0, v));
+const overlayOpacityFromUrl = Number.parseFloat(urlParams.get('wordOverlayOpacity') ?? '0.45');
 const isInternal = urlParams.has('internal');
 const ensureStableDevTabId = () => {
   const storageKey = 'superdoc-dev-tab-id';
@@ -58,7 +61,19 @@ const trackChangesReplacements = ref(urlParams.get('replacements') === 'independ
 const useCollaboration = urlParams.get('collab') === '1';
 const collabRoom = urlParams.get('room') || 'superdoc-dev-room';
 const collabUrl = 'ws://localhost:8081/v1/collaboration';
+const useWordOverlay = ref(urlParams.get('wordOverlay') !== '0');
+const wordOverlayOpacity = ref(Number.isFinite(overlayOpacityFromUrl) ? clampOpacity(overlayOpacityFromUrl) : 0.45);
+const wordOverlayBlendMode = ref(urlParams.get('wordOverlayBlend') || 'difference');
 const selectedTheme = ref('default');
+const generatedWordScreenshots = ref([]);
+const isGeneratingWordBaseline = ref(false);
+const wordBaselineStatus = ref('');
+const wordBaselineError = ref('');
+const wordOverlayOpacityLabel = computed(() => `${Math.round(wordOverlayOpacity.value * 100)}%`);
+const wordOverlayAvailable = computed(
+  () => useLayoutEngine.value && !useWebLayout.value && generatedWordScreenshots.value.length > 0,
+);
+let wordOverlayLayoutUnsubscribe = null;
 
 // Collaboration state
 const ydocRef = shallowRef(null);
@@ -111,6 +126,87 @@ const user = {
   email: testUserEmail,
 };
 
+const getSuperdocRoot = () => document.getElementById('superdoc');
+
+const removeWordOverlay = () => {
+  const root = getSuperdocRoot();
+  if (!root) return;
+  root.querySelectorAll('.dev-word-overlay-image').forEach((node) => node.remove());
+  root.querySelectorAll('.dev-word-overlay-page-host').forEach((node) => {
+    node.classList.remove('dev-word-overlay-page-host');
+  });
+};
+
+const applyWordOverlay = () => {
+  const root = getSuperdocRoot();
+  if (!root) return;
+
+  if (!useWordOverlay.value || !wordOverlayAvailable.value) {
+    removeWordOverlay();
+    return;
+  }
+
+  const pageNodes = Array.from(root.querySelectorAll('.superdoc-page[data-page-index]'));
+  pageNodes.forEach((pageNode, index) => {
+    const pageIndexRaw = Number.parseInt(pageNode.getAttribute('data-page-index') ?? String(index), 10);
+    const pageNumber = Number.isFinite(pageIndexRaw) ? pageIndexRaw + 1 : index + 1;
+    const screenshotUrl = generatedWordScreenshots.value[pageNumber - 1];
+    let overlayNode = pageNode.querySelector(':scope > .dev-word-overlay-image');
+
+    if (!screenshotUrl) {
+      overlayNode?.remove();
+      pageNode.classList.remove('dev-word-overlay-page-host');
+      return;
+    }
+
+    if (!overlayNode) {
+      overlayNode = document.createElement('img');
+      overlayNode.className = 'dev-word-overlay-image';
+      overlayNode.setAttribute('alt', `Word screenshot page ${pageNumber}`);
+      overlayNode.setAttribute('draggable', 'false');
+      pageNode.appendChild(overlayNode);
+    }
+
+    pageNode.classList.add('dev-word-overlay-page-host');
+    overlayNode.setAttribute('src', screenshotUrl);
+    overlayNode.style.opacity = String(wordOverlayOpacity.value);
+    overlayNode.style.mixBlendMode = wordOverlayBlendMode.value;
+  });
+};
+
+const scheduleWordOverlayApply = () => {
+  nextTick(() => {
+    requestAnimationFrame(() => {
+      applyWordOverlay();
+    });
+  });
+};
+
+const detachWordOverlayListener = () => {
+  if (typeof wordOverlayLayoutUnsubscribe === 'function') {
+    wordOverlayLayoutUnsubscribe();
+  }
+  wordOverlayLayoutUnsubscribe = null;
+};
+
+const bindWordOverlayListener = (editor) => {
+  detachWordOverlayListener();
+  const presentationEditor = editor?.presentationEditor;
+  if (presentationEditor?.onLayoutUpdated) {
+    wordOverlayLayoutUnsubscribe = presentationEditor.onLayoutUpdated(() => {
+      scheduleWordOverlayApply();
+    });
+  }
+  scheduleWordOverlayApply();
+};
+
+const clearGeneratedWordBaseline = () => {
+  generatedWordScreenshots.value = [];
+  wordBaselineStatus.value = '';
+  wordBaselineError.value = '';
+  scheduleWordOverlayApply();
+};
+
 const commentPermissionResolver = ({ permission, comment, defaultDecision, currentUser }) => {
   if (!comment) return defaultDecision;
 
@@ -128,6 +224,7 @@ const commentPermissionResolver = ({ permission, comment, defaultDecision, curre
 };
 
 const handleNewFile = async (file) => {
+  clearGeneratedWordBaseline();
   uploadedFileName.value = file?.name || '';
   // Generate a file url
   const url = URL.createObjectURL(file);
@@ -888,6 +985,99 @@ const exportDocxBlob = async () => {
   console.debug(blob);
 };
 
+const blobToBase64 = (blob) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result !== 'string') {
+        reject(new Error('Unable to encode DOCX export'));
+        return;
+      }
+
+      const commaIndex = result.indexOf(',');
+      resolve(commaIndex >= 0 ? result.slice(commaIndex + 1) : result);
+    };
+    reader.onerror = () => {
+      reject(reader.error || new Error('Failed to read DOCX export blob'));
+    };
+    reader.readAsDataURL(blob);
+  });
+
+const getWordBaselineFileName = () => {
+  const source = uploadedFileName.value || currentFile.value?.name || title.value || 'document';
+  const trimmedSource = String(source).trim() || 'document';
+  const withoutExtension = trimmedSource.replace(/\.[^.]+$/, '') || 'document';
+  return `${withoutExtension}.docx`;
+};
+
+const generateWordBaseline = async () => {
+  if (!superdoc.value) {
+    wordBaselineError.value = 'SuperDoc is not ready yet.';
+    return;
+  }
+
+  isGeneratingWordBaseline.value = true;
+  wordBaselineError.value = '';
+  wordBaselineStatus.value = 'Exporting current document...';
+
+  try {
+    const exportBlob = await superdoc.value.export({
+      commentsType: 'external',
+      triggerDownload: false,
+    });
+
+    if (!(exportBlob instanceof Blob)) {
+      throw new Error('SuperDoc export did not return a DOCX blob');
+    }
+
+    const response = await fetch(`${wordBaselineServiceUrl}/api/word-baseline`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        fileName: getWordBaselineFileName(),
+        docxBase64: await blobToBase64(exportBlob),
+      }),
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload?.error || `Word reference request failed (${response.status})`);
+    }
+
+    if (!Array.isArray(payload?.pages) || payload.pages.length === 0) {
+      throw new Error('Word reference request completed but returned no page images');
+    }
+
+    generatedWordScreenshots.value = payload.pages;
+    useWordOverlay.value = true;
+    wordBaselineStatus.value = `Generated ${payload.pages.length} Word reference page(s).`;
+    scheduleWordOverlayApply();
+  } catch (error) {
+    wordBaselineStatus.value = '';
+    wordBaselineError.value = error instanceof Error ? error.message : String(error);
+    console.error('[SuperDoc Dev] Failed to generate Word reference:', error);
+  } finally {
+    isGeneratingWordBaseline.value = false;
+  }
+};
+
+const toggleWordOverlay = () => {
+  useWordOverlay.value = !useWordOverlay.value;
+};
+
+const setWordOverlayOpacity = (value) => {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return;
+  wordOverlayOpacity.value = clampOpacity(numericValue);
+};
+
+const setWordOverlayBlendMode = (value) => {
+  wordOverlayBlendMode.value = String(value || 'difference');
+};
+
 const downloadBlob = (blob, fileName) => {
   if (!blob) return;
   const url = URL.createObjectURL(blob);
@@ -917,6 +1107,7 @@ const getActiveDocumentEntry = () => {
 const onEditorCreate = ({ editor }) => {
   activeEditor.value = editor;
   window.editor = editor;
+  bindWordOverlayListener(editor);
 
   editor.on('fieldAnnotationClicked', (params) => {
     console.log('fieldAnnotationClicked', { params });
@@ -943,6 +1134,13 @@ const onEditorCreate = ({ editor }) => {
     console.log('rightClick', { params });
   });
 };
+
+watch(
+  [useWordOverlay, wordOverlayOpacity, wordOverlayBlendMode, generatedWordScreenshots, useLayoutEngine, useWebLayout],
+  () => {
+    scheduleWordOverlayApply();
+  },
+);
 
 watch(selectedTheme, (theme) => {
   applyDevTheme(theme);
@@ -1009,6 +1207,8 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   applyDevTheme('default');
+  detachWordOverlayListener();
+  removeWordOverlay();
 
   if (typeof removeYjsObservers === 'function') {
     removeYjsObservers();
@@ -1123,6 +1323,15 @@ const activeSidebarProps = computed(() => {
   if (activeSidebarId.value === 'layout') {
     return {
       useWebLayout: useWebLayout.value,
+      useWordOverlay: useWordOverlay.value,
+      isGeneratingWordBaseline: isGeneratingWordBaseline.value,
+      generatedCount: generatedWordScreenshots.value.length,
+      wordOverlayOpacity: wordOverlayOpacity.value,
+      wordOverlayOpacityLabel: wordOverlayOpacityLabel.value,
+      wordOverlayBlendMode: wordOverlayBlendMode.value,
+      wordBaselineStatus: wordBaselineStatus.value,
+      wordBaselineError: wordBaselineError.value,
+      wordOverlayAvailable: wordOverlayAvailable.value,
     };
   }
 
@@ -1382,7 +1591,12 @@ if (scrollTestMode.value) {
             :key="`${activeSidebarId}-${sidebarInstanceKey}`"
             v-bind="activeSidebarProps"
             @close="setActiveSidebar('off')"
+            @toggle-overlay="toggleWordOverlay"
             @toggle-web-layout="toggleViewLayout"
+            @generate-baseline="generateWordBaseline"
+            @clear-generated-baseline="clearGeneratedWordBaseline"
+            @update:word-overlay-opacity="setWordOverlayOpacity"
+            @update:word-overlay-blend-mode="setWordOverlayBlendMode"
             @clear-yjs-events="clearYjsChanges"
           />
         </div>
@@ -1993,6 +2207,21 @@ if (scrollTestMode.value) {
 
 .dev-app__main:has(.dev-app__content-container--web-layout) {
   overflow-x: hidden;
+}
+
+:deep(.dev-word-overlay-page-host) {
+  position: relative;
+  overflow: hidden;
+}
+
+:deep(.dev-word-overlay-image) {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  pointer-events: none;
+  z-index: 120;
 }
 
 .dev-app__inputs-panel {

@@ -360,31 +360,7 @@ describe('collaboration helpers', () => {
     expect(superdoc.commentsStore.hasSyncedCollaborationComments).toBe(true);
   });
 
-  it('loadCommentsFromYdoc preserves local v2 tracked-change rows when room comments are empty', () => {
-    const trackedRow = {
-      commentId: 'tc-1',
-      trackedChange: true,
-      trackedChangeAnchorKey: 'tc::body::tc-1',
-    };
-    superdoc.config.editorVersion = 2;
-    superdoc.activeEditor = { editorVersion: 2 };
-    superdoc.provider.synced = true;
-    superdoc.commentsStore.commentsList = [
-      trackedRow,
-      { commentId: 'local-comment', commentText: 'room comments own this row' },
-    ];
-
-    const loaded = loadCommentsFromYdoc(superdoc);
-
-    expect(loaded).toBe(true);
-    expect(useCommentMock).not.toHaveBeenCalled();
-    expect(superdoc.commentsStore.commentsList).toEqual([trackedRow]);
-    expect(superdoc.commentsStore.hasSyncedCollaborationComments).toBe(true);
-  });
-
-  it('loadCommentsFromYdoc does not preserve tracked-change rows for v1 rooms', () => {
-    superdoc.config.editorVersion = 1;
-    superdoc.activeEditor = { editorVersion: 1 };
+  it('loadCommentsFromYdoc replaces local tracked-change rows from the room payload', () => {
     superdoc.commentsStore.commentsList = [
       {
         commentId: 'tc-1',

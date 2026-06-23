@@ -1,5 +1,4 @@
 // @ts-check
-import './core/v2-integration/browser-peer-runtime.js';
 import {
   SuperConverter,
   Editor,

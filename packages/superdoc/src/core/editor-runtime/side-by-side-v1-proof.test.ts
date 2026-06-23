@@ -49,7 +49,6 @@ function makeFakeV1Editor(documentId: string, selectionText: string) {
   const emitter = makeEmitter();
   return {
     options: { documentId },
-    editorVersion: 1 as const,
     state: {
       doc: { textBetween: (_from: number, _to: number, _sep?: string) => selectionText },
       selection: { from: 0, to: selectionText.length, empty: selectionText.length === 0 },

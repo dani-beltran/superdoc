@@ -173,7 +173,7 @@ describeSharedYDoc('SD-3214: headless SDK reads browser-authored comment metadat
           new YMap(
             Object.entries({
               commentId: 'c-update',
-              commentText: 'v2',
+              commentText: 'updated',
               creatorName: 'Browser User',
               creatorEmail: 'browser@example.com',
               createdTime: 1700000002000,
@@ -188,7 +188,7 @@ describeSharedYDoc('SD-3214: headless SDK reads browser-authored comment metadat
     opened.dispose();
 
     const item = result.items.find((c) => c.id === 'c-update');
-    expect(item?.text).toBe('v2');
+    expect(item?.text).toBe('updated');
   });
 });
 

@@ -1004,13 +1004,12 @@ const CLI_ONLY_METADATA: Record<CliOnlyOperationId, CliOperationMetadata> = {
           oneOf: [
             {
               type: 'object',
-              description:
-                'WebSocket-based collaboration. `runtime: "v2"` supports only `y-websocket`; `hocuspocus` is legacy v1-only.',
+              description: 'WebSocket-based collaboration via `y-websocket` or `hocuspocus`.',
               properties: {
                 providerType: {
                   type: 'string',
                   enum: ['y-websocket', 'hocuspocus'],
-                  description: 'Collaboration provider. For `runtime: "v2"`, only `y-websocket` is supported.',
+                  description: 'Collaboration provider.',
                 },
                 url: { type: 'string', description: 'WebSocket server URL.' },
                 documentId: {
@@ -1039,13 +1038,12 @@ const CLI_ONLY_METADATA: Record<CliOnlyOperationId, CliOperationMetadata> = {
             },
             {
               type: 'object',
-              description:
-                'Liveblocks collaboration with a public API key. Legacy v1-only; `runtime: "v2"` single-socket collaboration does not support Liveblocks.',
+              description: 'Liveblocks collaboration with a public API key.',
               properties: {
                 providerType: {
                   type: 'string',
                   enum: ['liveblocks'],
-                  description: 'Collaboration provider. Liveblocks is not supported on `runtime: "v2"`.',
+                  description: 'Collaboration provider.',
                 },
                 roomId: { type: 'string', description: 'Liveblocks room identifier.' },
                 publicApiKey: { type: 'string', description: 'Liveblocks public API key (pk_...).' },
@@ -1064,13 +1062,12 @@ const CLI_ONLY_METADATA: Record<CliOnlyOperationId, CliOperationMetadata> = {
             },
             {
               type: 'object',
-              description:
-                'Liveblocks collaboration with a custom auth endpoint. Legacy v1-only; `runtime: "v2"` single-socket collaboration does not support Liveblocks.',
+              description: 'Liveblocks collaboration with a custom auth endpoint.',
               properties: {
                 providerType: {
                   type: 'string',
                   enum: ['liveblocks'],
-                  description: 'Collaboration provider. Liveblocks is not supported on `runtime: "v2"`.',
+                  description: 'Collaboration provider.',
                 },
                 roomId: { type: 'string', description: 'Liveblocks room identifier.' },
                 authEndpoint: { type: 'string', description: 'Absolute URL of the auth endpoint.' },
@@ -1117,14 +1114,6 @@ const CLI_ONLY_METADATA: Record<CliOnlyOperationId, CliOperationMetadata> = {
       { name: 'overrideType', kind: 'flag', flag: 'override-type', type: 'string' },
       { name: 'onMissing', kind: 'flag', flag: 'on-missing', type: 'string' },
       { name: 'bootstrapSettlingMs', kind: 'flag', flag: 'bootstrap-settling-ms', type: 'number' },
-      {
-        name: 'runtime',
-        kind: 'flag',
-        flag: 'runtime',
-        type: 'string',
-        schema: { type: 'string', enum: ['v1', 'v2'] } as CliTypeSpec,
-        description: "Runtime kind: 'v1' (default, legacy editor) or 'v2' (headless SD document session).",
-      },
       USER_NAME_PARAM,
       USER_EMAIL_PARAM,
       PASSWORD_PARAM,

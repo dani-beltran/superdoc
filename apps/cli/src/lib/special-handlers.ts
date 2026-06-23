@@ -385,7 +385,7 @@ const resolveReviewDecideId: PreInvokeHook = (input, context) => {
 /**
  * comments.create/patch can target a tracked change by id. The CLI exposes
  * stable track-change ids, so translate them back to the raw adapter id before
- * invoking the v2 comment adapter.
+ * invoking the comment adapter.
  */
 const resolveCommentTrackedChangeTargetId: PreInvokeHook = (input, context) => {
   const record = asRecord(input);

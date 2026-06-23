@@ -109,12 +109,9 @@ describe('extractInvokeInput', () => {
   });
 
   test('converts paragraph format --block-id shortcuts into paragraph block targets', () => {
-    const input = extractInvokeInput('format.paragraph.setMarkRunProps', {
+    const input = extractInvokeInput('format.paragraph.setAlignment', {
       blockId: 'p1',
-      markRunProps: {
-        bold: true,
-        color: { model: 'rgb', value: 'FF0000' },
-      },
+      alignment: 'center',
     }) as Record<string, unknown>;
 
     expect(input).toEqual({
@@ -123,22 +120,17 @@ describe('extractInvokeInput', () => {
         nodeType: 'paragraph',
         nodeId: 'p1',
       },
-      markRunProps: {
-        bold: true,
-        color: { model: 'rgb', value: 'FF0000' },
-      },
+      alignment: 'center',
     });
   });
 
   test('rejects text-range shortcuts for paragraph format operations', () => {
     expect(() =>
-      extractInvokeInput('format.paragraph.setMarkRunProps', {
+      extractInvokeInput('format.paragraph.setAlignment', {
         blockId: 'p1',
         start: 0,
         end: 5,
-        markRunProps: {
-          bold: true,
-        },
+        alignment: 'center',
       }),
     ).toThrow(CliError);
   });

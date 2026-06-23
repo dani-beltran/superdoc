@@ -16,7 +16,6 @@ import {
   writeContextMetadata,
 } from '../lib/context';
 import {
-  loadV2Runtime,
   openCollaborativeDocument,
   openDocument,
   type OpenedRuntimeDocument,
@@ -26,32 +25,10 @@ import { CliError } from '../lib/errors';
 import { resolvePassword } from '../lib/open-password';
 import { parseOperationArgs } from '../lib/operation-args';
 import { generateSessionId } from '../lib/session';
-import {
-  ACCEPTED_RUNTIME_VALUES,
-  type CommandContext,
-  type CommandExecution,
-  type DocumentRuntimeKind,
-} from '../lib/types';
+import { type CommandContext, type CommandExecution, type DocumentRuntimeKind } from '../lib/types';
 
 const VALID_OVERRIDE_TYPES = new Set(['markdown', 'html', 'text']);
 const VALID_ON_MISSING = new Set(['seedFromDoc', 'blank', 'error']);
-
-/**
- * Normalize the `--runtime` value: accepts `'v1' | 'v2'`, treats absence as
- * `'v1'`, and rejects everything else with the named INVALID_RUNTIME error
- * code so consumers can tell client errors apart from engine errors.
- */
-function validateRuntime(value: string | undefined, source: 'cli' | 'input' = 'cli'): DocumentRuntimeKind {
-  if (value == null || value.length === 0) return 'v1';
-  if ((ACCEPTED_RUNTIME_VALUES as readonly string[]).includes(value)) {
-    return value as DocumentRuntimeKind;
-  }
-  throw new CliError(
-    'INVALID_RUNTIME',
-    `open: --runtime must be one of: ${ACCEPTED_RUNTIME_VALUES.join(', ')}. Got "${value}".`,
-    { provided: value, acceptedValues: [...ACCEPTED_RUNTIME_VALUES], source },
-  );
-}
 
 function normalizeTrackChangesOpenConfig(value: unknown): EditorPassThroughOptions['trackChanges'] | undefined {
   if (value == null) return undefined;
@@ -76,25 +53,6 @@ function normalizeTrackChangesOpenConfig(value: unknown): EditorPassThroughOptio
   throw new CliError('INVALID_ARGUMENT', 'open: trackChanges.replacements must be one of: paired, independent.', {
     provided: replacements,
   });
-}
-
-function rejectUnsupportedV2CollaborationProvider(
-  runtime: DocumentRuntimeKind,
-  collaboration: ReturnType<typeof resolveCollaborationProfile> | undefined,
-): void {
-  if (runtime !== 'v2' || !collaboration || collaboration.providerType === 'y-websocket') {
-    return;
-  }
-
-  throw new CliError(
-    'CAPABILITY_UNAVAILABLE',
-    `open: runtime v2 single-socket collaboration only supports the 'y-websocket' relay; provider '${collaboration.providerType}' is a legacy v1-only transport.`,
-    {
-      runtime,
-      providerType: collaboration.providerType,
-      documentId: collaboration.documentId,
-    },
-  );
 }
 
 export async function runOpen(tokens: string[], context: CommandContext): Promise<CommandExecution> {
@@ -138,8 +96,7 @@ export async function runOpen(tokens: string[], context: CommandContext): Promis
   const bootstrapSettlingMs = getNumberOption(parsed, 'bootstrap-settling-ms');
   const userName = getStringOption(parsed, 'user-name');
   const userEmail = getStringOption(parsed, 'user-email');
-  const runtimeArg = getStringOption(parsed, 'runtime');
-  const runtime = validateRuntime(runtimeArg, context.argumentSource ?? 'cli');
+  const runtime: DocumentRuntimeKind = 'v1';
   const allowEnvFallback = context.executionMode !== 'host';
   const password = resolvePassword(getStringOption(parsed, 'password'), allowEnvFallback);
   const trackChanges = normalizeTrackChangesOpenConfig(args.trackChanges);
@@ -204,22 +161,6 @@ export async function runOpen(tokens: string[], context: CommandContext): Promis
 
   const collaboration = collaborationInput ? resolveCollaborationProfile(collaborationInput, sessionId) : undefined;
   const sessionType = collaboration ? 'collab' : 'local';
-  rejectUnsupportedV2CollaborationProvider(runtime, collaboration);
-
-  if (runtime === 'v2' && contentOverride != null) {
-    throw new CliError('RUNTIME_V2_UNAVAILABLE', 'open: --content-override is not available in the v2 runtime.', {
-      runtime: 'v2',
-      feature: 'content-override',
-    });
-  }
-
-  if (runtime === 'v2' && password != null) {
-    throw new CliError(
-      'RUNTIME_V2_UNAVAILABLE',
-      'open: encrypted DOCX inputs are not yet supported in the v2 runtime.',
-      { runtime: 'v2', feature: 'password' },
-    );
-  }
 
   if (!collaboration && (onMissing != null || bootstrapSettlingMs != null)) {
     throw new CliError(
@@ -282,12 +223,7 @@ export async function runOpen(tokens: string[], context: CommandContext): Promis
       }
 
       let opened: OpenedRuntimeDocument & { bootstrap?: unknown };
-      if (runtime === 'v2') {
-        const v2Module = await loadV2Runtime();
-        opened = collaboration
-          ? await v2Module.openV2CollaborativeDocument(doc, context.io, collaboration, { editorOpenOptions, user })
-          : await v2Module.openV2Document(doc, context.io, { editorOpenOptions, user });
-      } else if (collaboration) {
+      if (collaboration) {
         opened = await openCollaborativeDocument(doc, context.io, collaboration, { editorOpenOptions, user });
       } else {
         opened = await openDocument(doc, context.io, { editorOpenOptions, user });
@@ -327,7 +263,6 @@ export async function runOpen(tokens: string[], context: CommandContext): Promis
 
         if (context.executionMode === 'host' && context.sessionPool) {
           context.sessionPool.adoptFromOpen(sessionId, opened, {
-            runtime: metadata.runtime,
             sessionType: metadata.sessionType,
             workingDocPath: paths.workingDocPath,
             metadataRevision: metadata.revision,

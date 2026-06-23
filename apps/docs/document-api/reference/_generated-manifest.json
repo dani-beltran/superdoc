@@ -17,9 +17,6 @@
     "apps/docs/document-api/reference/blocks/delete.mdx",
     "apps/docs/document-api/reference/blocks/index.mdx",
     "apps/docs/document-api/reference/blocks/list.mdx",
-    "apps/docs/document-api/reference/blocks/merge.mdx",
-    "apps/docs/document-api/reference/blocks/move.mdx",
-    "apps/docs/document-api/reference/blocks/split.mdx",
     "apps/docs/document-api/reference/bookmarks/get.mdx",
     "apps/docs/document-api/reference/bookmarks/index.mdx",
     "apps/docs/document-api/reference/bookmarks/insert.mdx",
@@ -200,7 +197,6 @@
     "apps/docs/document-api/reference/format/paragraph/set-flow-options.mdx",
     "apps/docs/document-api/reference/format/paragraph/set-indentation.mdx",
     "apps/docs/document-api/reference/format/paragraph/set-keep-options.mdx",
-    "apps/docs/document-api/reference/format/paragraph/set-mark-run-props.mdx",
     "apps/docs/document-api/reference/format/paragraph/set-numbering.mdx",
     "apps/docs/document-api/reference/format/paragraph/set-outline-level.mdx",
     "apps/docs/document-api/reference/format/paragraph/set-shading.mdx",
@@ -294,19 +290,16 @@
     "apps/docs/document-api/reference/lists/apply-preset.mdx",
     "apps/docs/document-api/reference/lists/apply-style.mdx",
     "apps/docs/document-api/reference/lists/apply-template.mdx",
-    "apps/docs/document-api/reference/lists/apply.mdx",
     "apps/docs/document-api/reference/lists/attach.mdx",
     "apps/docs/document-api/reference/lists/can-continue-previous.mdx",
     "apps/docs/document-api/reference/lists/can-join.mdx",
     "apps/docs/document-api/reference/lists/capture-template.mdx",
     "apps/docs/document-api/reference/lists/clear-level-overrides.mdx",
     "apps/docs/document-api/reference/lists/continue-previous.mdx",
-    "apps/docs/document-api/reference/lists/continue.mdx",
     "apps/docs/document-api/reference/lists/convert-to-text.mdx",
     "apps/docs/document-api/reference/lists/create.mdx",
     "apps/docs/document-api/reference/lists/delete.mdx",
     "apps/docs/document-api/reference/lists/detach.mdx",
-    "apps/docs/document-api/reference/lists/get-state.mdx",
     "apps/docs/document-api/reference/lists/get-style.mdx",
     "apps/docs/document-api/reference/lists/get.mdx",
     "apps/docs/document-api/reference/lists/indent.mdx",
@@ -316,9 +309,7 @@
     "apps/docs/document-api/reference/lists/list.mdx",
     "apps/docs/document-api/reference/lists/merge.mdx",
     "apps/docs/document-api/reference/lists/outdent.mdx",
-    "apps/docs/document-api/reference/lists/remove.mdx",
     "apps/docs/document-api/reference/lists/restart-at.mdx",
-    "apps/docs/document-api/reference/lists/restart.mdx",
     "apps/docs/document-api/reference/lists/separate.mdx",
     "apps/docs/document-api/reference/lists/set-level-alignment.mdx",
     "apps/docs/document-api/reference/lists/set-level-bullet.mdx",
@@ -415,7 +406,6 @@
     "apps/docs/document-api/reference/tables/insert-column.mdx",
     "apps/docs/document-api/reference/tables/insert-row.mdx",
     "apps/docs/document-api/reference/tables/merge-cells.mdx",
-    "apps/docs/document-api/reference/tables/move-row.mdx",
     "apps/docs/document-api/reference/tables/move.mdx",
     "apps/docs/document-api/reference/tables/set-alt-text.mdx",
     "apps/docs/document-api/reference/tables/set-border.mdx",
@@ -483,14 +473,7 @@
     {
       "aliasMemberPaths": [],
       "key": "blocks",
-      "operationIds": [
-        "blocks.list",
-        "blocks.delete",
-        "blocks.deleteRange",
-        "blocks.split",
-        "blocks.merge",
-        "blocks.move"
-      ],
+      "operationIds": ["blocks.list", "blocks.delete", "blocks.deleteRange"],
       "pagePath": "apps/docs/document-api/reference/blocks/index.mdx",
       "title": "Blocks"
     },
@@ -643,12 +626,7 @@
         "lists.setLevelNumberStyle",
         "lists.setLevelText",
         "lists.setLevelStart",
-        "lists.setLevelLayout",
-        "lists.getState",
-        "lists.apply",
-        "lists.continue",
-        "lists.restart",
-        "lists.remove"
+        "lists.setLevelLayout"
       ],
       "pagePath": "apps/docs/document-api/reference/lists/index.mdx",
       "title": "Lists"
@@ -702,7 +680,6 @@
         "format.paragraph.clearBorder",
         "format.paragraph.setShading",
         "format.paragraph.clearShading",
-        "format.paragraph.setMarkRunProps",
         "format.paragraph.setDirection",
         "format.paragraph.clearDirection",
         "format.paragraph.setNumbering"
@@ -737,7 +714,6 @@
         "tables.setLayout",
         "tables.insertRow",
         "tables.deleteRow",
-        "tables.moveRow",
         "tables.setRowHeight",
         "tables.distributeRows",
         "tables.setRowOptions",
@@ -1114,5 +1090,5 @@
     }
   ],
   "marker": "{/* GENERATED FILE: DO NOT EDIT. Regenerate via `pnpm run docapi:sync`. */}",
-  "sourceHash": "a870119c850007e1b994fcaa36fcc58302b9e340657fe3634f589a83daf309fb"
+  "sourceHash": "b7a0382edb33e88b28f1af627a89d6a0b441890883e30993390a76c756214e4c"
 }

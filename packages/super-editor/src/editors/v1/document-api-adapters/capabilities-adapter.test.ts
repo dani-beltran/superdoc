@@ -322,27 +322,6 @@ describe('getDocumentApiCapabilities', () => {
     expect(capabilities.operations['blocks.delete'].tracked).toBe(true);
   });
 
-  it('marks v2-only compatibility stub operations as unavailable in v1', () => {
-    const capabilities = getDocumentApiCapabilities(makeEditor());
-    const stubbedOperations = [
-      'blocks.split',
-      'blocks.merge',
-      'blocks.move',
-      'lists.getState',
-      'lists.apply',
-      'lists.continue',
-      'lists.restart',
-      'lists.remove',
-      'format.paragraph.setMarkRunProps',
-      'tables.moveRow',
-    ] as const;
-
-    for (const operationId of stubbedOperations) {
-      expect(capabilities.operations[operationId].available).toBe(false);
-      expect(capabilities.operations[operationId].reasons).toContain('OPERATION_UNAVAILABLE');
-    }
-  });
-
   it('uses OPERATION_UNAVAILABLE without COMMAND_UNAVAILABLE for non-command-backed availability failures', () => {
     const capabilities = getDocumentApiCapabilities(
       makeEditor({

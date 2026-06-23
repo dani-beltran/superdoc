@@ -48,7 +48,7 @@ type EditorWithPresentationOwner = Editor & {
 };
 
 const isV1ToolbarEditor = (editor: HeadlessToolbarActiveEditor | null | undefined): editor is Editor => {
-  return Boolean(editor && editor.editorVersion !== 2);
+  return Boolean(editor && (editor.editorVersion == null || editor.editorVersion === 1) && editor.commands !== null);
 };
 
 // SD-3213f: accept both the narrow SuperDoc method

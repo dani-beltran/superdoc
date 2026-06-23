@@ -25,12 +25,6 @@ import type {
   BlocksListResult,
   BlocksDeleteRangeInput,
   BlocksDeleteRangeResult,
-  BlocksMergeInput,
-  BlocksMergeResult,
-  BlocksMoveInput,
-  BlocksMoveResult,
-  BlocksSplitInput,
-  BlocksSplitResult,
 } from '../types/blocks.types.js';
 import type { GetNodeByIdInput } from '../get-node/get-node.js';
 import type { GetTextInput } from '../get-text/get-text.js';
@@ -142,12 +136,6 @@ import type {
   ListsSetLevelTextInput,
   ListsSetLevelStartInput,
   ListsSetLevelLayoutInput,
-  ListsGetStateInput,
-  ListsGetStateResult,
-  ListsApplyInput,
-  ListsContinueV2Input,
-  ListsRestartV2Input,
-  ListsRemoveV2Input,
 } from '../lists/lists.types.js';
 import type {
   ParagraphMutationResult,
@@ -170,7 +158,6 @@ import type {
   ParagraphsClearBorderInput,
   ParagraphsSetShadingInput,
   ParagraphsClearShadingInput,
-  ParagraphsSetMarkRunPropsInput,
   ParagraphsSetDirectionInput,
   ParagraphsClearDirectionInput,
   ParagraphsSetNumberingInput,
@@ -417,7 +404,6 @@ import type {
   TablesSetLayoutInput,
   TablesInsertRowInput,
   TablesDeleteRowInput,
-  TablesMoveRowInput,
   TablesSetRowHeightInput,
   TablesDistributeRowsInput,
   TablesSetRowOptionsInput,
@@ -585,9 +571,6 @@ export interface OperationRegistry extends FormatInlineAliasOperationRegistry {
   'blocks.list': { input: BlocksListInput | undefined; options: never; output: BlocksListResult };
   'blocks.delete': { input: BlocksDeleteInput; options: MutationOptions; output: BlocksDeleteResult };
   'blocks.deleteRange': { input: BlocksDeleteRangeInput; options: MutationOptions; output: BlocksDeleteRangeResult };
-  'blocks.split': { input: BlocksSplitInput; options: MutationOptions; output: BlocksSplitResult };
-  'blocks.merge': { input: BlocksMergeInput; options: MutationOptions; output: BlocksMergeResult };
-  'blocks.move': { input: BlocksMoveInput; options: MutationOptions; output: BlocksMoveResult };
   // --- format.* ---
   'format.apply': { input: StyleApplyInput; options: MutationOptions; output: TextMutationReceipt };
   // --- styles.paragraph.* ---
@@ -684,11 +667,6 @@ export interface OperationRegistry extends FormatInlineAliasOperationRegistry {
   };
   'format.paragraph.clearShading': {
     input: ParagraphsClearShadingInput;
-    options: MutationOptions;
-    output: ParagraphMutationResult;
-  };
-  'format.paragraph.setMarkRunProps': {
-    input: ParagraphsSetMarkRunPropsInput;
     options: MutationOptions;
     output: ParagraphMutationResult;
   };
@@ -807,12 +785,6 @@ export interface OperationRegistry extends FormatInlineAliasOperationRegistry {
   'lists.setLevelText': { input: ListsSetLevelTextInput; options: MutationOptions; output: ListsMutateItemResult };
   'lists.setLevelStart': { input: ListsSetLevelStartInput; options: MutationOptions; output: ListsMutateItemResult };
   'lists.setLevelLayout': { input: ListsSetLevelLayoutInput; options: MutationOptions; output: ListsMutateItemResult };
-  // --- lists.* (v2 numbering-aware) ---
-  'lists.getState': { input: ListsGetStateInput; options: never; output: ListsGetStateResult };
-  'lists.apply': { input: ListsApplyInput; options: MutationOptions; output: ListsMutateItemResult };
-  'lists.continue': { input: ListsContinueV2Input; options: MutationOptions; output: ListsMutateItemResult };
-  'lists.restart': { input: ListsRestartV2Input; options: MutationOptions; output: ListsMutateItemResult };
-  'lists.remove': { input: ListsRemoveV2Input; options: MutationOptions; output: ListsMutateItemResult };
   // --- sections.* ---
   'sections.list': { input: SectionsListQuery | undefined; options: never; output: SectionsListResult };
   'sections.get': { input: SectionsGetInput; options: never; output: SectionInfo };
@@ -935,7 +907,6 @@ export interface OperationRegistry extends FormatInlineAliasOperationRegistry {
   'tables.setLayout': { input: TablesSetLayoutInput; options: MutationOptions; output: TableMutationResult };
   'tables.insertRow': { input: TablesInsertRowInput; options: MutationOptions; output: TableMutationResult };
   'tables.deleteRow': { input: TablesDeleteRowInput; options: MutationOptions; output: TableMutationResult };
-  'tables.moveRow': { input: TablesMoveRowInput; options: MutationOptions; output: TableMutationResult };
   'tables.setRowHeight': { input: TablesSetRowHeightInput; options: MutationOptions; output: TableMutationResult };
   'tables.distributeRows': { input: TablesDistributeRowsInput; options: MutationOptions; output: TableMutationResult };
   'tables.setRowOptions': { input: TablesSetRowOptionsInput; options: MutationOptions; output: TableMutationResult };

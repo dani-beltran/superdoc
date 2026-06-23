@@ -708,28 +708,6 @@ const tableOrCellAddressSchema = ref('TableOrCellAddress');
 const paragraphAddressSchema = ref('ParagraphAddress');
 const headingAddressSchema = ref('HeadingAddress');
 const listItemAddressSchema = ref('ListItemAddress');
-// v2 list ops accept paragraph blocks or list-item blocks
-// (the substrate identifies the paragraph by w14:paraId regardless).
-const listsV2BlockTargetSchema: JsonSchema = {
-  oneOf: [
-    objectSchema(
-      {
-        kind: { const: 'block' },
-        nodeType: { const: 'paragraph' },
-        nodeId: { type: 'string' },
-      },
-      ['kind', 'nodeType', 'nodeId'],
-    ),
-    objectSchema(
-      {
-        kind: { const: 'block' },
-        nodeType: { const: 'listItem' },
-        nodeId: { type: 'string' },
-      },
-      ['kind', 'nodeType', 'nodeId'],
-    ),
-  ],
-};
 const paragraphTargetSchema: JsonSchema = {
   oneOf: [paragraphAddressSchema, headingAddressSchema, listItemAddressSchema],
 };
@@ -761,119 +739,6 @@ void inlineNodeAddressSchema;
 void textMutationRangeSchema;
 void entityAddressSchema;
 void matchRunSchema;
-const markRunColorRefSchema: JsonSchema = {
-  oneOf: [
-    objectSchema(
-      {
-        model: { const: 'rgb' },
-        value: { type: 'string', minLength: 1 },
-      },
-      ['model', 'value'],
-    ),
-    objectSchema(
-      {
-        model: { const: 'theme' },
-        theme: { type: 'string', minLength: 1 },
-        tint: { type: 'integer' },
-        shade: { type: 'integer' },
-      },
-      ['model', 'theme'],
-    ),
-    objectSchema(
-      {
-        model: { const: 'auto' },
-      },
-      ['model'],
-    ),
-  ],
-};
-const markRunFontsSchema: JsonSchema = {
-  ...objectSchema({
-    ascii: { type: 'string', minLength: 1 },
-    hAnsi: { type: 'string', minLength: 1 },
-    eastAsia: { type: 'string', minLength: 1 },
-    cs: { type: 'string', minLength: 1 },
-    asciiTheme: { type: 'string', minLength: 1 },
-    hAnsiTheme: { type: 'string', minLength: 1 },
-    eastAsiaTheme: { type: 'string', minLength: 1 },
-    csTheme: { type: 'string', minLength: 1 },
-    hint: { type: 'string', minLength: 1 },
-  }),
-  minProperties: 1,
-};
-const markRunLanguagesSchema: JsonSchema = {
-  ...objectSchema({
-    val: { type: 'string', minLength: 1 },
-    eastAsia: { type: 'string', minLength: 1 },
-    bidi: { type: 'string', minLength: 1 },
-  }),
-  minProperties: 1,
-};
-const markRunUnderlineSchema: JsonSchema = {
-  ...objectSchema({
-    style: { type: 'string', minLength: 1 },
-    color: markRunColorRefSchema,
-  }),
-  minProperties: 1,
-};
-const markRunShadingSchema: JsonSchema = {
-  ...objectSchema({
-    fill: markRunColorRefSchema,
-    color: markRunColorRefSchema,
-    pattern: { type: 'string', minLength: 1 },
-  }),
-  minProperties: 1,
-};
-const markRunBorderSchema: JsonSchema = {
-  ...objectSchema({
-    style: { type: 'string', minLength: 1 },
-    width: { type: 'number' },
-    space: { type: 'number' },
-    color: markRunColorRefSchema,
-    frame: { type: 'boolean' },
-    shadow: { type: 'boolean' },
-  }),
-  minProperties: 1,
-};
-const markRunPropsSchema: JsonSchema = {
-  ...objectSchema({
-    fontSizeCs: { type: 'number' },
-    specVanish: { type: 'boolean' },
-    fontSize: { type: 'number' },
-    fonts: markRunFontsSchema,
-    fontFamily: { type: 'string', minLength: 1 },
-    lang: markRunLanguagesSchema,
-    color: markRunColorRefSchema,
-    highlight: { type: 'string', minLength: 1 },
-    shading: markRunShadingSchema,
-    cs: { type: 'boolean' },
-    rtl: { type: 'boolean' },
-    bold: { type: 'boolean' },
-    boldCs: { type: 'boolean' },
-    italic: { type: 'boolean' },
-    italicCs: { type: 'boolean' },
-    underline: markRunUnderlineSchema,
-    strikethrough: { type: 'boolean' },
-    doubleStrikethrough: { type: 'boolean' },
-    caps: { type: 'boolean' },
-    smallCaps: { type: 'boolean' },
-    outline: { type: 'boolean' },
-    shadow: { type: 'boolean' },
-    emboss: { type: 'boolean' },
-    imprint: { type: 'boolean' },
-    verticalAlign: { enum: ['baseline', 'superscript', 'subscript'] },
-    characterSpacing: { type: 'number' },
-    characterScale: { type: 'number' },
-    kern: { type: 'number' },
-    baselineShift: { type: 'number' },
-    fitTextWidth: { type: 'number' },
-    vanish: { type: 'boolean' },
-    webHidden: { type: 'boolean' },
-    border: markRunBorderSchema,
-    textEffect: { type: 'string', minLength: 1 },
-  }),
-  minProperties: 1,
-};
 // ---------------------------------------------------------------------------
 // Discovery envelope schemas (C0)
 // ---------------------------------------------------------------------------
@@ -3081,8 +2946,8 @@ const captionMutation = refMutationSchemas({ caption: captionAddressSchema }, ['
 const captionConfig = refConfigSchemas();
 // --- Field schemas ---
 // Issue 7: `storyId` and `fieldId` are optional session-stable identity
-// fields used by the v2 runtime. The legacy required fields stay required
-// so v1 callers and the shared contract keep their existing shape.
+// fields. The legacy required fields stay required so v1 callers and the
+// shared contract keep their existing shape.
 const fieldAddressSchema: JsonSchema = objectSchema(
   {
     kind: { const: 'field' },
@@ -3729,101 +3594,6 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
     ),
     failure: preApplyFailureResultSchemaFor('blocks.deleteRange'),
   },
-  'blocks.split': {
-    input: objectSchema(
-      {
-        target: blockNodeAddressSchema,
-        offset: { type: 'integer', minimum: 0 },
-      },
-      ['target', 'offset'],
-    ),
-    output: objectSchema(
-      {
-        success: { const: true },
-        inserted: blockNodeAddressSchema,
-        remappedRefs: arraySchema(ref('AffectedRefRemapping')),
-        affectedStories: arraySchema(ref('StoryLocator')),
-        textRangeShifts: arraySchema(ref('TextRangeShift')),
-        txId: { type: 'string' },
-      },
-      ['success', 'inserted'],
-    ),
-    success: objectSchema(
-      {
-        success: { const: true },
-        inserted: blockNodeAddressSchema,
-        remappedRefs: arraySchema(ref('AffectedRefRemapping')),
-        affectedStories: arraySchema(ref('StoryLocator')),
-        textRangeShifts: arraySchema(ref('TextRangeShift')),
-        txId: { type: 'string' },
-      },
-      ['success', 'inserted'],
-    ),
-    failure: preApplyFailureResultSchemaFor('blocks.split'),
-  },
-  'blocks.merge': {
-    input: objectSchema(
-      {
-        first: blockNodeAddressSchema,
-        second: blockNodeAddressSchema,
-      },
-      ['first', 'second'],
-    ),
-    output: objectSchema(
-      {
-        success: { const: true },
-        removed: blockNodeAddressSchema,
-        remappedRefs: arraySchema(ref('AffectedRefRemapping')),
-        affectedStories: arraySchema(ref('StoryLocator')),
-        textRangeShifts: arraySchema(ref('TextRangeShift')),
-        txId: { type: 'string' },
-      },
-      ['success', 'removed'],
-    ),
-    success: objectSchema(
-      {
-        success: { const: true },
-        removed: blockNodeAddressSchema,
-        remappedRefs: arraySchema(ref('AffectedRefRemapping')),
-        affectedStories: arraySchema(ref('StoryLocator')),
-        textRangeShifts: arraySchema(ref('TextRangeShift')),
-        txId: { type: 'string' },
-      },
-      ['success', 'removed'],
-    ),
-    failure: preApplyFailureResultSchemaFor('blocks.merge'),
-  },
-  'blocks.move': {
-    input: objectSchema(
-      {
-        source: blockNodeAddressSchema,
-        destination: blockNodeAddressSchema,
-        placement: { enum: ['before', 'after'] },
-      },
-      ['source', 'destination', 'placement'],
-    ),
-    output: objectSchema(
-      {
-        success: { const: true },
-        moved: blockNodeAddressSchema,
-        remappedRefs: arraySchema(ref('AffectedRefRemapping')),
-        affectedStories: arraySchema(ref('StoryLocator')),
-        txId: { type: 'string' },
-      },
-      ['success', 'moved'],
-    ),
-    success: objectSchema(
-      {
-        success: { const: true },
-        moved: blockNodeAddressSchema,
-        remappedRefs: arraySchema(ref('AffectedRefRemapping')),
-        affectedStories: arraySchema(ref('StoryLocator')),
-        txId: { type: 'string' },
-      },
-      ['success', 'moved'],
-    ),
-    failure: preApplyFailureResultSchemaFor('blocks.move'),
-  },
   // --- styles.paragraph.* ---
   'styles.paragraph.setStyle': {
     input: objectSchema(
@@ -4075,21 +3845,6 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
     output: paragraphMutationResultSchemaFor('format.paragraph.clearShading'),
     success: paragraphMutationSuccessSchema,
     failure: paragraphMutationFailureSchemaFor('format.paragraph.clearShading'),
-  },
-  'format.paragraph.setMarkRunProps': {
-    input: objectSchema(
-      {
-        target: paragraphTargetSchema,
-        markRunProps: {
-          ...markRunPropsSchema,
-          description: 'Paragraph-mark run properties (SDRunProps shape, e.g. fontSizeCs, specVanish).',
-        },
-      },
-      ['target', 'markRunProps'],
-    ),
-    output: paragraphMutationResultSchemaFor('format.paragraph.setMarkRunProps'),
-    success: paragraphMutationSuccessSchema,
-    failure: paragraphMutationFailureSchemaFor('format.paragraph.setMarkRunProps'),
   },
   'format.paragraph.setDirection': {
     input: objectSchema(
@@ -5486,81 +5241,6 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
     success: listsMutateItemSuccessSchema,
     failure: listsFailureSchemaFor('lists.setLevelLayout'),
   },
-  // v2 numbering-aware list operations.
-  'lists.getState': {
-    input: objectSchema(
-      {
-        target: listsV2BlockTargetSchema,
-      },
-      ['target'],
-    ),
-    output: {
-      oneOf: [
-        objectSchema(
-          {
-            success: { const: true },
-            isListItem: { type: 'boolean' },
-            numId: { type: ['string', 'null'] },
-            ilvl: { type: 'integer', minimum: 0 },
-            abstractNumId: { type: ['string', 'null'] },
-            numFmt: { type: ['string', 'null'] },
-            lvlText: { type: ['string', 'null'] },
-            seed: { type: ['string', 'null'], enum: ['bullet', 'ordered', null] },
-          },
-          ['success', 'isListItem', 'ilvl'],
-        ),
-        listsFailureSchemaFor('lists.getState'),
-      ],
-    },
-  },
-  'lists.apply': {
-    input: objectSchema(
-      {
-        target: listsV2BlockTargetSchema,
-        seed: { enum: ['bullet', 'ordered'] },
-        reuseNumId: { type: 'string' },
-        ilvl: { type: 'integer', minimum: 0, maximum: 8 },
-      },
-      ['target', 'seed'],
-    ),
-    output: listsMutateItemResultSchemaFor('lists.apply'),
-    success: listsMutateItemSuccessSchema,
-    failure: listsFailureSchemaFor('lists.apply'),
-  },
-  'lists.continue': {
-    input: objectSchema(
-      {
-        target: listsV2BlockTargetSchema,
-      },
-      ['target'],
-    ),
-    output: listsMutateItemResultSchemaFor('lists.continue'),
-    success: listsMutateItemSuccessSchema,
-    failure: listsFailureSchemaFor('lists.continue'),
-  },
-  'lists.restart': {
-    input: objectSchema(
-      {
-        target: listsV2BlockTargetSchema,
-        startAt: { type: 'integer', minimum: 1 },
-      },
-      ['target'],
-    ),
-    output: listsMutateItemResultSchemaFor('lists.restart'),
-    success: listsMutateItemSuccessSchema,
-    failure: listsFailureSchemaFor('lists.restart'),
-  },
-  'lists.remove': {
-    input: objectSchema(
-      {
-        target: listsV2BlockTargetSchema,
-      },
-      ['target'],
-    ),
-    output: listsMutateItemResultSchemaFor('lists.remove'),
-    success: listsMutateItemSuccessSchema,
-    failure: listsFailureSchemaFor('lists.remove'),
-  },
   'comments.create': {
     input: objectSchema(
       {
@@ -5622,7 +5302,7 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
         isInternal: {
           type: 'boolean',
           description:
-            'Legacy v1/document-api compatibility field. Not a supported v2 behavior. V2 adapters MUST reject a `comments.patch` request containing `isInternal` with `CAPABILITY_UNAVAILABLE` (kernel reason `internal-comments-unsupported`). The field is preserved in the schema only so v1 callers keep their input shape (`comments-spec.md` §7, §14.6).',
+            'Legacy v1/document-api compatibility field. Not supported for new comment patch behavior. A `comments.patch` request containing `isInternal` fails with `CAPABILITY_UNAVAILABLE` (kernel reason `internal-comments-unsupported`). The field is preserved in the schema only so v1 callers keep their input shape (`comments-spec.md` §7, §14.6).',
         },
       },
       ['commentId'],
@@ -6468,31 +6148,6 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
   },
   'tables.deleteRow': {
     input: rowOperationInputSchema({}),
-    output: tableMutationResultSchema,
-    success: tableMutationSuccessSchema,
-    failure: tableMutationFailureSchema,
-  },
-  'tables.moveRow': {
-    input: rowOperationInputSchema(
-      {
-        destination: {
-          oneOf: [
-            objectSchema({ kind: { const: 'first' } }, ['kind']),
-            objectSchema({ kind: { const: 'last' } }, ['kind']),
-            objectSchema({ kind: { const: 'before' }, rowIndex: { type: 'integer', minimum: 0 } }, [
-              'kind',
-              'rowIndex',
-            ]),
-            objectSchema({ kind: { const: 'after' }, rowIndex: { type: 'integer', minimum: 0 } }, ['kind', 'rowIndex']),
-            objectSchema({ kind: { const: 'before' }, target: tableRowAddressSchema }, ['kind', 'target']),
-            objectSchema({ kind: { const: 'after' }, target: tableRowAddressSchema }, ['kind', 'target']),
-            objectSchema({ kind: { const: 'before' }, nodeId: { type: 'string' } }, ['kind', 'nodeId']),
-            objectSchema({ kind: { const: 'after' }, nodeId: { type: 'string' } }, ['kind', 'nodeId']),
-          ],
-        },
-      },
-      ['destination'],
-    ),
     output: tableMutationResultSchema,
     success: tableMutationSuccessSchema,
     failure: tableMutationFailureSchema,

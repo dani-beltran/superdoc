@@ -9,7 +9,6 @@
  * without throwing.
  */
 
-import { V1_RUNTIME_UNAVAILABLE_OPERATION_IDS } from '@superdoc/document-api';
 import type { CliExposedOperationId } from '../cli/operation-set.js';
 import { OPERATION_FAMILY, type OperationFamily } from '../cli/operation-hints.js';
 import { CliError, type AdapterLikeError, type CliErrorCode } from './errors.js';
@@ -19,14 +18,9 @@ type ErrorMappingContext = {
 };
 
 const TRACK_CHANGES_REVIEW_HELPER_COMMANDS = new Set(['track-changes accept', 'track-changes reject']);
-const V1_RUNTIME_UNAVAILABLE_OPERATION_SET = new Set<string>(V1_RUNTIME_UNAVAILABLE_OPERATION_IDS);
 
 function isTrackChangesReviewHelper(operationId: CliExposedOperationId, context?: ErrorMappingContext): boolean {
   return operationId === 'trackChanges.decide' && TRACK_CHANGES_REVIEW_HELPER_COMMANDS.has(context?.commandName ?? '');
-}
-
-function isV1RuntimeUnavailableOperation(operationId: CliExposedOperationId): boolean {
-  return V1_RUNTIME_UNAVAILABLE_OPERATION_SET.has(operationId);
 }
 
 // ---------------------------------------------------------------------------
@@ -144,9 +138,6 @@ function mapListsError(operationId: CliExposedOperationId, error: unknown, code:
   }
 
   if (code === 'TRACK_CHANGE_COMMAND_UNAVAILABLE' || code === 'CAPABILITY_UNAVAILABLE') {
-    if (code === 'CAPABILITY_UNAVAILABLE' && isV1RuntimeUnavailableOperation(operationId)) {
-      return new CliError('CAPABILITY_UNAVAILABLE', message, { operationId, details });
-    }
     return new CliError('TRACK_CHANGE_COMMAND_UNAVAILABLE', message, { operationId, details });
   }
 
@@ -192,9 +183,6 @@ function mapImagesError(operationId: CliExposedOperationId, error: unknown, code
   }
 
   if (code === 'CAPABILITY_UNAVAILABLE' || code === 'COMMAND_UNAVAILABLE') {
-    if (code === 'CAPABILITY_UNAVAILABLE' && isV1RuntimeUnavailableOperation(operationId)) {
-      return new CliError('CAPABILITY_UNAVAILABLE', message, { operationId, details });
-    }
     return new CliError('COMMAND_FAILED', message, { operationId, details });
   }
 
@@ -219,9 +207,6 @@ function mapTablesError(operationId: CliExposedOperationId, error: unknown, code
   }
 
   if (code === 'CAPABILITY_UNAVAILABLE' || code === 'COMMAND_UNAVAILABLE') {
-    if (code === 'CAPABILITY_UNAVAILABLE' && isV1RuntimeUnavailableOperation(operationId)) {
-      return new CliError('CAPABILITY_UNAVAILABLE', message, { operationId, details });
-    }
     return new CliError('COMMAND_FAILED', message, { operationId, details });
   }
 
@@ -249,9 +234,6 @@ function mapTextMutationError(operationId: CliExposedOperationId, error: unknown
   }
 
   if (code === 'TRACK_CHANGE_COMMAND_UNAVAILABLE' || code === 'CAPABILITY_UNAVAILABLE') {
-    if (code === 'CAPABILITY_UNAVAILABLE' && isV1RuntimeUnavailableOperation(operationId)) {
-      return new CliError('CAPABILITY_UNAVAILABLE', message, { operationId, details });
-    }
     return new CliError('TRACK_CHANGE_COMMAND_UNAVAILABLE', message, { operationId, details });
   }
 
@@ -298,9 +280,6 @@ function mapCreateError(operationId: CliExposedOperationId, error: unknown, code
   }
 
   if (code === 'CAPABILITY_UNAVAILABLE') {
-    if (isV1RuntimeUnavailableOperation(operationId)) {
-      return new CliError('CAPABILITY_UNAVAILABLE', message, { operationId, details });
-    }
     const reason = (details as { reason?: string } | undefined)?.reason;
     if (reason === 'tracked_mode_unsupported') {
       return new CliError('TRACK_CHANGE_COMMAND_UNAVAILABLE', message, { operationId, details });
@@ -329,9 +308,6 @@ function mapBlocksError(operationId: CliExposedOperationId, error: unknown, code
   }
 
   if (code === 'CAPABILITY_UNAVAILABLE') {
-    if (isV1RuntimeUnavailableOperation(operationId)) {
-      return new CliError('CAPABILITY_UNAVAILABLE', message, { operationId, details });
-    }
     const reason = (details as { reason?: string } | undefined)?.reason;
     if (reason === 'tracked_mode_unsupported') {
       return new CliError('TRACK_CHANGE_COMMAND_UNAVAILABLE', message, { operationId, details });
@@ -704,9 +680,6 @@ export function mapFailedReceipt(
       return new CliError('INVALID_TARGET', failureMessage, { operationId, failure });
     }
     if (failureCode === 'CAPABILITY_UNAVAILABLE') {
-      if (isV1RuntimeUnavailableOperation(operationId)) {
-        return new CliError('CAPABILITY_UNAVAILABLE', failureMessage, { operationId, failure });
-      }
       return new CliError('TRACK_CHANGE_COMMAND_UNAVAILABLE', failureMessage, { operationId, failure });
     }
     return new CliError('COMMAND_FAILED', failureMessage, { operationId, failure });
@@ -718,9 +691,6 @@ export function mapFailedReceipt(
       return new CliError('TARGET_NOT_FOUND', failureMessage, { operationId, failure });
     }
     if (failureCode === 'TRACK_CHANGE_COMMAND_UNAVAILABLE' || failureCode === 'CAPABILITY_UNAVAILABLE') {
-      if (failureCode === 'CAPABILITY_UNAVAILABLE' && isV1RuntimeUnavailableOperation(operationId)) {
-        return new CliError('CAPABILITY_UNAVAILABLE', failureMessage, { operationId, failure });
-      }
       return new CliError('TRACK_CHANGE_COMMAND_UNAVAILABLE', failureMessage, { operationId, failure });
     }
     if (failureCode === 'INVALID_TARGET') {
@@ -733,9 +703,6 @@ export function mapFailedReceipt(
   if (family === 'blocks') {
     if (failureCode === 'INVALID_TARGET') {
       return new CliError('INVALID_ARGUMENT', failureMessage, { operationId, failure });
-    }
-    if (failureCode === 'CAPABILITY_UNAVAILABLE' && isV1RuntimeUnavailableOperation(operationId)) {
-      return new CliError('CAPABILITY_UNAVAILABLE', failureMessage, { operationId, failure });
     }
     return new CliError('COMMAND_FAILED', failureMessage, { operationId, failure });
   }
@@ -791,9 +758,6 @@ export function mapFailedReceipt(
       return new CliError('INVALID_ARGUMENT', failureMessage, { operationId, failure });
     }
     if (failureCode === 'CAPABILITY_UNAVAILABLE') {
-      if (isV1RuntimeUnavailableOperation(operationId)) {
-        return new CliError('CAPABILITY_UNAVAILABLE', failureMessage, { operationId, failure });
-      }
       return new CliError('COMMAND_FAILED', failureMessage, { operationId, failure });
     }
     return new CliError('COMMAND_FAILED', failureMessage, { operationId, failure });

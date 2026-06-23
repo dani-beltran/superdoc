@@ -256,20 +256,6 @@ export type TablesInsertRowInput =
 
 export type TablesDeleteRowInput = DirectRowTargetLocator | TableScopedRowLocator;
 
-export type TableRowMoveDestination =
-  | { kind: 'first' }
-  | { kind: 'last' }
-  | { kind: 'before'; rowIndex: number }
-  | { kind: 'after'; rowIndex: number }
-  | { kind: 'before'; target: TableRowAddress }
-  | { kind: 'after'; target: TableRowAddress }
-  | { kind: 'before'; nodeId: string }
-  | { kind: 'after'; nodeId: string };
-
-export type TablesMoveRowInput = (DirectRowTargetLocator | TableScopedRowLocator) & {
-  destination: TableRowMoveDestination;
-};
-
 export type TablesSetRowHeightInput =
   | (TableScopedRowLocator & { heightPt: number; rule?: 'atLeast' | 'exact' | 'auto' })
   | (DirectRowTargetLocator & { heightPt: number; rule?: 'atLeast' | 'exact' | 'auto' });

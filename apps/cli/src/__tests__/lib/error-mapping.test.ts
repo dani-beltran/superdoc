@@ -135,20 +135,17 @@ describe('mapInvokeError', () => {
     expect(canonical.code).toBe('TARGET_NOT_FOUND');
   });
 
-  test.each([
-    'blocks.split',
-    'lists.apply',
-    'format.paragraph.setMarkRunProps',
-    'tables.moveRow',
-    'fields.insert',
-  ] as const)('%s preserves CAPABILITY_UNAVAILABLE for unsupported v1/v2-gated paths', (operationId) => {
-    const error = Object.assign(new Error(`${operationId} is only available on v2-backed sessions.`), {
-      code: 'CAPABILITY_UNAVAILABLE',
-    });
+  test.each(['fields.insert', 'footnotes.insert'] as const)(
+    '%s preserves CAPABILITY_UNAVAILABLE for adapter-gated paths',
+    (operationId) => {
+      const error = Object.assign(new Error(`${operationId} is not available on this adapter.`), {
+        code: 'CAPABILITY_UNAVAILABLE',
+      });
 
-    const mapped = mapInvokeError(operationId as any, error);
-    expect(mapped.code).toBe('CAPABILITY_UNAVAILABLE');
-  });
+      const mapped = mapInvokeError(operationId as any, error);
+      expect(mapped.code).toBe('CAPABILITY_UNAVAILABLE');
+    },
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -523,25 +520,22 @@ describe('mapFailedReceipt: plan-engine code passthrough', () => {
     },
   );
 
-  test.each([
-    'blocks.split',
-    'lists.apply',
-    'format.paragraph.setMarkRunProps',
-    'tables.moveRow',
-    'footnotes.insert',
-  ] as const)('%s failed receipts preserve CAPABILITY_UNAVAILABLE', (operationId) => {
-    const receipt = {
-      success: false,
-      failure: {
-        code: 'CAPABILITY_UNAVAILABLE',
-        message: `${operationId} is only available on v2-backed sessions.`,
-      },
-    };
+  test.each(['fields.insert', 'footnotes.insert'] as const)(
+    '%s failed receipts preserve CAPABILITY_UNAVAILABLE',
+    (operationId) => {
+      const receipt = {
+        success: false,
+        failure: {
+          code: 'CAPABILITY_UNAVAILABLE',
+          message: `${operationId} is not available on this adapter.`,
+        },
+      };
 
-    const result = mapFailedReceipt(operationId as any, receipt);
-    expect(result).toBeInstanceOf(CliError);
-    expect(result!.code).toBe('CAPABILITY_UNAVAILABLE');
-  });
+      const result = mapFailedReceipt(operationId as any, receipt);
+      expect(result).toBeInstanceOf(CliError);
+      expect(result!.code).toBe('CAPABILITY_UNAVAILABLE');
+    },
+  );
 });
 
 // ---------------------------------------------------------------------------

@@ -10,8 +10,8 @@
 // Boundary rules (the runtime contract, enforced by `../import-boundary.test.ts`):
 // This module lives under `core/editor-runtime/`, which is import-scanned.
 //     It therefore NEVER imports `@superdoc/super-editor`, the concrete v1
-//     `Editor`/`PresentationEditor`, ProseMirror, or any v2/Document-API
-//     internals. Instead it talks to the v1 surfaces through the minimal
+//     `Editor`/`PresentationEditor`, ProseMirror, or any Document API internals.
+//     Instead it talks to the v1 surfaces through the minimal
 //     STRUCTURAL interfaces below. The concrete v1 instances are injected by the
 //     shell (`SuperDoc.vue`), which is free to reference v1 types directly.
 // Position tokens are opaque. The adapter keeps the non-serializable PM
@@ -75,8 +75,6 @@ export interface V1EditorLike extends V1EventTargetLike {
   focus?(): void;
   exportDocx?(params?: unknown): Promise<unknown>;
   setDocumentMode?(mode: EditorRuntimeDocumentMode): void;
-  /** Present on the v2 facade as `2`; absent/`1` for the real v1 editor. */
-  editorVersion?: 1 | 2;
 }
 
 /** The subset of the v1 `PresentationEditor` the adapter delegates to. */
@@ -284,11 +282,23 @@ export function createV1EditorRuntimeAdapter(options: V1EditorRuntimeAdapterOpti
     return { id, kind: 'v1', documentId, state, documentMode, capabilities: capabilities() };
   }
 
+  function getLivePresentationEditor(): V1PresentationEditorLike | null {
+    const editorWithPresentation = editor as typeof editor & {
+      presentationEditor?: V1PresentationEditorLike | null;
+      _presentationEditor?: V1PresentationEditorLike | null;
+    };
+    return editorWithPresentation.presentationEditor ?? editorWithPresentation._presentationEditor ?? null;
+  }
+
   function setDocumentMode(mode: EditorRuntimeDocumentMode): void {
     if (disposed) return;
     const nextMode = normalizeDocumentMode(mode);
     if (nextMode === documentMode) return;
     documentMode = nextMode;
+    const livePresentationEditor = getLivePresentationEditor();
+    if (livePresentationEditor && livePresentationEditor !== presentationEditor) {
+      attachPresentationEditor(livePresentationEditor);
+    }
     presentationEditor?.setDocumentMode?.(documentMode);
     editor.setDocumentMode?.(documentMode);
     if (state === 'editing-ready' || state === 'review-ready') {

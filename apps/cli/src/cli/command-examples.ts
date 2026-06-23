@@ -157,7 +157,5 @@ export const DOC_COMMAND_EXAMPLES: Readonly<Record<string, readonly string[]>> =
   ],
 
   // ── Paragraph Format ────────────────────────────────────────────────
-  'format.paragraph.setMarkRunProps': [
-    'superdoc format paragraph set-mark-run-props --block-id abc123 --mark-run-props-json \'{"bold":true,"italic":true,"color":{"model":"rgb","value":"FF0000"}}\'',
-  ],
+  'format.paragraph.setAlignment': ['superdoc format paragraph set-alignment --block-id abc123 --alignment center'],
 };

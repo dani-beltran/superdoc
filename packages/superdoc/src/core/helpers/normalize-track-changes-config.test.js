@@ -69,7 +69,7 @@ describe('normalizeTrackChangesConfig', () => {
       expect(config.modules.trackChanges.enabled).toBe(true);
     });
 
-    it('preserves canonical author color config for v2 tracked-change rendering', () => {
+    it('preserves canonical author color config for tracked-change rendering', () => {
       const authorColors = {
         enabled: true,
         overrides: { Ada: '#8250df' },

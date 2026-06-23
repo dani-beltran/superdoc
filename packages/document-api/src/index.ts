@@ -210,12 +210,6 @@ import type {
   ListsSetLevelTextInput,
   ListsSetLevelStartInput,
   ListsSetLevelLayoutInput,
-  ListsGetStateInput,
-  ListsGetStateResult,
-  ListsApplyInput,
-  ListsContinueV2Input,
-  ListsRestartV2Input,
-  ListsRemoveV2Input,
 } from './lists/lists.types.js';
 import {
   executeListsGet,
@@ -257,11 +251,6 @@ import {
   executeListsSetLevelText,
   executeListsSetLevelStart,
   executeListsSetLevelLayout,
-  executeListsGetState,
-  executeListsApply,
-  executeListsContinueV2,
-  executeListsRestartV2,
-  executeListsRemoveV2,
 } from './lists/lists.js';
 import { executeReplace, type ReplaceInput } from './replace/replace.js';
 import type { CreateAdapter, CreateApi } from './create/create.js';
@@ -273,14 +262,7 @@ import {
   executeCreateTableOfContents,
 } from './create/create.js';
 import type { BlocksAdapter, BlocksApi } from './blocks/blocks.js';
-import {
-  executeBlocksList,
-  executeBlocksDelete,
-  executeBlocksDeleteRange,
-  executeBlocksSplit,
-  executeBlocksMerge,
-  executeBlocksMove,
-} from './blocks/blocks.js';
+import { executeBlocksList, executeBlocksDelete, executeBlocksDeleteRange } from './blocks/blocks.js';
 import type {
   BlocksDeleteInput,
   BlocksDeleteResult,
@@ -302,7 +284,6 @@ import type {
   TablesSetLayoutInput,
   TablesInsertRowInput,
   TablesDeleteRowInput,
-  TablesMoveRowInput,
   TablesSetRowHeightInput,
   TablesDistributeRowsInput,
   TablesSetRowOptionsInput,
@@ -433,7 +414,6 @@ import type {
   ParagraphsClearBorderInput,
   ParagraphsSetShadingInput,
   ParagraphsClearShadingInput,
-  ParagraphsSetMarkRunPropsInput,
   ParagraphsSetDirectionInput,
   ParagraphsClearDirectionInput,
   ParagraphsSetNumberingInput,
@@ -459,7 +439,6 @@ import {
   executeParagraphsClearBorder,
   executeParagraphsSetShading,
   executeParagraphsClearShading,
-  executeParagraphsSetMarkRunProps,
   executeParagraphsSetDirection,
   executeParagraphsClearDirection,
   executeParagraphsSetNumbering,
@@ -1391,7 +1370,6 @@ export type {
   ParagraphsClearBorderInput,
   ParagraphsSetShadingInput,
   ParagraphsClearShadingInput,
-  ParagraphsSetMarkRunPropsInput,
   ParagraphsSetDirectionInput,
   ParagraphsClearDirectionInput,
   ParagraphsSetNumberingInput,
@@ -1482,12 +1460,6 @@ export type {
   ListsSetLevelTextInput,
   ListsSetLevelStartInput,
   ListsSetLevelLayoutInput,
-  ListsGetStateInput,
-  ListsGetStateResult,
-  ListsApplyInput,
-  ListsContinueV2Input,
-  ListsRestartV2Input,
-  ListsRemoveV2Input,
 } from './lists/lists.types.js';
 export {
   LIST_KINDS,
@@ -1589,24 +1561,8 @@ export type {
   CommentTarget,
 } from './comments/comments.types.js';
 export type { BlocksApi } from './blocks/blocks.js';
-export {
-  executeBlocksList,
-  executeBlocksDelete,
-  executeBlocksDeleteRange,
-  executeBlocksSplit,
-  executeBlocksMerge,
-  executeBlocksMove,
-} from './blocks/blocks.js';
-// v2 list operation execute wrappers + v1 indent / outdent.
-export {
-  executeListsIndent,
-  executeListsOutdent,
-  executeListsGetState,
-  executeListsApply,
-  executeListsContinueV2,
-  executeListsRestartV2,
-  executeListsRemoveV2,
-} from './lists/lists.js';
+export { executeBlocksList, executeBlocksDelete, executeBlocksDeleteRange } from './blocks/blocks.js';
+export { executeListsIndent, executeListsOutdent } from './lists/lists.js';
 export { DocumentApiValidationError } from './errors.js';
 export { textReceiptToSDReceipt, buildStructuralReceipt } from './receipt-bridge.js';
 export type { StructuralReceiptParams } from './receipt-bridge.js';
@@ -1628,7 +1584,6 @@ export interface TablesApi {
   setLayout(input: TablesSetLayoutInput, options?: MutationOptions): TableMutationResult;
   insertRow(input: TablesInsertRowInput, options?: MutationOptions): TableMutationResult;
   deleteRow(input: TablesDeleteRowInput, options?: MutationOptions): TableMutationResult;
-  moveRow(input: TablesMoveRowInput, options?: MutationOptions): TableMutationResult;
   setRowHeight(input: TablesSetRowHeightInput, options?: MutationOptions): TableMutationResult;
   distributeRows(input: TablesDistributeRowsInput, options?: MutationOptions): TableMutationResult;
   setRowOptions(input: TablesSetRowOptionsInput, options?: MutationOptions): TableMutationResult;
@@ -1668,9 +1623,7 @@ export interface TablesApi {
   setDefaultStyle(input: TablesSetDefaultStyleInput, options?: MutationOptions): DocumentMutationResult;
   clearDefaultStyle(input?: TablesClearDefaultStyleInput, options?: MutationOptions): DocumentMutationResult;
 }
-export type TablesAdapter = Omit<TablesApi, 'moveRow'> & {
-  moveRow?: TablesApi['moveRow'];
-};
+export type TablesAdapter = TablesApi;
 /**
  * Callable capability accessor returned by `createDocumentApi`.
  *
@@ -2091,16 +2044,6 @@ function requireAdapter<T>(adapter: T | undefined, namespace: string): T {
   }
   return adapter;
 }
-function unavailableTableMutationResult(operationName: string): TableMutationResult {
-  return {
-    success: false,
-    failure: {
-      code: 'CAPABILITY_UNAVAILABLE',
-      message: `${operationName} is not available. The host engine has not provided an adapter for this capability.`,
-      details: { operation: operationName },
-    },
-  };
-}
 function buildFormatInlineAliasApi(adapter: SelectionMutationAdapter): FormatInlineAliasApi {
   return Object.fromEntries(
     INLINE_PROPERTY_REGISTRY.map((entry) => {
@@ -2280,9 +2223,6 @@ export function createDocumentApi(adapters: DocumentApiAdapters): DocumentApi {
         clearShading(input: ParagraphsClearShadingInput, options?: MutationOptions): ParagraphMutationResult {
           return executeParagraphsClearShading(adapters.paragraphs, input, options);
         },
-        setMarkRunProps(input: ParagraphsSetMarkRunPropsInput, options?: MutationOptions): ParagraphMutationResult {
-          return executeParagraphsSetMarkRunProps(adapters.paragraphs, input, options);
-        },
         setDirection(input: ParagraphsSetDirectionInput, options?: MutationOptions): ParagraphMutationResult {
           return executeParagraphsSetDirection(adapters.paragraphs, input, options);
         },
@@ -2332,15 +2272,6 @@ export function createDocumentApi(adapters: DocumentApiAdapters): DocumentApi {
       },
       deleteRange(input: BlocksDeleteRangeInput, options?: MutationOptions): BlocksDeleteRangeResult {
         return executeBlocksDeleteRange(adapters.blocks, input, options);
-      },
-      split(input, options) {
-        return executeBlocksSplit(adapters.blocks, input, options);
-      },
-      merge(input, options) {
-        return executeBlocksMerge(adapters.blocks, input, options);
-      },
-      move(input, options) {
-        return executeBlocksMove(adapters.blocks, input, options);
       },
     },
     create: {
@@ -2577,22 +2508,6 @@ export function createDocumentApi(adapters: DocumentApiAdapters): DocumentApi {
       setLevelLayout(input: ListsSetLevelLayoutInput, options?: MutationOptions): ListsMutateItemResult {
         return executeListsSetLevelLayout(adapters.lists, input, options);
       },
-      // v2 numbering-aware list operations.
-      getState(input: ListsGetStateInput): ListsGetStateResult {
-        return executeListsGetState(adapters.lists, input);
-      },
-      apply(input: ListsApplyInput, options?: MutationOptions): ListsMutateItemResult {
-        return executeListsApply(adapters.lists, input, options);
-      },
-      continue(input: ListsContinueV2Input, options?: MutationOptions): ListsMutateItemResult {
-        return executeListsContinueV2(adapters.lists, input, options);
-      },
-      restart(input: ListsRestartV2Input, options?: MutationOptions): ListsMutateItemResult {
-        return executeListsRestartV2(adapters.lists, input, options);
-      },
-      remove(input: ListsRemoveV2Input, options?: MutationOptions): ListsMutateItemResult {
-        return executeListsRemoveV2(adapters.lists, input, options);
-      },
     },
     sections: {
       list(query?: SectionsListQuery): SectionsListResult {
@@ -2705,11 +2620,6 @@ export function createDocumentApi(adapters: DocumentApiAdapters): DocumentApi {
       },
       deleteRow(input, options?) {
         return executeRowLocatorOp('tables.deleteRow', adapters.tables.deleteRow.bind(adapters.tables), input, options);
-      },
-      moveRow(input, options?) {
-        const moveRowAdapter =
-          adapters.tables.moveRow?.bind(adapters.tables) ?? (() => unavailableTableMutationResult('tables.moveRow'));
-        return executeRowLocatorOp('tables.moveRow', moveRowAdapter, input, options);
       },
       setRowHeight(input, options?) {
         return executeRowLocatorOp(

@@ -116,46 +116,12 @@ import type * as Y from 'yjs';
 import type { WhiteboardData } from './whiteboard/Whiteboard.js';
 
 type V1ActiveEditor = Editor & {
-  editorVersion?: 1;
   toolbar?: SuperToolbar;
   presentationEditor?: PresentationEditor | null;
 };
 
-type V2ActiveEditorFacade = {
-  editorVersion: 2;
-  documentId?: string;
-  host?: unknown;
-  mount?: unknown;
-  options?: {
-    documentId?: string;
-    documentMode?: DocumentMode;
-    [key: string]: unknown;
-  };
-  capabilities?: unknown;
-  save?: (...args: unknown[]) => Promise<unknown>;
-  exportDocx?: (...args: unknown[]) => Promise<Blob>;
-  focus?: () => unknown;
-  v2Comments?: unknown;
-  v2TrackedChanges?: unknown;
-  pageMetrics?: unknown;
-  pageLayout?: unknown;
-  pageFurniture?: unknown;
-  reviewHydration?: unknown;
-  commands?: null;
-  state?: null;
-  view?: null;
-  setHighContrastMode?: (isHighContrast: boolean) => void;
-  [key: string]: unknown;
-};
-
-type ActiveEditor = Editor | V2ActiveEditorFacade;
-
-function isV2ActiveEditorFacade(editor: unknown): editor is V2ActiveEditorFacade {
-  return Boolean(editor && typeof editor === 'object' && (editor as { editorVersion?: unknown }).editorVersion === 2);
-}
-
-function getActivePresentationEditor(editor: ActiveEditor | null | undefined): PresentationEditor | null {
-  if (!editor || isV2ActiveEditorFacade(editor)) return null;
+function getActivePresentationEditor(editor: Editor | null | undefined): PresentationEditor | null {
+  if (!editor) return null;
   return (editor as V1ActiveEditor).presentationEditor ?? null;
 }
 
@@ -234,18 +200,17 @@ interface SuperDocEventMap {
 // current consumer-visible contract.
 
 /**
- * Whether a runtime's legacy editor projection is a v1, command-capable surface
+ * Whether a runtime's legacy editor projection is a command-capable v1 surface
  * the legacy shell (toolbar, `search`, `goToSearchResult`, `activeEditor`) can
- * drive. v2-shaped scaffolding (`editorVersion === 2`), null projections, and
- * projections whose `commands` are not object-like are UNSUPPORTED and must
- * fail closed so stale v1 surfaces never stay bound to the wrong editor.
+ * drive. Null projections and projections whose `commands` are not object-like
+ * are unsupported and must fail closed so stale v1 surfaces never stay bound to
+ * the wrong editor.
  *
  * @param projection The runtime's `getLegacyEditorProjection()` result.
  */
 function isCommandCapableV1LegacyProjection(projection: unknown): projection is V1ActiveEditor {
   if (!projection || typeof projection !== 'object') return false;
-  const candidate = projection as { editorVersion?: number; commands?: unknown };
-  if (candidate.editorVersion === 2) return false;
+  const candidate = projection as { commands?: unknown };
   return Boolean(candidate.commands) && typeof candidate.commands === 'object';
 }
 
@@ -409,7 +374,6 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
   // (called synchronously from the constructor), so by the time any
   // external callsite reads them they exist.
   declare activeEditor: Editor | null;
-  declare editorVersion: 1 | 2;
   declare toolbar: SuperToolbar | null;
   declare toolbarElement: string | HTMLElement | undefined;
   declare userColorMap: Map<string, string>;
@@ -548,10 +512,6 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
 
     // Internal: toggle layout-engine-powered PresentationEditor in dev shells
     useLayoutEngine: true,
-
-    // Existing v1 DOCX path unless the host explicitly opts into the injected
-    // v2 shell.
-    editorVersion: 1,
   };
   constructor(config: Config) {
     super();
@@ -617,9 +577,6 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
       this.config.layoutEngineOptions.flowMode = 'paginated';
     }
 
-    this.editorVersion = this.#normalizeEditorVersion(this.config.editorVersion);
-    this.config.editorVersion = this.editorVersion;
-
     const incomingUser = this.config.user;
     if (!incomingUser || typeof incomingUser !== 'object') {
       this.config.user = { ...DEFAULT_USER };
@@ -628,7 +585,7 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
         ...DEFAULT_USER,
         ...incomingUser,
       };
-      if (!this.config.user.name && this.editorVersion !== 2) {
+      if (!this.config.user.name) {
         this.config.user.name = DEFAULT_USER.name;
       }
     }
@@ -1669,16 +1626,6 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
     this.emit('sidebar-toggle', isOpened);
   }
 
-  #normalizeEditorVersion(raw: unknown): 1 | 2 {
-    if (raw === undefined || raw === null) return 1;
-    if (raw === 1) return 1;
-    if (raw === 2) return 2;
-    console.warn(
-      `[SuperDoc] Ignoring invalid editorVersion ${String(raw)}; falling back to v1 DOCX path. Supported values: 1 | 2.`,
-    );
-    return 1;
-  }
-
   /** @param args */
   #log(...args: unknown[]) {
     (console.debug ? console.debug : console.log)('🦋 🦸‍♀️ [superdoc]', ...args);
@@ -1754,7 +1701,7 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
   /**
    * Clear the legacy `activeEditor` projection and detach the v1 toolbar. Used
    * when active state clears and when an active runtime is unsupported for the
-   * v1 shell path (v2-shaped, null, or command-incapable projection).
+   * v1 shell path (null or command-incapable projection).
    */
   #clearActiveEditorProjection() {
     this.activeEditor = null;
@@ -1801,9 +1748,8 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
       if (runtime?.kind === 'v1' && isCommandCapableV1LegacyProjection(projection)) {
         this.setActiveEditor(projection);
       } else {
-        // Fail closed: a non-v1 runtime, or a runtime with a v2-shaped / null /
-        // command-incapable projection, must not leave a stale v1 editor or
-        // toolbar bound.
+        // Fail closed: unsupported runtimes and command-incapable projections
+        // must not leave a stale v1 editor or toolbar bound.
         this.#clearActiveEditorProjection();
       }
     } finally {
@@ -1819,7 +1765,7 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
    * @param editor The legacy editor to resolve a runtime for.
    * @returns The owning runtime id, or `null` when none can be resolved.
    */
-  #resolveRuntimeIdForEditor(editor: ActiveEditor | null): EditorRuntimeId | null {
+  #resolveRuntimeIdForEditor(editor: Editor | null): EditorRuntimeId | null {
     if (!editor) return null;
     for (const runtime of this.#editorRuntimeRegistry.getAll()) {
       if (runtime.kind !== 'v1') continue;
@@ -1844,15 +1790,7 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
    *
    * @param editor The editor to set as active
    */
-  setActiveEditor(editor: Editor | null): void;
-  setActiveEditor(editor: ActiveEditor | null) {
-    if (isV2ActiveEditorFacade(editor)) {
-      if (!this.#applyingRuntimeActiveChange && this.#editorRuntimeRegistry.getActive()) {
-        this.#editorRuntimeRegistry.setActive(null, 'set-active-v2-facade');
-      }
-      this.activeEditor = editor as unknown as Editor;
-      return;
-    }
+  setActiveEditor(editor: Editor | null): void {
     if (!isCommandCapableV1LegacyProjection(editor)) {
       this.#clearActiveEditorProjection();
       return;
@@ -1883,136 +1821,6 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
       }
     }
     this.#applyActiveEditorProjection(editor);
-  }
-
-  getV2FeatureMatrix() {
-    return [
-      {
-        feature: 'docx.open-render',
-        status: 'supported',
-        reason: 'editorVersion: 2 opens and renders DOCX documents through the injected private V2 integration seam',
-      },
-      {
-        feature: 'docx.review-handles',
-        status: 'supported',
-        reason: 'Comment/tracked-change list + decide via v2 host handles',
-      },
-      {
-        feature: 'shell.toolbar',
-        status: 'disabled',
-        reason: 'v1 SuperToolbar requires v1 Editor; v2 toolbar bridge is a Phase 2.x follow-up',
-      },
-      {
-        feature: 'shell.rich-formatting',
-        status: 'not-shipped',
-        reason: 'format-target-unsupported: v2 host has no format.* family yet',
-      },
-      {
-        feature: 'shell.comments-sidebar',
-        status: 'supported',
-        reason:
-          'ui-phase3-002: v2 comments adapter routes create/reply/edit/resolve/delete through V2EditorHost.dispatch',
-      },
-      {
-        feature: 'shell.comments-sidebar.reopen',
-        status: 'not-shipped',
-        reason: 'comment-reopen-ui-omitted: public v2 shell keeps resolved-state reopen disabled',
-      },
-      {
-        feature: 'shell.tracked-change-sidebar',
-        status: 'supported',
-        reason: 'ui-phase3-003: v2 tracked-change adapter lists/decides via V2EditorHost.dispatch (body-story scope)',
-      },
-      {
-        feature: 'shell.tracked-change-sidebar.bulk',
-        status: 'not-shipped',
-        reason:
-          'bulk-tracked-change-decisions-omitted: acceptAll/rejectAll are matrix-disabled by default in the v2 host',
-      },
-      {
-        feature: 'shell.tracked-change-sidebar.non-body',
-        status: 'not-shipped',
-        reason: 'story-target-not-shipped: public v2 shell only hydrates body-story tracked changes',
-      },
-      {
-        feature: 'shell.comments-sidebar.persistence',
-        status: 'supported',
-        reason:
-          'ui-phase3-004: comment create/reply/edit/resolve/delete persist through SuperDoc.export() → re-mount via the v2 host save bridge',
-      },
-      {
-        feature: 'shell.tracked-change-sidebar.persistence',
-        status: 'supported',
-        reason:
-          'ui-phase3-004: tracked-change accept/reject persist through SuperDoc.export() → re-mount via the v2 host save bridge',
-      },
-      {
-        feature: 'shell.comments-sidebar.author-required',
-        status: 'supported',
-        reason:
-          'ui-phase3-004: v2 comments adapter surfaces commentCommandsReason=author-required from the host capability matrix; write controls disable and forced dispatch reports ok:false',
-      },
-      {
-        feature: 'shell.find-replace',
-        status: 'disabled',
-        reason: 'find-replace-omitted: public v2 shell does not expose v2 find/replace yet',
-      },
-      {
-        feature: 'shell.ai-writer',
-        status: 'disabled',
-        reason: 'ai-omitted: public v2 shell hides AI chrome until a v2 command bridge exists',
-      },
-      {
-        feature: 'shell.collaboration',
-        status: 'not-shipped',
-        reason: 'Y.js / Hocuspocus bridge for v2 not yet wired',
-      },
-      {
-        feature: 'shell.context-menu',
-        status: 'not-shipped',
-        reason: 'context-menu-omitted: public v2 shell disables v1 context menu in v2 mode',
-      },
-      {
-        feature: 'shell.page-metrics',
-        status: 'supported',
-        reason:
-          'ui-phase4-001: v2 page metrics snapshot ' +
-          '(editorVersion: 2, documentId, renderEpoch, layoutGeneration, zoom, pages[], capabilities) ' +
-          'available via superdoc.activeEditor.pageMetrics.{ getSnapshot, subscribe, setZoom }',
-      },
-      {
-        feature: 'shell.zoom',
-        status: 'supported',
-        reason:
-          'ui-phase4-001: SuperDoc.setZoom routes to V2EditorHost.setZoom in v2 mode; ' +
-          'single CSS-transform wrapper applies scale to the painted document, page metrics ' +
-          'viewport coords scale with the same zoom value',
-      },
-      {
-        feature: 'shell.ruler-page-margins',
-        status: 'supported',
-        reason:
-          'ui-phase4-002: v2 ruler renders against the V2PageMetricsSnapshot and dispatches margin drags through ' +
-          'a narrow v2 page-layout bridge (`activeEditor.pageLayout.setMargins(...)`) backed by ' +
-          '`doc.sections.setPageMargins(...)`. The v2 page metrics snapshot now reports ' +
-          '`capabilities.marginEdit = { supported: true }`',
-      },
-      {
-        feature: 'shell.custom-extensions',
-        status: 'not-shipped',
-        reason: 'Customer ProseMirror extensions cannot register against the v2 host',
-      },
-      { feature: 'pdf.viewer', status: 'supported', reason: 'editorVersion ignored for PDF documents' },
-      { feature: 'html.viewer', status: 'supported', reason: 'editorVersion ignored for HTML documents' },
-    ];
-  }
-
-  get v2() {
-    if (this.editorVersion !== 2) return null;
-    return {
-      version: 2,
-      featureMatrix: this.getV2FeatureMatrix(),
-    };
   }
 
   /**
@@ -2552,8 +2360,7 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
    *
    * @param text The text or regex to search for
    * @returns The search results, or `undefined` when there is no active editor
-   *   or the active legacy projection exposes no `search` command (e.g. a
-   *   v2-shaped runtime with `commands: null`).
+   *   or the active projection exposes no `search` command.
    */
   search(text: string | RegExp): SearchMatch[] | undefined {
     const commands = this.activeEditor?.commands;
@@ -2571,9 +2378,8 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
    *
    * @param match The match object returned by `superdoc.search()`.
    * @returns Whether the command dispatched, or `undefined` when there is no
-   *   active editor or the active legacy projection exposes no
-   *   `goToSearchResult` command (e.g. a v2-shaped runtime with `commands:
-   *   null`).
+   *   active editor or the active projection exposes no `goToSearchResult`
+   *   command.
    */
   goToSearchResult(match: SearchMatch) {
     const commands = this.activeEditor?.commands;

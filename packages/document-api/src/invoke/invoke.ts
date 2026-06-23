@@ -70,9 +70,6 @@ export function buildDispatchTable(api: DocumentApi): TypedDispatchTable {
     'blocks.list': (input) => api.blocks.list(input),
     'blocks.delete': (input, options) => api.blocks.delete(input, options),
     'blocks.deleteRange': (input, options) => api.blocks.deleteRange(input, options),
-    'blocks.split': (input, options) => api.blocks.split(input, options),
-    'blocks.merge': (input, options) => api.blocks.merge(input, options),
-    'blocks.move': (input, options) => api.blocks.move(input, options),
     // --- format.* ---
     'format.apply': (input, options) => api.format.apply(input, options),
     ...formatInlineAliasDispatch,
@@ -98,7 +95,6 @@ export function buildDispatchTable(api: DocumentApi): TypedDispatchTable {
     'format.paragraph.clearBorder': (input, options) => api.format.paragraph.clearBorder(input, options),
     'format.paragraph.setShading': (input, options) => api.format.paragraph.setShading(input, options),
     'format.paragraph.clearShading': (input, options) => api.format.paragraph.clearShading(input, options),
-    'format.paragraph.setMarkRunProps': (input, options) => api.format.paragraph.setMarkRunProps(input, options),
     'format.paragraph.setDirection': (input, options) => api.format.paragraph.setDirection(input, options),
     'format.paragraph.clearDirection': (input, options) => api.format.paragraph.clearDirection(input, options),
     'format.paragraph.setNumbering': (input, options) => api.format.paragraph.setNumbering(input, options),
@@ -152,12 +148,6 @@ export function buildDispatchTable(api: DocumentApi): TypedDispatchTable {
     'lists.setLevelText': (input, options) => api.lists.setLevelText(input, options),
     'lists.setLevelStart': (input, options) => api.lists.setLevelStart(input, options),
     'lists.setLevelLayout': (input, options) => api.lists.setLevelLayout(input, options),
-    // --- lists.* (v2 numbering-aware) ---
-    'lists.getState': (input) => api.lists.getState(input),
-    'lists.apply': (input, options) => api.lists.apply(input, options),
-    'lists.continue': (input, options) => api.lists.continue(input, options),
-    'lists.restart': (input, options) => api.lists.restart(input, options),
-    'lists.remove': (input, options) => api.lists.remove(input, options),
     // --- sections.* ---
     'sections.list': (input) => api.sections.list(input),
     'sections.get': (input) => api.sections.get(input),
@@ -215,7 +205,6 @@ export function buildDispatchTable(api: DocumentApi): TypedDispatchTable {
     'tables.setLayout': (input, options) => api.tables.setLayout(input, options),
     'tables.insertRow': (input, options) => api.tables.insertRow(input, options),
     'tables.deleteRow': (input, options) => api.tables.deleteRow(input, options),
-    'tables.moveRow': (input, options) => api.tables.moveRow(input, options),
     'tables.setRowHeight': (input, options) => api.tables.setRowHeight(input, options),
     'tables.distributeRows': (input, options) => api.tables.distributeRows(input, options),
     'tables.setRowOptions': (input, options) => api.tables.setRowOptions(input, options),

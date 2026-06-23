@@ -49,13 +49,12 @@ export type FindOutput = DocumentApiFindOutput;
 export type UserIdentity = { name: string; email: string };
 
 /**
- * Runtime kind selected when opening a document. v1 wraps the legacy
- * `Editor` + v1 Document API adapters; v2 wraps an `SDDocumentSession`
- * plus v2 adapters. Defaults to v1 when omitted.
+ * Runtime kind selected when opening a document. This branch is v1-only:
+ * v1 wraps the legacy `Editor` + v1 Document API adapters. The field is
+ * retained for forward/backward compatibility of persisted session metadata,
+ * but `'v1'` is the only accepted value. Defaults to v1 when omitted.
  */
-export type DocumentRuntimeKind = 'v1' | 'v2';
-
-export const ACCEPTED_RUNTIME_VALUES: readonly DocumentRuntimeKind[] = ['v1', 'v2'];
+export type DocumentRuntimeKind = 'v1';
 
 export type OutputMode = 'json' | 'pretty';
 export type ExecutionMode = 'oneshot' | 'host';

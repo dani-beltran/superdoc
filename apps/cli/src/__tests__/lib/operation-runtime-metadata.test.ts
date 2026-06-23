@@ -104,6 +104,14 @@ describe('operation runtime metadata', () => {
     expect(trackChangesOption!.type).toBe('string');
   });
 
+  test('doc.open metadata does not expose a runtime selector', () => {
+    const openMeta = CLI_OPERATION_METADATA['doc.open'];
+    const openOptions = CLI_OPERATION_OPTION_SPECS['doc.open'];
+
+    expect(openMeta.params.map((p) => p.name)).not.toContain('runtime');
+    expect(openOptions.map((o) => o.name)).not.toContain('runtime');
+  });
+
   test('final recipe-provider parity operations expose their promoted CLI params', () => {
     const blocksListMeta = CLI_OPERATION_METADATA['doc.blocks.list'];
     expect(blocksListMeta.params.find((p) => p.name === 'in')?.flag).toBe('in-json');
@@ -118,12 +126,12 @@ describe('operation runtime metadata', () => {
     expect(fieldsInsertMeta.params.find((p) => p.name === 'cachedResultText')?.flag).toBe('cached-result-text');
     expect(fieldsInsertMeta.params.find((p) => p.name === 'updatePolicy')?.flag).toBe('update-policy');
 
-    const markRunMeta = CLI_OPERATION_METADATA['doc.format.paragraph.setMarkRunProps'];
-    expect(markRunMeta.params.find((p) => p.name === 'markRunProps')?.flag).toBe('mark-run-props-json');
+    const alignmentMeta = CLI_OPERATION_METADATA['doc.format.paragraph.setAlignment'];
+    expect(alignmentMeta.params.find((p) => p.name === 'alignment')?.flag).toBe('alignment');
   });
 
   test('paragraph format operations expose block shortcuts without text-range flags', () => {
-    const paragraphFormatMeta = CLI_OPERATION_METADATA['doc.format.paragraph.setMarkRunProps'];
+    const paragraphFormatMeta = CLI_OPERATION_METADATA['doc.format.paragraph.setAlignment'];
     const paragraphParamNames = paragraphFormatMeta.params.map((p) => p.name);
 
     expect(paragraphParamNames).toContain('blockId');

@@ -78,7 +78,7 @@ export type ReceiptFailure = {
 // Review warnings
 //
 // AIDEV-NOTE: `ReviewWarning` is the single shared warning carrier
-// for the v2 review features (comments and tracked changes). The shared
+// for review features (comments and tracked changes). The shared
 // foundation requires one carrier so comments export and
 // tracked-change export / degradation policy do not invent
 // parallel surfaces. Spec language `warning` maps to `severity: 'warning'`
@@ -90,8 +90,7 @@ export type ReceiptFailure = {
 //   - source had malformed optional sidecar data that was ignored while
 //     preserving core data
 //   - generated fixture uses direct OOXML rather than Word-authored provenance
-//   - Word cannot visually represent a richer v2 headless structural intent
-//     exactly
+//   - Word cannot visually represent a richer headless structural intent exactly
 //
 // Forbidden semantic loss (e.g. dropping a persisted comment, losing thread
 // topology, deleting an anchor that the cross-feature rules say must survive)
@@ -178,10 +177,8 @@ export type ReceiptSuccess = {
    */
   textRangeShifts?: TextRangeShift[];
   /**
-   * Transaction id of the successful commit. Optional and
-   * additive — engines that lack a per-tx identity omit it. v2 populates
-   * this for every successful mutation so callers can wire the receipt to
-   * their own history bookkeeping (undo / redo correlation, audit logs).
+   * Transaction id of the successful commit. Optional and additive — engines
+   * that lack a per-tx identity omit it.
    */
   txId?: string;
   /**

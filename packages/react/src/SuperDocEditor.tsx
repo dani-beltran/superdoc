@@ -59,8 +59,6 @@ function SuperDocEditorInner(props: SuperDocEditorProps, ref: ForwardedRef<Super
     user: userProp,
     users: usersProp,
     modules,
-    editorVersion,
-    editorIntegration,
     // All other props passed through
     ...restProps
   } = props;
@@ -186,8 +184,6 @@ function SuperDocEditorInner(props: SuperDocEditorProps, ref: ForwardedRef<Super
           ...(user ? { user } : {}),
           ...(users ? { users } : {}),
           ...(modules ? { modules } : {}),
-          ...(editorVersion != null ? { editorVersion } : {}),
-          ...(editorIntegration != null ? { editorIntegration } : {}),
           // Wire up callbacks with lifecycle guards
           onReady: (event: SuperDocReadyEvent) => {
             if (!destroyed) {
@@ -274,19 +270,7 @@ function SuperDocEditorInner(props: SuperDocEditorProps, ref: ForwardedRef<Super
     // initial values — use getInstance() methods to change them at runtime.
     // restProps is intentionally excluded to avoid rebuilds on every render.
     // documentMode is handled separately via setDocumentMode() for efficiency.
-  }, [
-    documentProp,
-    user,
-    users,
-    modules,
-    role,
-    hideToolbar,
-    contained,
-    editorVersion,
-    editorIntegration,
-    containerId,
-    toolbarId,
-  ]);
+  }, [documentProp, user, users, modules, role, hideToolbar, contained, containerId, toolbarId]);
 
   const wrapperClassName = ['superdoc-wrapper', className].filter(Boolean).join(' ');
   const hideWhenLoading: CSSProperties | undefined = isLoading ? { display: 'none' } : undefined;

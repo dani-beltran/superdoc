@@ -9,7 +9,6 @@ import { CliError } from './errors';
 import { asRecord, isRecord, pathExists } from './guards';
 import { validateSessionId } from './session';
 import {
-  ACCEPTED_RUNTIME_VALUES,
   type CliIO,
   type DocumentRuntimeKind,
   type ExecutionMode,
@@ -158,9 +157,9 @@ function normalizeSessionType(value: unknown): SessionType {
 }
 
 function normalizeRuntime(value: unknown): DocumentRuntimeKind {
-  if (typeof value === 'string' && (ACCEPTED_RUNTIME_VALUES as readonly string[]).includes(value)) {
-    return value as DocumentRuntimeKind;
-  }
+  // Session metadata may outlive older runtime labels, but this CLI no longer
+  // offers runtime selection. Rehydrate every session as v1.
+  void value;
   return 'v1';
 }
 

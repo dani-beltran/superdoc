@@ -216,8 +216,7 @@ export function executeTrackChangesDecide(
       success: false,
       failure: {
         code: 'CAPABILITY_UNAVAILABLE',
-        message:
-          'trackChanges.decide range targets require the v2 adapter or a compatible decideRange() adapter method.',
+        message: 'trackChanges.decide range targets require a compatible decideRange() adapter method.',
       },
     };
   }
