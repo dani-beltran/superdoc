@@ -176,13 +176,31 @@ const onFocus = () => {
 };
 
 const onInputMousedown = (event) => {
-  if (disabled.value || document.activeElement === inputRef.value) return;
-  event.preventDefault();
-  inputRef.value?.focus();
+  if (disabled.value) return;
+
+  const hadInputFocus = document.activeElement === inputRef.value;
+  emit('item-clicked');
   isEditing.value = true;
-  query.value = '';
-  inputDisplay.value = appliedLabel.value;
-  setSelectionRange(0, appliedLabel.value.length);
+
+  if (!hadInputFocus) {
+    query.value = '';
+    inputDisplay.value = appliedLabel.value;
+    event.preventDefault();
+    inputRef.value?.focus();
+    setSelectionRange(0, appliedLabel.value.length);
+  }
+
+  if (!isOpen.value) {
+    const typedMatch = findPrefixMatchIndex(query.value, optionLabels.value);
+    if (typedMatch >= 0) {
+      openList(typedMatch);
+    } else if (hadInputFocus) {
+      openList(-1);
+    } else {
+      const index = appliedIndex();
+      openList(index >= 0 ? index : 0);
+    }
+  }
 };
 
 const onBlur = (event) => {
