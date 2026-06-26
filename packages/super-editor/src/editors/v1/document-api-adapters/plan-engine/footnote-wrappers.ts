@@ -233,7 +233,7 @@ export function footnotesInsertWrapper(
   if (input.body !== undefined) {
     return footnoteFailure(
       'CAPABILITY_UNAVAILABLE',
-      'footnotes.insert structured body content is only available on v2-backed sessions.',
+      'footnotes.insert structured body content is not supported by the v1 editor runtime.',
     );
   }
 
@@ -317,7 +317,7 @@ export function footnotesUpdateWrapper(
   if (input.patch.body !== undefined) {
     return footnoteFailure(
       'CAPABILITY_UNAVAILABLE',
-      'footnotes.update structured body content is only available on v2-backed sessions.',
+      'footnotes.update structured body content is not supported by the v1 editor runtime.',
     );
   }
 

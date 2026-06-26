@@ -5,9 +5,14 @@
  * paragraphs and tables while preserving their content structure.
  */
 
-import type { FlowBlock, ParagraphBlock, TableBlock, TextRun } from '@superdoc/contracts';
+import type { FlowBlock, ListBlock, ParagraphBlock, SdtMetadata, TableBlock, TextRun } from '@superdoc/contracts';
 import type { PMNode, NodeHandlerContext } from '../types.js';
-import { resolveNodeSdtMetadata, applySdtMetadataToParagraphBlocks, applySdtMetadataToTableBlock } from './metadata.js';
+import {
+  resolveNodeSdtMetadata,
+  applySdtMetadataToParagraphBlocks,
+  applySdtMetadataToTableBlock,
+  applySdtMetadataToListBlock,
+} from './metadata.js';
 
 const NON_RENDERED_STRUCTURAL_INLINE_TYPES = new Set([
   'bookmarkEnd',
@@ -75,6 +80,24 @@ function applyPlaceholderToEmptyParagraphBlocks(
     applied = true;
   });
   return applied;
+}
+
+function applyContainerSdtMetadata(blocks: FlowBlock[], metadata?: SdtMetadata): void {
+  if (!metadata) return;
+
+  blocks.forEach((block) => {
+    if (block.kind === 'paragraph' || block.kind === 'table') {
+      if (!block.attrs) block.attrs = {};
+      block.attrs.containerSdt ??= metadata;
+      return;
+    }
+    if (block.kind === 'list') {
+      block.items.forEach((item) => {
+        if (!item.paragraph.attrs) item.paragraph.attrs = {};
+        item.paragraph.attrs.containerSdt ??= metadata;
+      });
+    }
+  });
 }
 
 /**
@@ -154,6 +177,9 @@ export function handleStructuredContentBlockNode(node: PMNode, context: NodeHand
         paragraphBlocks.filter((b) => b.kind === 'paragraph') as ParagraphBlock[],
         structuredContentMetadata,
       );
+      paragraphBlocks.forEach((block) => {
+        if (block.kind === 'list') applySdtMetadataToListBlock(block as ListBlock, structuredContentMetadata);
+      });
       if (applyPlaceholderToEmptyParagraphBlocks(paragraphBlocks, structuredContentMetadata, contentPos)) {
         paragraphBlocks.forEach((block) => {
           blocks.push(block);
@@ -200,6 +226,9 @@ export function handleStructuredContentBlockNode(node: PMNode, context: NodeHand
         structuredContentMetadata,
       );
       paragraphBlocks.forEach((block) => {
+        if (block.kind === 'list') applySdtMetadataToListBlock(block as ListBlock, structuredContentMetadata);
+      });
+      paragraphBlocks.forEach((block) => {
         blocks.push(block);
         recordBlockKind?.(block.kind);
       });
@@ -225,6 +254,12 @@ export function handleStructuredContentBlockNode(node: PMNode, context: NodeHand
           recordBlockKind?.(tableBlock.kind);
         }
       }
+      return;
+    }
+    if (child.type === 'structuredContentBlock') {
+      const blockStart = blocks.length;
+      handleStructuredContentBlockNode(child, context);
+      applyContainerSdtMetadata(blocks.slice(blockStart), structuredContentMetadata);
       return;
     }
     // SD-1333: documentPartObject is a transparent wrapper - recurse its content.

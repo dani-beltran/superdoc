@@ -241,14 +241,12 @@ export type ToolbarContext = {
 /**
  * Active-editor shape accepted at the SuperDoc host boundary.
  *
- * A real SuperDoc can expose either the v1 Editor projection or a narrow v2
- * facade through `activeEditor`. The toolbar resolver only builds a command
- * context for v1-command-capable editors; v2 facades are accepted here so
- * `createHeadlessToolbar({ superdoc })` remains assignable during the v2
- * transition without pretending the facade is a full v1 Editor.
+ * A real SuperDoc exposes the v1 Editor projection through `activeEditor`.
+ * The toolbar resolver only builds a command context for command-capable
+ * editors.
  */
 export type HeadlessToolbarActiveEditor = {
-  editorVersion?: 1 | 2;
+  editorVersion?: 1;
   options?: {
     isHeaderOrFooter?: boolean;
     headerFooterType?: string;

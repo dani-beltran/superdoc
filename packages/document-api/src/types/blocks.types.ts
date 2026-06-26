@@ -1,12 +1,5 @@
 import type { BlockNodeType, BlockNodeAddress, DeletableBlockNodeAddress } from './base.js';
-import type {
-  AffectedRef,
-  AffectedRefRemapping,
-  Receipt,
-  ReceiptFailure,
-  ReceiptInsert,
-  TextRangeShift,
-} from './receipt.js';
+import type { AffectedRef, Receipt, ReceiptInsert, TextRangeShift } from './receipt.js';
 import type { StoryLocator } from './story.types.js';
 import type { ParagraphNumbering } from './paragraph.types.js';
 // ---------------------------------------------------------------------------
@@ -91,85 +84,6 @@ export interface DeletedBlockSummary {
   nodeType: string;
   textPreview: string | null;
 }
-// ---------------------------------------------------------------------------
-// Structural block / paragraph operations.
-//
-// `blocks.split`, `blocks.merge`, and `blocks.move` cover the structural
-// editing surface that `create.paragraph` and `blocks.delete` cannot
-// express. Each operation accepts a `BlockNodeAddress` (or a v2 stable ref
-// where applicable) and returns a structured receipt that mirrors the
-// kernel's semantic delta.
-// ---------------------------------------------------------------------------
-export interface BlocksSplitInput {
-  /** Paragraph-shaped block to split. Only `paragraph` / `heading` / `listItem` are supported. */
-  target: BlockNodeAddress;
-  /** Char offset inside the target paragraph's visible text where the split occurs. */
-  offset: number;
-}
-export interface BlocksSplitSuccessResult {
-  success: true;
-  /** Address of the new paragraph created by the split (the tail). */
-  inserted: BlockNodeAddress;
-  trackedChangeRefs?: ReceiptInsert[];
-  remappedRefs?: AffectedRefRemapping[];
-  affectedStories?: StoryLocator[];
-  textRangeShifts?: TextRangeShift[];
-  txId?: string;
-}
-export interface BlocksSplitFailureResult {
-  success: false;
-  failure: ReceiptFailure;
-}
-export type BlocksSplitResult = BlocksSplitSuccessResult | BlocksSplitFailureResult;
-export interface BlocksMergeInput {
-  /** First paragraph; receives the merged content. */
-  first: BlockNodeAddress;
-  /** Paragraph immediately after `first` in the same story. */
-  second: BlockNodeAddress;
-}
-export interface BlocksMergeSuccessResult {
-  success: true;
-  /** Address of the paragraph that was removed (the second paragraph). */
-  removed: BlockNodeAddress;
-  trackedChangeRefs?: ReceiptInsert[];
-  remappedRefs?: AffectedRefRemapping[];
-  affectedStories?: StoryLocator[];
-  textRangeShifts?: TextRangeShift[];
-  txId?: string;
-}
-export interface BlocksMergeFailureResult {
-  success: false;
-  failure: ReceiptFailure;
-}
-export type BlocksMergeResult = BlocksMergeSuccessResult | BlocksMergeFailureResult;
-export interface BlocksMoveInput {
-  /** Paragraph to move. */
-  source: BlockNodeAddress;
-  /** Destination anchor paragraph in the same story. */
-  destination: BlockNodeAddress;
-  /** Whether to place `source` before or after `destination`. */
-  placement: 'before' | 'after';
-}
-export interface BlocksMoveSuccessResult {
-  success: true;
-  /** Same `source` paragraph, now relocated. */
-  moved: BlockNodeAddress;
-  remappedRefs?: AffectedRefRemapping[];
-  affectedStories?: StoryLocator[];
-  /**
-   * Tracked-mode authoring (changeMode: 'tracked') emits paired move review
-   * entities. Each entry addresses the logical pair so callers can route the
-   * resulting review through `trackChanges.list/get/decide`. Direct-mode
-   * moves leave this field undefined.
-   */
-  trackedChangeRefs?: ReceiptInsert[];
-  txId?: string;
-}
-export interface BlocksMoveFailureResult {
-  success: false;
-  failure: ReceiptFailure;
-}
-export type BlocksMoveResult = BlocksMoveSuccessResult | BlocksMoveFailureResult;
 // Re-export Receipt so consumers can reference the union for failure-only
 // shapes without depending on `../types/receipt.js` directly from this file.
 export type { Receipt };

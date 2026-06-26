@@ -399,6 +399,11 @@ describe('handleStructuredContentNode nested SDT import regression', () => {
     elements: [sdtPr(props), { name: 'w:sdtContent', elements: contentElements }],
   });
 
+  const bookmarkStart = (id, name) => ({
+    name: 'w:bookmarkStart',
+    attributes: { 'w:id': id, 'w:name': name },
+  });
+
   const table = (text) => ({
     name: 'w:tbl',
     elements: [
@@ -503,6 +508,43 @@ describe('handleStructuredContentNode nested SDT import regression', () => {
     expect(nested.attrs.sdtPr?.elements?.find((el) => el.name === 'w:alias')?.attributes?.['w:val']).toBe(
       'Inner Alias',
     );
+
+    expectSchemaValid(result);
+  });
+
+  it('keeps a nested block SDT when a bookmark starts before it in the parent SDT', () => {
+    const inner = sdt({ id: 'inner-after-bookmark', tag: 'inner-tag', alias: 'Inner Alias' }, [
+      paragraph('Nested paragraph'),
+    ]);
+    const outer = sdt({ id: 'outer-bookmark', tag: 'outer-tag', alias: 'Outer Alias' }, [
+      bookmarkStart('42', 'beforeInnerSdt'),
+      inner,
+    ]);
+
+    const result = importNodes([outer]);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].type).toBe('structuredContentBlock');
+    expect(result[0].content?.map((node) => node.type)).toEqual(['paragraph', 'structuredContentBlock']);
+    expect(result[0].content?.[0]?.content).toContainEqual({
+      type: 'bookmarkStart',
+      attrs: {
+        id: '42',
+        name: 'beforeInnerSdt',
+      },
+    });
+
+    const nested = findFirstJson(
+      result[0],
+      (node) => node.type === 'structuredContentBlock' && node.attrs?.id === 'inner-after-bookmark',
+    );
+    expect(nested).toBeTruthy();
+    expect(nested.attrs).toMatchObject({
+      id: 'inner-after-bookmark',
+      tag: 'inner-tag',
+      alias: 'Inner Alias',
+      controlType: 'richText',
+    });
 
     expectSchemaValid(result);
   });

@@ -1,4 +1,5 @@
 import type {
+  BorderSpec,
   CellBorders,
   DrawingBlock,
   ImageDrawing,
@@ -18,7 +19,13 @@ import type {
   WrapExclusion,
   WrapTextMode,
 } from '@superdoc/contracts';
-import { rescaleColumnWidths, normalizeZIndex, getCellSpacingPx } from '@superdoc/contracts';
+import {
+  rescaleColumnWidths,
+  normalizeZIndex,
+  getCellSpacingPx,
+  getBorderBandProfile,
+  getSdtContainerKey,
+} from '@superdoc/contracts';
 import type { ResolvePhysicalFamily } from '@superdoc/font-system';
 import type { MinimalWordLayout } from '@superdoc/common/list-marker-utils';
 import type { FragmentRenderContext, RenderedLineInfo } from '../renderer.js';
@@ -26,8 +33,7 @@ import { applySquareWrapExclusionsToLines } from '../utils/anchor-helpers';
 import { createBlockImageContent } from '../images/image-block.js';
 import { buildImageHyperlinkAnchor } from '../images/hyperlink.js';
 import {
-  getSdtContainerKeyForBlock,
-  getSdtSiblingBoundaries,
+  getSdtSiblingBoundariesWithOwnContainers,
   type SdtAncestorOptions,
   type SdtBoundaryOptions,
 } from '../sdt/container.js';
@@ -37,6 +43,32 @@ import { renderParagraphContent } from '../paragraph/renderParagraphContent.js';
 
 type TableRowMeasure = TableMeasure['rows'][number];
 type TableCellMeasure = TableRowMeasure['cells'][number];
+
+const getCellBlockSdtBoundaryKey = (block: ParagraphBlock | TableBlock): string | null => {
+  return getSdtContainerKey(block.attrs?.containerSdt) ?? getSdtContainerKey(block.attrs?.sdt);
+};
+
+const getCellBlockOwnSdtBoundaryKey = (block: ParagraphBlock | TableBlock): string | null => {
+  return getSdtContainerKey(block.attrs?.sdt);
+};
+
+const narrowSdtBoundaryFlags = (
+  boundary: SdtBoundaryOptions | undefined,
+  isFirstSlice: boolean,
+  isLastSlice: boolean,
+): SdtBoundaryOptions | undefined => {
+  if (!boundary) return undefined;
+
+  return {
+    ...boundary,
+    isStart: (boundary.isStart ?? true) && isFirstSlice,
+    isEnd: (boundary.isEnd ?? true) && isLastSlice,
+    showLabel: boundary.showLabel === undefined ? undefined : boundary.showLabel && isFirstSlice,
+    ownIsStart: boundary.ownIsStart === undefined ? undefined : boundary.ownIsStart && isFirstSlice,
+    ownIsEnd: boundary.ownIsEnd === undefined ? undefined : boundary.ownIsEnd && isLastSlice,
+    ownShowLabel: boundary.ownShowLabel === undefined ? undefined : boundary.ownShowLabel && isFirstSlice,
+  };
+};
 
 /**
  * Compute the total segment count for a cell's blocks, matching the layout engine's
@@ -486,14 +518,7 @@ function renderPartialEmbeddedTable(params: {
   }
 
   const visibleHeight = computeVisibleHeight(tableMeasure.rows, embeddedFromRow, embeddedToRow, partialRowInfo);
-  const effectiveSdtBoundary = sdtBoundary
-    ? {
-        ...sdtBoundary,
-        isStart: (sdtBoundary.isStart ?? true) && localFrom === 0,
-        isEnd: (sdtBoundary.isEnd ?? true) && localTo >= totalTableSegments,
-        showLabel: sdtBoundary.showLabel === undefined ? undefined : sdtBoundary.showLabel && localFrom === 0,
-      }
-    : undefined;
+  const effectiveSdtBoundary = narrowSdtBoundaryFlags(sdtBoundary, localFrom === 0, localTo >= totalTableSegments);
 
   const tableWrapper = doc.createElement('div');
   tableWrapper.style.position = 'relative';
@@ -554,6 +579,12 @@ type TableCellRenderDependencies = {
   cell?: TableBlock['rows'][number]['cells'][number];
   /** Resolved borders for this cell */
   borders?: CellBorders;
+  /**
+   * Per-side CSS band width overrides in px. Interior compound bands straddle the
+   * gridline (Word model, SD-3308): each adjacent cell carries HALF the band as its
+   * transparent border instead of the owner carrying it all.
+   */
+  borderBandOverridesPx?: { left?: number; right?: number };
   /** Whether to apply default border if no borders specified */
   useDefaultBorder?: boolean;
   /** Function to render a line of paragraph content */
@@ -703,6 +734,7 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
     fromLine,
     toLine,
     resolvePhysical,
+    borderBandOverridesPx,
   } = deps;
 
   const attrs = cell?.attrs;
@@ -714,9 +746,30 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
   ): HTMLElement => buildImageHyperlinkAnchor(doc, imageEl, hyperlink, display);
 
   // RTL: swap left↔right cell margins (ECMA-376 Part 4 §14.3.3–14.3.4, §14.3.7–14.3.8)
-  const paddingLeft = isRtl ? (padding.right ?? 4) : (padding.left ?? 4);
+  // Word eats half of a border band back from the cell padding on that side
+  // (band-scaling probe measurements: leftover margin = padding - band/2, floored
+  // at 0). Scoped to compound bands (double, triple, thinThick*): for single-rule
+  // borders the difference is sub-pixel and not worth disturbing existing layouts.
+  // The matching column growth lives in measuring resolveColumnBandAllowances. (SD-3308)
+  // The eaten amount is the painted band in THIS cell minus the half-band the
+  // column was granted: a boundary band (fully inside) eats band/2; a straddled
+  // interior band (half inside, see borderBandOverridesPx) eats nothing.
+  const compoundBandEats = (border: BorderSpec | undefined, bandInCellPx?: number): number => {
+    const profile = border ? getBorderBandProfile(border) : null;
+    if (!profile) return 0;
+    const bandInCell = bandInCellPx ?? profile.band;
+    return Math.max(0, bandInCell - profile.band / 2);
+  };
+  const paddingLeft = Math.max(
+    0,
+    (isRtl ? (padding.right ?? 4) : (padding.left ?? 4)) - compoundBandEats(borders?.left, borderBandOverridesPx?.left),
+  );
   const paddingTop = padding.top ?? 0;
-  const paddingRight = isRtl ? (padding.left ?? 4) : (padding.right ?? 4);
+  const paddingRight = Math.max(
+    0,
+    (isRtl ? (padding.left ?? 4) : (padding.right ?? 4)) -
+      compoundBandEats(borders?.right, borderBandOverridesPx?.right),
+  );
   const paddingBottom = padding.bottom ?? 0;
 
   const cellEl = doc.createElement('div');
@@ -735,7 +788,7 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
   cellEl.style.paddingBottom = `${paddingBottom}px`;
 
   if (borders) {
-    applyCellBorders(cellEl, borders);
+    applyCellBorders(cellEl, borders, borderBandOverridesPx);
   } else if (useDefaultBorder) {
     cellEl.style.border = '1px solid rgba(0,0,0,0.6)';
   }
@@ -748,9 +801,12 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
   const cellBlocks = cell?.blocks ?? (cell?.paragraph ? [cell.paragraph] : []);
   const blockMeasures = cellMeasure?.blocks ?? (cellMeasure?.paragraph ? [cellMeasure.paragraph] : []);
   const sdtContainerKeys = cellBlocks.map((block) =>
-    block.kind === 'paragraph' || block.kind === 'table' ? getSdtContainerKeyForBlock(block) : null,
+    block.kind === 'paragraph' || block.kind === 'table' ? getCellBlockSdtBoundaryKey(block) : null,
   );
-  const sdtBoundaries = getSdtSiblingBoundaries(sdtContainerKeys);
+  const sdtOwnContainerKeys = cellBlocks.map((block) =>
+    block.kind === 'paragraph' || block.kind === 'table' ? getCellBlockOwnSdtBoundaryKey(block) : null,
+  );
+  const sdtBoundaries = getSdtSiblingBoundariesWithOwnContainers(sdtContainerKeys, sdtOwnContainerKeys);
 
   if (cellBlocks.length > 0 && blockMeasures.length > 0) {
     // Content is a child of the cell, positioned relative to it
@@ -999,16 +1055,11 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
         paraWrapper.style.position = 'relative';
         paraWrapper.style.left = '0';
         paraWrapper.style.width = '100%';
-        const baseSdtBoundary = sdtBoundaries[i];
-        const sdtBoundary = baseSdtBoundary
-          ? {
-              ...baseSdtBoundary,
-              isStart: (baseSdtBoundary.isStart ?? true) && localStartLine === 0,
-              isEnd: (baseSdtBoundary.isEnd ?? true) && localEndLine >= blockLineCount,
-              showLabel:
-                baseSdtBoundary.showLabel === undefined ? undefined : baseSdtBoundary.showLabel && localStartLine === 0,
-            }
-          : undefined;
+        const sdtBoundary = narrowSdtBoundaryFlags(
+          sdtBoundaries[i],
+          localStartLine === 0,
+          localEndLine >= blockLineCount,
+        );
 
         content.appendChild(paraWrapper);
         const result = renderParagraphContent({

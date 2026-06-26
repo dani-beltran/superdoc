@@ -407,7 +407,7 @@ describe('superdoc CLI', () => {
   });
 
   test('describe command paragraph format ops do not advertise text-range shortcuts', async () => {
-    const result = await runCli(['describe', 'command', 'doc.format.paragraph.setMarkRunProps', '--output', 'pretty']);
+    const result = await runCli(['describe', 'command', 'doc.format.paragraph.setAlignment', '--output', 'pretty']);
     expect(result.code).toBe(0);
     expect(result.stdout).toContain('--block-id');
     expect(result.stdout).not.toContain('--start');
@@ -1694,30 +1694,6 @@ describe('superdoc CLI', () => {
     await access(footnotesOut);
     expect(await readDocxPart(footnotesOut, 'word/footnotes.xml')).toContain('Example footnote content.');
     expect(await readDocxPart(footnotesOut, 'word/document.xml')).toContain('footnoteReference');
-  });
-
-  test('paragraph mark run props surface CAPABILITY_UNAVAILABLE on the v1 runtime', async () => {
-    const formatSource = join(TEST_DIR, 'paragraph-mark-run-props-source.docx');
-    const formatOut = join(TEST_DIR, 'paragraph-mark-run-props-out.docx');
-    await copyFile(SAMPLE_DOC, formatSource);
-
-    const target = await firstTextRange(['find', formatSource, '--type', 'text', '--pattern', 'Wilde']);
-    const result = await runCli([
-      'format',
-      'paragraph',
-      'set-mark-run-props',
-      formatSource,
-      '--block-id',
-      target.blockId,
-      '--mark-run-props-json',
-      '{"bold":true}',
-      '--out',
-      formatOut,
-    ]);
-
-    expect(result.code).toBe(1);
-    const envelope = parseJsonOutput<ErrorEnvelope>(result);
-    expect(envelope.error.code).toBe('CAPABILITY_UNAVAILABLE');
   });
 
   test('track-changes list is capability-aware', async () => {

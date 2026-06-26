@@ -260,19 +260,6 @@ const REQUIRED_HELPERS: Partial<Record<OperationId, (editor: Editor) => boolean>
   },
 };
 
-const V1_STUBBED_OPERATIONS = new Set<OperationId>([
-  'blocks.split',
-  'blocks.merge',
-  'blocks.move',
-  'lists.getState',
-  'lists.apply',
-  'lists.continue',
-  'lists.restart',
-  'lists.remove',
-  'format.paragraph.setMarkRunProps',
-  'tables.moveRow',
-]);
-
 // ---------------------------------------------------------------------------
 // Schema-node gating for specialized namespaces
 // ---------------------------------------------------------------------------
@@ -476,10 +463,6 @@ function isTemplatesApplyAvailable(editor: Editor): boolean {
 }
 
 function isOperationAvailable(editor: Editor, operationId: OperationId): boolean {
-  if (V1_STUBBED_OPERATIONS.has(operationId)) {
-    return false;
-  }
-
   // format.apply is available when at least one inline property can be executed.
   if (operationId === 'format.apply') {
     return INLINE_PROPERTY_REGISTRY.some((property) => isInlinePropertyAvailable(editor, property));

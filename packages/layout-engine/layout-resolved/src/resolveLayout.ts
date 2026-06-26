@@ -25,6 +25,7 @@ import type {
   LineSegment,
   PageRefLocation,
   Run,
+  SdtMetadata,
   TableBlock,
   TextRun,
 } from '@superdoc/contracts';
@@ -447,21 +448,25 @@ function resolveFragmentSdtContainerKey(fragment: Fragment, blockMap: Map<string
   const block = entry.block;
 
   if (fragment.kind === 'para' && block.kind === 'paragraph') {
-    return getSdtContainerKey(block.attrs?.sdt, block.attrs?.containerSdt);
+    return resolveSdtBoundaryKey(block.attrs?.sdt, block.attrs?.containerSdt);
   }
 
   if (fragment.kind === 'list-item' && block.kind === 'list') {
     const listBlock = block as ListBlock;
     const item = listBlock.items.find((listItem) => listItem.id === fragment.itemId);
-    return getSdtContainerKey(item?.paragraph.attrs?.sdt, item?.paragraph.attrs?.containerSdt);
+    return resolveSdtBoundaryKey(item?.paragraph.attrs?.sdt, item?.paragraph.attrs?.containerSdt);
   }
 
   if (fragment.kind === 'table' && block.kind === 'table') {
-    return getSdtContainerKey(block.attrs?.sdt, block.attrs?.containerSdt);
+    return resolveSdtBoundaryKey(block.attrs?.sdt, block.attrs?.containerSdt);
   }
 
   // image, drawing — no SDT container keys
   return null;
+}
+
+function resolveSdtBoundaryKey(sdt?: SdtMetadata | null, containerSdt?: SdtMetadata | null): string | null {
+  return getSdtContainerKey(containerSdt) ?? getSdtContainerKey(sdt);
 }
 
 function computeBlockVersion(

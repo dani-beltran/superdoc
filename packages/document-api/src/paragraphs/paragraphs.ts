@@ -31,7 +31,6 @@ import type {
   ParagraphsClearBorderInput,
   ParagraphsSetShadingInput,
   ParagraphsClearShadingInput,
-  ParagraphsSetMarkRunPropsInput,
   ParagraphsSetDirectionInput,
   ParagraphsClearDirectionInput,
   ParagraphsSetNumberingInput,
@@ -80,7 +79,6 @@ export type {
   ParagraphsClearBorderInput,
   ParagraphsSetShadingInput,
   ParagraphsClearShadingInput,
-  ParagraphsSetMarkRunPropsInput,
   ParagraphsSetDirectionInput,
   ParagraphsClearDirectionInput,
   ParagraphsSetNumberingInput,
@@ -125,7 +123,6 @@ export interface ParagraphsAdapter {
   clearBorder(input: ParagraphsClearBorderInput, options?: MutationOptions): ParagraphMutationResult;
   setShading(input: ParagraphsSetShadingInput, options?: MutationOptions): ParagraphMutationResult;
   clearShading(input: ParagraphsClearShadingInput, options?: MutationOptions): ParagraphMutationResult;
-  setMarkRunProps?(input: ParagraphsSetMarkRunPropsInput, options?: MutationOptions): ParagraphMutationResult;
   setDirection(input: ParagraphsSetDirectionInput, options?: MutationOptions): ParagraphMutationResult;
   clearDirection(input: ParagraphsClearDirectionInput, options?: MutationOptions): ParagraphMutationResult;
   setNumbering(input: ParagraphsSetNumberingInput, options?: MutationOptions): ParagraphMutationResult;
@@ -153,7 +150,6 @@ export interface ParagraphFormatApi {
   clearBorder(input: ParagraphsClearBorderInput, options?: MutationOptions): ParagraphMutationResult;
   setShading(input: ParagraphsSetShadingInput, options?: MutationOptions): ParagraphMutationResult;
   clearShading(input: ParagraphsClearShadingInput, options?: MutationOptions): ParagraphMutationResult;
-  setMarkRunProps(input: ParagraphsSetMarkRunPropsInput, options?: MutationOptions): ParagraphMutationResult;
   setDirection(input: ParagraphsSetDirectionInput, options?: MutationOptions): ParagraphMutationResult;
   clearDirection(input: ParagraphsClearDirectionInput, options?: MutationOptions): ParagraphMutationResult;
   setNumbering(input: ParagraphsSetNumberingInput, options?: MutationOptions): ParagraphMutationResult;
@@ -271,34 +267,6 @@ function assertNonEmptyString(value: unknown, fieldName: string, operation: stri
   }
 }
 
-function assertFiniteNumber(value: unknown, fieldName: string, operation: string): asserts value is number {
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    throw new DocumentApiValidationError(
-      'INVALID_INPUT',
-      `${operation} ${fieldName} must be a finite number, got ${JSON.stringify(value)}.`,
-      { field: fieldName, value },
-    );
-  }
-}
-
-function assertNonEmptyObject(
-  value: unknown,
-  fieldName: string,
-  operation: string,
-): asserts value is Record<string, unknown> {
-  if (!isRecord(value)) {
-    throw new DocumentApiValidationError('INVALID_INPUT', `${operation} ${fieldName} must be an object.`, {
-      field: fieldName,
-      value,
-    });
-  }
-  if (Object.keys(value).length === 0) {
-    throw new DocumentApiValidationError('INVALID_INPUT', `${operation} ${fieldName} must not be empty.`, {
-      field: fieldName,
-    });
-  }
-}
-
 /** Rejects if a patch input has zero patchable fields beyond `target`. */
 function assertNotEmptyPatch(input: Record<string, unknown>, patchKeys: readonly string[], operation: string): void {
   const hasPatchField = patchKeys.some((key) => input[key] !== undefined);
@@ -342,61 +310,6 @@ const SET_BORDER_KEYS = new Set(['target', 'side', 'style', 'color', 'size', 'sp
 const CLEAR_BORDER_KEYS = new Set(['target', 'side']);
 const SET_SHADING_KEYS = new Set(['target', 'fill', 'color', 'pattern']);
 const CLEAR_SHADING_KEYS = new Set(['target']);
-const SET_MARK_RUN_PROPS_KEYS = new Set(['target', 'markRunProps']);
-const MARK_RUN_PROPS_FIELD_KEYS = new Set([
-  'fontSizeCs',
-  'specVanish',
-  'fontSize',
-  'fonts',
-  'fontFamily',
-  'lang',
-  'color',
-  'highlight',
-  'shading',
-  'cs',
-  'rtl',
-  'bold',
-  'boldCs',
-  'italic',
-  'italicCs',
-  'underline',
-  'strikethrough',
-  'doubleStrikethrough',
-  'caps',
-  'smallCaps',
-  'outline',
-  'shadow',
-  'emboss',
-  'imprint',
-  'verticalAlign',
-  'characterSpacing',
-  'characterScale',
-  'kern',
-  'baselineShift',
-  'fitTextWidth',
-  'vanish',
-  'webHidden',
-  'border',
-  'textEffect',
-]);
-const MARK_RUN_COLOR_REF_KEYS = new Set(['model', 'value', 'theme', 'tint', 'shade']);
-const MARK_RUN_FONTS_KEYS = new Set([
-  'ascii',
-  'hAnsi',
-  'eastAsia',
-  'cs',
-  'asciiTheme',
-  'hAnsiTheme',
-  'eastAsiaTheme',
-  'csTheme',
-  'hint',
-]);
-const MARK_RUN_LANG_KEYS = new Set(['val', 'eastAsia', 'bidi']);
-const MARK_RUN_UNDERLINE_KEYS = new Set(['style', 'color']);
-const MARK_RUN_SHADING_KEYS = new Set(['fill', 'color', 'pattern']);
-const MARK_RUN_BORDER_KEYS = new Set(['style', 'width', 'space', 'color', 'frame', 'shadow']);
-const MARK_RUN_COLOR_MODE_VALUES = ['rgb', 'theme', 'auto'] as const;
-const MARK_RUN_VERTICAL_ALIGN_VALUES = ['baseline', 'superscript', 'subscript'] as const;
 const SET_DIRECTION_KEYS = new Set(['target', 'direction', 'alignmentPolicy']);
 const SET_NUMBERING_KEYS = new Set(['target', 'numId', 'level']);
 const CLEAR_DIRECTION_KEYS = new Set(['target']);
@@ -643,186 +556,6 @@ function validateClearShading(input: unknown): asserts input is ParagraphsClearS
   assertNoUnknownFields(input as Record<string, unknown>, CLEAR_SHADING_KEYS, 'format.paragraph.clearShading');
 }
 
-function validateMarkRunColorRef(value: unknown, fieldName: string, operation: string): void {
-  assertNonEmptyObject(value, fieldName, operation);
-  assertNoUnknownFields(value, MARK_RUN_COLOR_REF_KEYS, `${operation} ${fieldName}`);
-  if (value.model === undefined) {
-    throw new DocumentApiValidationError('INVALID_INPUT', `${operation} ${fieldName}.model is required.`, {
-      field: `${fieldName}.model`,
-    });
-  }
-  assertOneOf(value.model, `${fieldName}.model`, MARK_RUN_COLOR_MODE_VALUES, operation);
-  if (value.model === 'rgb') {
-    if (value.theme !== undefined || value.tint !== undefined || value.shade !== undefined) {
-      throw new DocumentApiValidationError(
-        'INVALID_INPUT',
-        `${operation} ${fieldName} rgb colors may only set model and value.`,
-        { field: fieldName, value },
-      );
-    }
-    assertNonEmptyString(value.value, `${fieldName}.value`, operation);
-    return;
-  }
-  if (value.model === 'theme') {
-    if (value.value !== undefined) {
-      throw new DocumentApiValidationError(
-        'INVALID_INPUT',
-        `${operation} ${fieldName} theme colors may not set value.`,
-        { field: `${fieldName}.value`, value: value.value },
-      );
-    }
-    assertNonEmptyString(value.theme, `${fieldName}.theme`, operation);
-    if (value.tint !== undefined) assertInteger(value.tint, `${fieldName}.tint`, operation);
-    if (value.shade !== undefined) assertInteger(value.shade, `${fieldName}.shade`, operation);
-    return;
-  }
-  if (value.value !== undefined || value.theme !== undefined || value.tint !== undefined || value.shade !== undefined) {
-    throw new DocumentApiValidationError('INVALID_INPUT', `${operation} ${fieldName} auto colors may only set model.`, {
-      field: fieldName,
-      value,
-    });
-  }
-}
-
-function validateMarkRunFonts(value: unknown, fieldName: string, operation: string): void {
-  assertNonEmptyObject(value, fieldName, operation);
-  assertNoUnknownFields(value, MARK_RUN_FONTS_KEYS, `${operation} ${fieldName}`);
-  for (const [key, nestedValue] of Object.entries(value)) {
-    assertNonEmptyString(nestedValue, `${fieldName}.${key}`, operation);
-  }
-}
-
-function validateMarkRunLanguages(value: unknown, fieldName: string, operation: string): void {
-  assertNonEmptyObject(value, fieldName, operation);
-  assertNoUnknownFields(value, MARK_RUN_LANG_KEYS, `${operation} ${fieldName}`);
-  for (const [key, nestedValue] of Object.entries(value)) {
-    assertNonEmptyString(nestedValue, `${fieldName}.${key}`, operation);
-  }
-}
-
-function validateMarkRunUnderline(value: unknown, fieldName: string, operation: string): void {
-  assertNonEmptyObject(value, fieldName, operation);
-  assertNoUnknownFields(value, MARK_RUN_UNDERLINE_KEYS, `${operation} ${fieldName}`);
-  if (value.style !== undefined) assertNonEmptyString(value.style, `${fieldName}.style`, operation);
-  if (value.color !== undefined) validateMarkRunColorRef(value.color, `${fieldName}.color`, operation);
-}
-
-function validateMarkRunShading(value: unknown, fieldName: string, operation: string): void {
-  assertNonEmptyObject(value, fieldName, operation);
-  assertNoUnknownFields(value, MARK_RUN_SHADING_KEYS, `${operation} ${fieldName}`);
-  if (value.fill !== undefined) validateMarkRunColorRef(value.fill, `${fieldName}.fill`, operation);
-  if (value.color !== undefined) validateMarkRunColorRef(value.color, `${fieldName}.color`, operation);
-  if (value.pattern !== undefined) assertNonEmptyString(value.pattern, `${fieldName}.pattern`, operation);
-}
-
-function validateMarkRunBorder(value: unknown, fieldName: string, operation: string): void {
-  assertNonEmptyObject(value, fieldName, operation);
-  assertNoUnknownFields(value, MARK_RUN_BORDER_KEYS, `${operation} ${fieldName}`);
-  if (value.style !== undefined) assertNonEmptyString(value.style, `${fieldName}.style`, operation);
-  if (value.width !== undefined) assertFiniteNumber(value.width, `${fieldName}.width`, operation);
-  if (value.space !== undefined) assertFiniteNumber(value.space, `${fieldName}.space`, operation);
-  if (value.color !== undefined) validateMarkRunColorRef(value.color, `${fieldName}.color`, operation);
-  if (value.frame !== undefined) assertStrictBoolean(value.frame, `${fieldName}.frame`, operation);
-  if (value.shadow !== undefined) assertStrictBoolean(value.shadow, `${fieldName}.shadow`, operation);
-}
-
-function validateMarkRunPropValue(key: string, value: unknown, operation: string): void {
-  const fieldName = `markRunProps.${key}`;
-  if (value === undefined) {
-    throw new DocumentApiValidationError('INVALID_INPUT', `${operation} ${fieldName} must not be undefined.`, {
-      field: fieldName,
-    });
-  }
-
-  switch (key) {
-    case 'fonts':
-      validateMarkRunFonts(value, fieldName, operation);
-      return;
-    case 'lang':
-      validateMarkRunLanguages(value, fieldName, operation);
-      return;
-    case 'color':
-      validateMarkRunColorRef(value, fieldName, operation);
-      return;
-    case 'underline':
-      validateMarkRunUnderline(value, fieldName, operation);
-      return;
-    case 'shading':
-      validateMarkRunShading(value, fieldName, operation);
-      return;
-    case 'border':
-      validateMarkRunBorder(value, fieldName, operation);
-      return;
-    case 'fontFamily':
-    case 'highlight':
-    case 'textEffect':
-      assertNonEmptyString(value, fieldName, operation);
-      return;
-    case 'fontSize':
-    case 'fontSizeCs':
-    case 'characterSpacing':
-    case 'characterScale':
-    case 'kern':
-    case 'baselineShift':
-    case 'fitTextWidth':
-      assertFiniteNumber(value, fieldName, operation);
-      return;
-    case 'verticalAlign':
-      assertOneOf(value, fieldName, MARK_RUN_VERTICAL_ALIGN_VALUES, operation);
-      return;
-    case 'cs':
-    case 'rtl':
-    case 'bold':
-    case 'boldCs':
-    case 'italic':
-    case 'italicCs':
-    case 'strikethrough':
-    case 'doubleStrikethrough':
-    case 'caps':
-    case 'smallCaps':
-    case 'outline':
-    case 'shadow':
-    case 'emboss':
-    case 'imprint':
-    case 'vanish':
-    case 'webHidden':
-    case 'specVanish':
-      assertStrictBoolean(value, fieldName, operation);
-      return;
-    default:
-      throw new DocumentApiValidationError('INVALID_INPUT', `${operation} does not support ${fieldName}.`, {
-        field: fieldName,
-      });
-  }
-}
-
-function validateSetMarkRunProps(input: unknown): asserts input is ParagraphsSetMarkRunPropsInput {
-  const op = 'format.paragraph.setMarkRunProps';
-  assertParagraphTarget(input, op);
-  assertNoUnknownFields(input as Record<string, unknown>, SET_MARK_RUN_PROPS_KEYS, op);
-  const rec = input as Record<string, unknown>;
-  if (rec.markRunProps === undefined) {
-    throw new DocumentApiValidationError('INVALID_INPUT', `${op} requires a markRunProps field.`);
-  }
-  if (!isRecord(rec.markRunProps)) {
-    throw new DocumentApiValidationError('INVALID_INPUT', `${op} markRunProps must be an object.`, {
-      field: 'markRunProps',
-      value: rec.markRunProps,
-    });
-  }
-  if (Object.keys(rec.markRunProps).length === 0) {
-    throw new DocumentApiValidationError(
-      'INVALID_INPUT',
-      `${op} markRunProps must declare at least one run property.`,
-      { field: 'markRunProps' },
-    );
-  }
-  assertNoUnknownFields(rec.markRunProps, MARK_RUN_PROPS_FIELD_KEYS, `${op} markRunProps`);
-  for (const [key, value] of Object.entries(rec.markRunProps)) {
-    validateMarkRunPropValue(key, value, op);
-  }
-}
-
 function validateSetDirection(input: unknown): asserts input is ParagraphsSetDirectionInput {
   const op = 'format.paragraph.setDirection';
   assertParagraphTarget(input, op);
@@ -1041,26 +774,6 @@ export function executeParagraphsClearShading(
 ): ParagraphMutationResult {
   validateClearShading(input);
   return adapter.clearShading(input, normalizeMutationOptions(options));
-}
-
-export function executeParagraphsSetMarkRunProps(
-  adapter: ParagraphsAdapter,
-  input: ParagraphsSetMarkRunPropsInput,
-  options?: MutationOptions,
-): ParagraphMutationResult {
-  validateSetMarkRunProps(input);
-  if (!adapter.setMarkRunProps) {
-    return {
-      success: false,
-      failure: {
-        code: 'CAPABILITY_UNAVAILABLE',
-        message:
-          'format.paragraph.setMarkRunProps is not available. The host engine has not provided an adapter for this capability.',
-        details: { operation: 'format.paragraph.setMarkRunProps' },
-      },
-    };
-  }
-  return adapter.setMarkRunProps(input, normalizeMutationOptions(options));
 }
 
 export function executeParagraphsSetDirection(

@@ -101,6 +101,43 @@ describe('renderTableCell', () => {
     },
   });
 
+  // SD-3308 Word-measured padding rule for compound border bands: the painted band
+  // eats HALF its width back from the cell padding per side (probe evidence: Word's
+  // thinThickSmallGap sz24 leftover margin = padding - band/2). Padding floors at 0;
+  // non-compound borders keep the full padding (sub-pixel difference, deliberately
+  // out of scope to avoid corpus churn).
+  it('compresses horizontal padding by half the band on compound border sides', () => {
+    const { cellElement } = renderTableCell({
+      ...createBaseDeps(),
+      cellMeasure: baseCellMeasure,
+      cell: baseCell,
+      borders: {
+        // thinThickSmallGap w4: band 6 -> padding 4 - 3 = 1px
+        left: { style: 'thinThickSmallGap', width: 4, color: '#000000' },
+        // triple w2: band 10 -> padding 4 - 5 -> floors at 0
+        right: { style: 'triple', width: 2, color: '#000000' },
+      },
+    });
+
+    expect(cellElement.style.paddingLeft).toBe('1px');
+    expect(cellElement.style.paddingRight).toBe('0px');
+  });
+
+  it('keeps full padding for non-compound border sides', () => {
+    const { cellElement } = renderTableCell({
+      ...createBaseDeps(),
+      cellMeasure: baseCellMeasure,
+      cell: baseCell,
+      borders: {
+        left: { style: 'single', width: 2, color: '#000000' },
+        right: { style: 'thick', width: 2, color: '#000000' },
+      },
+    });
+
+    expect(cellElement.style.paddingLeft).toBe('4px');
+    expect(cellElement.style.paddingRight).toBe('4px');
+  });
+
   it('uses an end-of-cell mark for the final paragraph in a table cell', () => {
     const secondParagraphBlock: ParagraphBlock = {
       kind: 'paragraph',
@@ -3798,6 +3835,99 @@ describe('renderTableCell', () => {
 
       // Cell should have overflow:visible to allow SDT labels to extend outside
       expect(cellElement.style.overflow).toBe('visible');
+    });
+
+    it('should render child SDT label when a table cell parent SDT continues into a nested child paragraph', () => {
+      const parentSdt: SdtMetadata = {
+        type: 'structuredContent',
+        scope: 'block',
+        id: 'cell-parent-sdt',
+        alias: 'Parent',
+      };
+      const childSdt: SdtMetadata = {
+        type: 'structuredContent',
+        scope: 'block',
+        id: 'cell-child-sdt',
+        alias: 'Child',
+      };
+      const parentPara: ParagraphBlock = {
+        kind: 'paragraph',
+        id: 'cell-parent-para',
+        runs: [{ text: 'Parent', fontFamily: 'Arial', fontSize: 16 }],
+        attrs: { sdt: parentSdt },
+      };
+      const childPara: ParagraphBlock = {
+        kind: 'paragraph',
+        id: 'cell-child-para',
+        runs: [{ text: 'Child', fontFamily: 'Arial', fontSize: 16 }],
+        attrs: { sdt: childSdt, containerSdt: parentSdt },
+      };
+      const parentMeasure: ParagraphMeasure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 6,
+            width: 50,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+          },
+        ],
+        totalHeight: 20,
+      };
+      const childMeasure: ParagraphMeasure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 5,
+            width: 40,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+          },
+        ],
+        totalHeight: 20,
+      };
+
+      const { cellElement } = renderTableCell({
+        ...createBaseDeps(),
+        cellMeasure: {
+          blocks: [parentMeasure, childMeasure],
+          width: 120,
+          height: 40,
+          gridColumnStart: 0,
+          colSpan: 1,
+          rowSpan: 1,
+        },
+        cell: {
+          id: 'cell-parent-child-sdt',
+          blocks: [parentPara, childPara],
+          attrs: {},
+        },
+      });
+
+      const chromeElements = Array.from(
+        cellElement.querySelectorAll<HTMLElement>('.superdoc-structured-content-block'),
+      );
+      expect(chromeElements).toHaveLength(2);
+      expect(chromeElements[0].dataset.sdtContainerStart).toBe('true');
+      expect(chromeElements[0].dataset.sdtContainerEnd).toBe('false');
+      expect(chromeElements[0].dataset.sdtNextOwnContainerStartsNested).toBe('true');
+      expect(chromeElements[1].dataset.sdtContainerStart).toBe('false');
+      expect(chromeElements[1].dataset.sdtContainerEnd).toBe('true');
+      expect(chromeElements[1].dataset.sdtOwnContainerStart).toBe('true');
+      expect(chromeElements[1].dataset.sdtOwnContainerEnd).toBe('true');
+      expect(chromeElements[1].dataset.sdtOwnContainerNested).toBe('true');
+      expect(chromeElements.map((el) => el.querySelector('.superdoc-structured-content__label')?.textContent)).toEqual([
+        'Parent',
+        'Child',
+      ]);
     });
 
     it('should set overflow:visible when cell contains documentSection SDT', () => {

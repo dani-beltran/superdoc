@@ -75,6 +75,28 @@ describe('normalizeContextMetadata', () => {
     });
   });
 
+  describe('runtime normalization', () => {
+    test('preserves the supported v1 runtime', () => {
+      const result = normalizeContextMetadata(makeMetadata({ runtime: 'v1' }));
+      expect(result.runtime).toBe('v1');
+    });
+
+    test('defaults an absent runtime to v1', () => {
+      const result = normalizeContextMetadata(makeMetadata({ runtime: undefined as any }));
+      expect(result.runtime).toBe('v1');
+    });
+
+    test('normalizes stale unsupported runtime metadata to v1', () => {
+      const metadata = makeMetadata({ runtime: 'legacy-runtime' as any });
+      expect(normalizeContextMetadata(metadata).runtime).toBe('v1');
+    });
+
+    test('normalizes any unknown runtime value to v1', () => {
+      const metadata = makeMetadata({ runtime: 'v3' as any });
+      expect(normalizeContextMetadata(metadata).runtime).toBe('v1');
+    });
+  });
+
   describe('session type normalization', () => {
     test('normalizes unknown session type to local', () => {
       const metadata = makeMetadata({ sessionType: 'unknown' as any });

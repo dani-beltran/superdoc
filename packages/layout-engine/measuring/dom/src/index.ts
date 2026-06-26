@@ -61,6 +61,7 @@ import {
   type CellSpacing,
   type TableBorders,
   type TableBorderValue,
+  type CellBorders,
   EMPTY_SDT_PLACEHOLDER_TEXT,
   effectiveTableCellSpacing,
   isEmptySdtPlaceholderRun,
@@ -76,6 +77,7 @@ import {
   DEFAULT_LIST_HANGING_PX as DEFAULT_LIST_HANGING,
 } from '@superdoc/common/layout-constants';
 import { resolveListTextStartPx, type MinimalMarker } from '@superdoc/common/list-marker-utils';
+import { getAtomicRunLayoutSize, type MeasureAtomicText } from '@superdoc/common/atomic-run-size';
 import { calculateRotatedBounds, normalizeRotation } from '@superdoc/geometry-utils';
 import { toCssFontFamily } from '@superdoc/font-utils';
 import { DEFAULT_FONT_MEASURE_CONTEXT, type FaceKey, type FontMeasureContext } from '@superdoc/font-system';
@@ -190,21 +192,16 @@ const pxToTwips = (px: number): number => Math.round(px * TWIPS_PER_PX);
 
 // Canonical implementation moved to @superdoc/contracts; re-imported for local use and re-exported.
 export { getCellSpacingPx } from '@superdoc/contracts';
-import { getCellSpacingPx } from '@superdoc/contracts';
+import { getCellSpacingPx, getBorderBandWidthPx } from '@superdoc/contracts';
 
 /**
- * Returns the border width in pixels for a table border value (matches painter border-utils logic).
- * Used so total table dimensions include outer border sizes and there is enough space for last row/column spacing.
+ * Returns the border band width in pixels for a table border value.
+ * Delegates to the shared contracts helper so this always matches the painter's
+ * rendered width (thick = 2x min 3px, double = 3x per-rule width min 3px). Used for
+ * outer table dimensions and per-row band reservation.
  */
 function getTableBorderWidthPx(value: TableBorderValue | null | undefined): number {
-  if (value == null) return 0;
-  if (typeof value === 'object' && 'none' in value && value.none) return 0;
-  const raw = value as { style?: string; width?: number; size?: number };
-  const w = typeof raw.width === 'number' ? raw.width : typeof raw.size === 'number' ? raw.size : 1;
-  const width = Math.max(0, w);
-  if (raw.style === 'none') return 0;
-  if (raw.style === 'thick') return Math.max(width * 2, 3);
-  return width;
+  return getBorderBandWidthPx(value);
 }
 
 /** Computes outer table border widths in px from table attrs (for total dimensions and content offset). */
@@ -227,11 +224,10 @@ const DEFAULT_CELL_PADDING = { top: 0, left: 4, right: 4, bottom: 0 };
 const DEFAULT_DECIMAL_SEPARATOR = '.';
 const ALLOWED_TAB_VALS = new Set<TabStop['val']>(['start', 'center', 'end', 'decimal', 'bar', 'clear']);
 
-// Field annotation pill styling constants
-const FIELD_ANNOTATION_PILL_PADDING = 8; // Border (2px each side) + padding (2px each side)
-const FIELD_ANNOTATION_LINE_HEIGHT_MULTIPLIER = 1.2; // Line height multiplier for pill height
-const FIELD_ANNOTATION_VERTICAL_PADDING = 6; // Vertical padding/border for pill height
-const DEFAULT_FIELD_ANNOTATION_FONT_SIZE = 16; // Default font size for field annotations
+// Field annotation pill styling constants are shared via @superdoc/common/layout-constants
+// (FIELD_ANNOTATION_PILL_PADDING, FIELD_ANNOTATION_VERTICAL_PADDING,
+// FIELD_ANNOTATION_LINE_HEIGHT_MULTIPLIER, DEFAULT_FIELD_ANNOTATION_FONT_SIZE) so the fast
+// remeasure path and this full measurer stay in lockstep.
 const DEFAULT_PARAGRAPH_FONT_SIZE = 12;
 const DEFAULT_PARAGRAPH_FONT_FAMILY = 'Arial';
 const isValidFontSize = (value: unknown): value is number =>
@@ -727,6 +723,21 @@ function measureTabAlignmentGroup(
 
   let foundDecimal = false;
 
+  // Field annotation label measurement for the shared atomic-run sizer, using this
+  // group measurer's existing font resolution (buildFontString + measureRunWidth).
+  const measureAtomicText: MeasureAtomicText = (text, atomicRun, fontSize) => {
+    const { font } = buildFontString(
+      {
+        fontFamily: ((atomicRun as { fontFamily?: string }).fontFamily as string) ?? 'Arial',
+        fontSize,
+        bold: (atomicRun as { bold?: boolean }).bold,
+        italic: (atomicRun as { italic?: boolean }).italic,
+      },
+      fontContext,
+    );
+    return measureRunWidth(text, font, ctx, atomicRun as unknown as TextRun, 0);
+  };
+
   for (let i = startRunIndex; i < runs.length; i++) {
     const run = runs[i];
 
@@ -778,42 +789,12 @@ function measureTabAlignmentGroup(
       continue;
     }
 
-    // Measure image runs
-    if (isImageRun(run)) {
-      const leftSpace = run.distLeft ?? 0;
-      const rightSpace = run.distRight ?? 0;
-      const imageWidth = run.width + leftSpace + rightSpace;
-
-      result.runs.push({ runIndex: i, width: imageWidth });
-      result.totalWidth += imageWidth;
-      continue;
-    }
-
-    // Measure math runs (atomic, pre-computed dimensions like images)
-    if (run.kind === 'math') {
-      const mathWidth = (run as { width: number }).width ?? 20;
-      result.runs.push({ runIndex: i, width: mathWidth });
-      result.totalWidth += mathWidth;
-      continue;
-    }
-
-    // Measure field annotation runs
-    if (isFieldAnnotationRun(run)) {
-      const fontSize = (run as { fontSize?: number }).fontSize ?? DEFAULT_FIELD_ANNOTATION_FONT_SIZE;
-      const { font } = buildFontString(
-        {
-          fontFamily: (run as { fontFamily?: string }).fontFamily ?? 'Arial',
-          fontSize,
-          bold: (run as { bold?: boolean }).bold,
-          italic: (run as { italic?: boolean }).italic,
-        },
-        fontContext,
-      );
-      const textWidth = run.displayLabel ? measureRunWidth(run.displayLabel, font, ctx, run, 0) : 0;
-      const pillWidth = textWidth + FIELD_ANNOTATION_PILL_PADDING;
-
-      result.runs.push({ runIndex: i, width: pillWidth });
-      result.totalWidth += pillWidth;
+    // Measure atomic runs (image / math / field annotation) via the shared sizer so
+    // alignment-group widths match the canonical line-pass sizing.
+    if (isImageRun(run) || run.kind === 'math' || isFieldAnnotationRun(run)) {
+      const { width } = getAtomicRunLayoutSize(run, measureAtomicText);
+      result.runs.push({ runIndex: i, width });
+      result.totalWidth += width;
       continue;
     }
 
@@ -894,6 +875,20 @@ async function measureParagraphBlock(
   fontContext: FontMeasureContext,
 ): Promise<ParagraphMeasure> {
   const ctx = getCanvasContext();
+  // Field annotation label measurement for the shared atomic-run sizer. Resolves the
+  // physical render family (the family the pill actually paints) and applies the run's
+  // text-transform so the measured width matches the glyphs on screen.
+  const measureAtomicText: MeasureAtomicText = (text, run, fontSize) => {
+    const family = fontContext.resolvePhysical(
+      ((run as { fontFamily?: string }).fontFamily as string) || 'Arial, sans-serif',
+      faceOf(run as { bold?: boolean; italic?: boolean }),
+    );
+    const weight = (run as { bold?: boolean }).bold ? 'bold' : 'normal';
+    const style = (run as { italic?: boolean }).italic ? 'italic' : 'normal';
+    ctx.font = `${style} ${weight} ${fontSize}px ${family}`;
+    const displayText = applyTextTransform(text, run as Run);
+    return displayText ? ctx.measureText(displayText).width : 0;
+  };
   const wordLayout: WordParagraphLayoutOutput | undefined = block.attrs?.wordLayout as
     | WordParagraphLayoutOutput
     | undefined;
@@ -1795,15 +1790,8 @@ async function measureParagraphBlock(
 
     // Handle image runs
     if (isImageRun(run)) {
-      // Calculate image width including spacing
-      const leftSpace = run.distLeft ?? 0;
-      const rightSpace = run.distRight ?? 0;
-      const imageWidth = run.width + leftSpace + rightSpace;
-
-      // Calculate image height including spacing (for line height)
-      const topSpace = run.distTop ?? 0;
-      const bottomSpace = run.distBottom ?? 0;
-      const imageHeight = run.height + topSpace + bottomSpace;
+      // Width/height (including dist* spacing) come from the shared atomic-run sizer.
+      const { width: imageWidth, height: imageHeight } = getAtomicRunLayoutSize(run, measureAtomicText);
 
       // Determine image position - check active tab group first, then pending alignment
       let imageStartX: number | undefined;
@@ -1927,9 +1915,7 @@ async function measureParagraphBlock(
 
     // Handle math runs (atomic, pre-computed dimensions like images)
     if (run.kind === 'math') {
-      const mathRun = run as { width: number; height: number };
-      const mathWidth = mathRun.width ?? 20;
-      const mathHeight = mathRun.height ?? 24;
+      const { width: mathWidth, height: mathHeight } = getAtomicRunLayoutSize(run, measureAtomicText);
 
       if (!currentLine) {
         currentLine = {
@@ -1958,54 +1944,10 @@ async function measureParagraphBlock(
 
     // Handle field annotation runs (pill-styled form fields)
     if (isFieldAnnotationRun(run)) {
-      // Use displayLabel for text measurement, with fallback defaults
-      const rawDisplayText = run.displayLabel || '';
-      const displayText = applyTextTransform(rawDisplayText, run);
-
-      // Use annotation's typography or fallback to defaults (16px Arial is standard)
-      const annotationFontSize =
-        typeof run.fontSize === 'number'
-          ? run.fontSize
-          : typeof run.fontSize === 'string'
-            ? parseFloat(run.fontSize) || DEFAULT_FIELD_ANNOTATION_FONT_SIZE
-            : DEFAULT_FIELD_ANNOTATION_FONT_SIZE;
-      // Resolve to the physical render family (a per-document fonts.map or the bundled substitute),
-      // the same family the pill paints, so the measured pill width matches the painted glyphs.
-      const annotationFontFamily = fontContext.resolvePhysical(run.fontFamily || 'Arial, sans-serif', faceOf(run));
-
-      // Build font string for measurement
-      const fontWeight = run.bold ? 'bold' : 'normal';
-      const fontStyle = run.italic ? 'italic' : 'normal';
-      const annotationFont = `${fontStyle} ${fontWeight} ${annotationFontSize}px ${annotationFontFamily}`;
-      ctx.font = annotationFont;
-
-      // Measure text width
-      const textWidth = displayText ? ctx.measureText(displayText).width : 0;
-
-      const annotationHorizontalPadding = run.highlighted === false ? 0 : FIELD_ANNOTATION_PILL_PADDING;
-      const annotationVerticalPadding = run.highlighted === false ? 0 : FIELD_ANNOTATION_VERTICAL_PADDING;
-
-      // Add pill styling overhead: border (2px each side) + padding (2px each side) = 8px total
-      const annotationWidth = textWidth + annotationHorizontalPadding;
-
-      // Calculate height including pill styling
-      let annotationHeight = annotationFontSize * FIELD_ANNOTATION_LINE_HEIGHT_MULTIPLIER + annotationVerticalPadding;
-
-      // Signature images are capped to 28px in the renderer; reflect that in measurement.
-      if (run.variant === 'signature' && run.imageSrc) {
-        const signatureHeight = 28 + annotationVerticalPadding;
-        annotationHeight = Math.max(annotationHeight, signatureHeight);
-      }
-
-      // Image annotations use explicit size when provided.
-      if (run.variant === 'image' && run.imageSrc && run.size?.height) {
-        const imageHeight = run.size.height + annotationVerticalPadding;
-        annotationHeight = Math.max(annotationHeight, imageHeight);
-      }
-
-      if (run.variant === 'html' && run.size?.height) {
-        annotationHeight = Math.max(annotationHeight, run.size.height);
-      }
+      // Pill width/height come from the shared atomic-run sizer (single source of
+      // truth with the fast remeasure path); `measureAtomicText` resolves the font
+      // and applies the text-transform exactly as the pill paints.
+      const { width: annotationWidth, height: annotationHeight } = getAtomicRunLayoutSize(run, measureAtomicText);
 
       // If a tab alignment is pending, apply it
       let annotationStartX: number | undefined;
@@ -2457,11 +2399,38 @@ async function measureParagraphBlock(
         // - We only want to break mid-word when the word truly exceeds available width
         // - Breaking words that exactly fit would cause unnecessary fragmentation
         if (wordOnlyWidth > effectiveMaxWidth + WIDTH_FUDGE_PX && word.length > 1) {
+          // Track the remaining portion of the oversized word. If the current line
+          // already has content, we may be able to place an initial chunk into the
+          // remaining width before finalizing the line.
+          let wordToBreak = word;
+          let wordToBreakStart = wordStartChar;
+
           // First, finish any existing currentLine before processing the long word
           // Only push the line if it has actual text content (segments), not just tab positioning.
           // If the line only has width from tab advances but no text, we should keep it so the
           // long word can use the pending tab alignment.
           if (currentLine && currentLine.width > 0 && currentLine.segments && currentLine.segments.length > 0) {
+            const remainingWidth = currentLine.maxWidth - currentLine.width;
+            if (remainingWidth > WIDTH_FUDGE_PX) {
+              const firstChunks = breakWordIntoChunks(wordToBreak, remainingWidth, font, ctx, run, wordToBreakStart);
+              const firstChunk = firstChunks[0];
+              if (firstChunk && firstChunk.text.length > 0 && firstChunk.text.length < wordToBreak.length) {
+                const firstChunkEnd = wordToBreakStart + firstChunk.text.length;
+                currentLine.toRun = runIndex;
+                currentLine.toChar = firstChunkEnd;
+                currentLine.width = roundValue(currentLine.width + firstChunk.width);
+                currentLine.maxFontSize = Math.max(currentLine.maxFontSize, lineHeightFontSize(run));
+                currentLine.maxFontInfo = getFontInfoFromRun(run, fontContext);
+                currentLine.segments.push({
+                  runIndex,
+                  fromChar: wordToBreakStart,
+                  toChar: firstChunkEnd,
+                  width: firstChunk.width,
+                });
+                wordToBreakStart = firstChunkEnd;
+                wordToBreak = wordToBreak.slice(firstChunk.text.length);
+              }
+            }
             trimTrailingWrapSpaces(currentLine);
             const metrics = finalizeLineMetrics(currentLine, spacing);
             const lineBase = currentLine;
@@ -2489,10 +2458,10 @@ async function measureParagraphBlock(
 
           // Use remaining width for chunking if we have a tab-only line, otherwise use full line width
           const chunkWidth = hasTabOnlyLine ? Math.max(remainingWidthAfterTab, lineMaxWidth * 0.25) : lineMaxWidth;
-          const chunks = breakWordIntoChunks(word, chunkWidth, font, ctx, run, wordStartChar);
+          const chunks = breakWordIntoChunks(wordToBreak, chunkWidth, font, ctx, run, wordToBreakStart);
 
           // Process all chunks except the last one as complete lines
-          let chunkCharOffset = wordStartChar;
+          let chunkCharOffset = wordToBreakStart;
           for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
             const chunk = chunks[chunkIndex];
             const chunkStartChar = chunkCharOffset;
@@ -2983,7 +2952,8 @@ async function measureTableBlock(
   // Measure each cell paragraph with appropriate column width based on colspan
   const rows: TableRowMeasure[] = [];
   const rowBaseHeights: number[] = new Array(block.rows.length).fill(0);
-  const spanConstraints: Array<{ startRow: number; rowSpan: number; requiredHeight: number }> = [];
+  const spanConstraints: Array<{ startRow: number; rowSpan: number; requiredHeight: number; minRowHeight: number }> =
+    [];
   for (let rowIndex = 0; rowIndex < block.rows.length; rowIndex++) {
     const row = block.rows[rowIndex];
     const normalizedRow = workingInput.rows[rowIndex];
@@ -3111,7 +3081,23 @@ async function measureTableBlock(
       if (rowspan === 1) {
         rowBaseHeights[rowIndex] = Math.max(rowBaseHeights[rowIndex], totalCellHeight);
       } else {
-        spanConstraints.push({ startRow: rowIndex, rowSpan: rowspan, requiredHeight: totalCellHeight });
+        // A row whose cells are ALL row-spanning would otherwise measure 0: the
+        // OOXML vMerge continuation cells are real <w:tc> elements holding an empty
+        // paragraph and Word sizes rows from them, but the import merges those
+        // cells away. Approximate the lost empty-cell height with the spanning
+        // cell's first text line; non-text spans (e.g. a logo image) fall back to
+        // an even share so a spanning picture never doubles. Applied only to rows
+        // with no height of their own (see pass 1 below). (SD-3028)
+        const firstBlockMeasure = blockMeasures[0];
+        const firstLineHeight =
+          firstBlockMeasure?.kind === 'paragraph' && firstBlockMeasure.lines.length > 0
+            ? firstBlockMeasure.lines[0].lineHeight
+            : undefined;
+        const minRowHeight = Math.min(
+          totalCellHeight,
+          firstLineHeight != null ? firstLineHeight + paddingTop + paddingBottom : totalCellHeight / rowspan,
+        );
+        spanConstraints.push({ startRow: rowIndex, rowSpan: rowspan, requiredHeight: totalCellHeight, minRowHeight });
       }
 
       // Advance grid column position by colspan
@@ -3129,6 +3115,19 @@ async function measureTableBlock(
   }
 
   const rowHeights = [...rowBaseHeights];
+  // Pass 1: a spanned row with NO height of its own (all of its cells are vMerge
+  // starts/continuations) gets the spanning cell's one-line minimum instead of
+  // collapsing to zero. Rows that already have height from their own cells are
+  // left alone; Word sizes those from their own content.
+  for (const constraint of spanConstraints) {
+    const spanLength = Math.min(constraint.rowSpan, rowHeights.length - constraint.startRow);
+    for (let i = 0; i < spanLength; i++) {
+      if (rowBaseHeights[constraint.startRow + i] === 0) {
+        rowHeights[constraint.startRow + i] = Math.max(rowHeights[constraint.startRow + i], constraint.minRowHeight);
+      }
+    }
+  }
+  // Pass 2: the spanned rows together must fit the spanning cell's full content.
   for (const constraint of spanConstraints) {
     const { startRow, rowSpan, requiredHeight } = constraint;
     if (rowSpan <= 0) continue;
@@ -3145,6 +3144,49 @@ async function measureTableBlock(
         rowHeights[startRow + i] += increment;
       }
     }
+  }
+
+  // Reserve row height for fat border bands (collapsed mode). Word adds the full border
+  // band to the table's vertical extent: measured against Word output, the dotted sz12
+  // (2px band) and double sz12 (6px band) tables have IDENTICAL content regions and their
+  // row pitch differs by exactly the band delta. The legacy model absorbed hairline bands
+  // (<= 2px) in line-height slack, so to keep thin-border geometry byte-stable we only
+  // reserve bands above that hairline class, minus the same 1px nibble every bordered
+  // table already absorbs. Painter cells are border-box, so reserved height lets the band
+  // and the content coexist exactly like Word. Attribution follows the single-owner paint
+  // model: each row reserves its TOP gridline, the last row also reserves the bottom edge.
+  // (SD-3308)
+  const isCollapsedForBands =
+    (block.attrs?.borderCollapse ?? (block.attrs?.cellSpacing != null ? 'separate' : 'collapse')) !== 'separate';
+  if (isCollapsedForBands && block.rows.length > 0) {
+    const tableBordersForBands = block.attrs?.borders as TableBorders | null | undefined;
+    const bandReservation = (band: number): number => (band > 2 ? band - 1 : 0);
+    const gridlineBand = (gridline: number): number => {
+      let band = 0;
+      const rowAbove = gridline > 0 ? block.rows[gridline - 1] : undefined;
+      const rowBelow = gridline < block.rows.length ? block.rows[gridline] : undefined;
+      for (const row of [rowAbove, rowBelow]) {
+        if (!row) continue;
+        // Row-level tblPrEx overrides merge per edge onto the table borders (§17.4.61).
+        const override = row.attrs?.borders as TableBorders | null | undefined;
+        const eff = override ? { ...(tableBordersForBands ?? {}), ...override } : tableBordersForBands;
+        const value = gridline === 0 ? eff?.top : gridline === block.rows.length ? eff?.bottom : eff?.insideH;
+        band = Math.max(band, getBorderBandWidthPx(value));
+      }
+      // Cell-level tcBorders on either side of the gridline; the §17.4.66 winner is the
+      // heavier border, so the max band across candidates is the painted band width.
+      for (const cell of rowAbove?.cells ?? []) {
+        band = Math.max(band, getBorderBandWidthPx((cell.attrs?.borders as CellBorders | undefined)?.bottom));
+      }
+      for (const cell of rowBelow?.cells ?? []) {
+        band = Math.max(band, getBorderBandWidthPx((cell.attrs?.borders as CellBorders | undefined)?.top));
+      }
+      return band;
+    };
+    for (let i = 0; i < block.rows.length; i++) {
+      rowHeights[i] += bandReservation(gridlineBand(i));
+    }
+    rowHeights[block.rows.length - 1] += bandReservation(gridlineBand(block.rows.length));
   }
 
   // Apply explicit row heights (exact / atLeast) from row attributes

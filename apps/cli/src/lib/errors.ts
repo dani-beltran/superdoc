@@ -35,10 +35,6 @@ export type CliErrorCode =
   | 'OPERATION_HINT_MISSING'
   | 'UNSUPPORTED_FORMAT'
   | 'TIMEOUT'
-  // Runtime-selection error codes
-  | 'INVALID_RUNTIME'
-  | 'RUNTIME_V2_UNAVAILABLE'
-  | 'RUNTIME_MISMATCH'
   // Plan-engine error codes — passed through from document-api adapters
   | 'REVISION_CHANGED_SINCE_COMPILE'
   | 'PLAN_CONFLICT_OVERLAP'

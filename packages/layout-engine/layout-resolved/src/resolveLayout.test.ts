@@ -3243,6 +3243,49 @@ describe('resolveLayout', () => {
       expect(item.sdtContainerKey).toBe('documentSection:sec-2');
     });
 
+    it('uses containerSdt as the visual boundary key for nested block SDTs', () => {
+      const layout: Layout = {
+        pageSize: { w: 612, h: 792 },
+        pages: [
+          {
+            number: 1,
+            fragments: [
+              { kind: 'para', blockId: 'p-parent-marker', fromLine: 0, toLine: 1, x: 72, y: 100, width: 468 },
+              { kind: 'para', blockId: 'p-child', fromLine: 0, toLine: 1, x: 72, y: 120, width: 468 },
+            ],
+          },
+        ],
+      };
+      const parentSdt = { type: 'structuredContent' as const, scope: 'block' as const, id: 'parent-sdt' };
+      const childSdt = { type: 'structuredContent' as const, scope: 'block' as const, id: 'child-sdt' };
+      const blocks: FlowBlock[] = [
+        {
+          kind: 'paragraph',
+          id: 'p-parent-marker',
+          runs: [],
+          attrs: { sdt: parentSdt },
+        },
+        {
+          kind: 'paragraph',
+          id: 'p-child',
+          runs: [],
+          attrs: { sdt: childSdt, containerSdt: parentSdt },
+        },
+      ];
+      const measures: Measure[] = [
+        { kind: 'paragraph', lines: [], totalHeight: 0 },
+        { kind: 'paragraph', lines: [], totalHeight: 0 },
+      ];
+
+      const result = resolveLayout({ layout, flowMode: 'paginated', blocks, measures });
+      const parentItem = result.pages[0].items[0] as import('@superdoc/contracts').ResolvedFragmentItem;
+      const childItem = result.pages[0].items[1] as import('@superdoc/contracts').ResolvedFragmentItem;
+      expect(parentItem.sdtContainerKey).toBe('structuredContent:parent-sdt');
+      expect(childItem.sdtContainerKey).toBe('structuredContent:parent-sdt');
+      expect(childItem.block?.attrs?.sdt).toBe(childSdt);
+      expect(childItem.block?.attrs?.containerSdt).toBe(parentSdt);
+    });
+
     it('returns null (omits sdtContainerKey) for inline structuredContent scope', () => {
       const layout: Layout = {
         pageSize: { w: 612, h: 792 },

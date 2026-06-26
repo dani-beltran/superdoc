@@ -245,7 +245,7 @@ describe('operation-params deriveParamsFromInputSchema with $ref', () => {
 });
 
 describe('operation-params production metadata', () => {
-  test('trackChanges.decide exposes nested logical range targets used by v2 requirements', () => {
+  test('trackChanges.decide exposes nested logical range targets', () => {
     const targetParam = CLI_OPERATION_METADATA['doc.trackChanges.decide'].params.find(
       (param) => param.name === 'target',
     );

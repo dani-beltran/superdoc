@@ -29,7 +29,6 @@ export default function useDocument(params, superdocConfig) {
   const provider = shallowRef(params.provider);
   const socket = shallowRef(params.socket);
   const isNewFile = ref(params.isNewFile);
-  const v2Collaboration = params.v2Collaboration || null;
 
   // For docx
   const editorRef = shallowRef(null);
@@ -114,7 +113,6 @@ export default function useDocument(params, superdocConfig) {
     provider,
     socket,
     isNewFile,
-    v2Collaboration,
 
     // Placement
     container,

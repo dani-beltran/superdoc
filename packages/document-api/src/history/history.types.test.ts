@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import type { HistoryActionResult, HistoryAdapter } from './history.js';
-describe('HistoryActionResult v2 widening', () => {
+describe('HistoryActionResult additive fields', () => {
   it('accepts v1-shaped results unchanged', () => {
     const v1: HistoryActionResult = {
       noop: false,
@@ -12,8 +12,8 @@ describe('HistoryActionResult v2 widening', () => {
     expect(v1.remappedRefs).toBeUndefined();
     expect(v1.affectedStories).toBeUndefined();
   });
-  it('accepts v2-shaped results with populated optional fields', () => {
-    const v2: HistoryActionResult = {
+  it('accepts extended results with populated optional fields', () => {
+    const extended: HistoryActionResult = {
       noop: false,
       revision: { before: '5', after: '6' },
       removed: [{ kind: 'entity', entityType: 'comment', entityId: '42' }],
@@ -23,11 +23,11 @@ describe('HistoryActionResult v2 widening', () => {
       inserted: [],
       updated: [],
     };
-    expect(v2.removed?.[0]).toEqual({ kind: 'entity', entityType: 'comment', entityId: '42' });
-    expect(v2.invalidatedRefs?.[0]).toEqual({ kind: 'entity', entityType: 'comment', entityId: '42' });
-    expect(v2.affectedStories?.[0]).toEqual({ kind: 'story', storyType: 'body' });
+    expect(extended.removed?.[0]).toEqual({ kind: 'entity', entityType: 'comment', entityId: '42' });
+    expect(extended.invalidatedRefs?.[0]).toEqual({ kind: 'entity', entityType: 'comment', entityId: '42' });
+    expect(extended.affectedStories?.[0]).toEqual({ kind: 'story', storyType: 'body' });
   });
-  it('accepts v2 noop reasons additively', () => {
+  it('accepts additive noop reasons', () => {
     const r: HistoryActionResult = {
       noop: true,
       reason: 'no-undo-available',

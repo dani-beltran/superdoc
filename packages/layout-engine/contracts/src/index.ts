@@ -53,6 +53,10 @@ export { rescaleColumnWidths } from './table-column-rescale.js';
 // Cell spacing resolution (moved from measuring-dom for cross-stage use)
 export { getCellSpacingPx } from './cell-spacing.js';
 
+// Border band width (single source of truth for painter CSS width + measuring row reservation)
+export { getBorderBandWidthPx, getBorderBandProfile, isNativeCssDoubleStyle } from './border-band.js';
+export type { BorderBandProfile } from './border-band.js';
+
 // OOXML z-index normalization (moved from pm-adapter for cross-stage use)
 export {
   normalizeZIndex,
@@ -801,13 +805,28 @@ export type BorderStyle =
   | 'single'
   | 'double'
   | 'dashed'
+  | 'dashSmallGap'
   | 'dotted'
   | 'thick'
   | 'triple'
   | 'dotDash'
   | 'dotDotDash'
+  | 'thinThickSmallGap'
+  | 'thickThinSmallGap'
+  | 'thinThickThinSmallGap'
+  | 'thinThickMediumGap'
+  | 'thickThinMediumGap'
+  | 'thinThickThinMediumGap'
+  | 'thinThickLargeGap'
+  | 'thickThinLargeGap'
+  | 'thinThickThinLargeGap'
   | 'wave'
-  | 'doubleWave';
+  | 'doubleWave'
+  | 'dashDotStroked'
+  | 'threeDEmboss'
+  | 'threeDEngrave'
+  | 'outset'
+  | 'inset';
 
 /** Border specification for table and cell borders. */
 export type BorderSpec = {

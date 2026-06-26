@@ -22,6 +22,7 @@ import {
   applySdtContainerChrome,
   getSdtContainerMetadata,
   isStructuredContentMetadata,
+  resolveRenderedSdtBoundary,
   shouldRenderSdtContainerChrome,
   type SdtAncestorOptions,
   type SdtBoundaryOptions,
@@ -164,6 +165,7 @@ export const renderParagraphContent = (params: RenderParagraphContentParams): Re
   }
   applySdtDataset(frameEl, block.attrs?.sdt);
   applyContainerSdtDataset?.(frameEl, block.attrs?.containerSdt);
+  const effectiveSdtBoundary = resolveRenderedSdtBoundary(block.attrs?.sdt, block.attrs?.containerSdt, sdtBoundary);
 
   const applySdtChrome = shouldRenderSdtContainerChrome(block.attrs?.sdt, block.attrs?.containerSdt, {
     ancestorContainerKey,
@@ -178,7 +180,7 @@ export const renderParagraphContent = (params: RenderParagraphContentParams): Re
         frameEl,
         block.attrs?.sdt,
         block.attrs?.containerSdt,
-        sdtBoundary,
+        effectiveSdtBoundary,
         undefined,
         contentControlsChrome,
       )
@@ -228,7 +230,7 @@ export const renderParagraphContent = (params: RenderParagraphContentParams): Re
       lineIndexOffset + localStartLine,
       continuesFromPrev,
       continuesOnNext,
-      sdtBoundary,
+      effectiveSdtBoundary,
       resolvedContent,
     );
   }

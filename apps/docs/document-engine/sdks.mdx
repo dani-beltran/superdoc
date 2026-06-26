@@ -577,9 +577,6 @@ The SDKs expose all operations from the [Document API](/document-api/overview) p
 | `doc.blocks.list` | `blocks list` | List top-level blocks in document order with IDs, types, text previews, and optional full text when includeText:true. Supports pagination via offset/limit, optional nodeType filtering, and single-story scoping via `in: <StoryLocator>`. |
 | `doc.blocks.delete` | `blocks delete` | Delete an entire block node (paragraph, heading, list item, table, image, or sdt) deterministically. |
 | `doc.blocks.deleteRange` | `blocks delete-range` | Delete a contiguous range of top-level blocks between two endpoints (inclusive). Both endpoints must be direct children of the document node. Supports dry-run preview. |
-| `doc.blocks.split` | `blocks split` | Split a paragraph at a visible-text offset, producing two paragraphs. Preserves unambiguous simple run properties around the cut. Rejects when the paragraph contains fields, content controls, drawings, equations, or unsupported tracked-change wrappers. Available on v2-backed sessions only; v1-backed sessions currently return `CAPABILITY_UNAVAILABLE`. |
-| `doc.blocks.merge` | `blocks merge` | Merge two adjacent paragraphs in the same story. The first paragraph keeps its pPr; the second paragraph is removed. Rejects when either paragraph carries a w:sectPr or when their numbering definitions differ. Available on v2-backed sessions only; v1-backed sessions currently return `CAPABILITY_UNAVAILABLE`. |
-| `doc.blocks.move` | `blocks move` | Move a paragraph within the same story to a new anchor paragraph (before or after). Cross-story and relationship-bearing moves reject with named reasons. Tracked-mode authoring emits paired `<w:moveFrom>` / `<w:moveTo>` review state with explicit move range marker identity; safe content (no comment/bookmark/permission anchors and no pre-existing tracked wrappers) is required for tracked authoring. Available on v2-backed sessions only; v1-backed sessions currently return `CAPABILITY_UNAVAILABLE`. |
 | `doc.templates.apply` | `templates apply` | Apply detected DOCX template/substrate (styles, numbering, settings, theme, font table, web settings, headers/footers, section defaults) from a source package onto the current document, preserving body content. Scopes are auto-detected from source package evidence. |
 | `doc.query.match` | `query match` | Deterministic selector-based search returning mutation-grade addresses and text ranges. Use this to discover targets before any mutation. |
 | `doc.ranges.resolve` | `ranges resolve` | Resolve two explicit anchors into a contiguous document range. Returns a transparent SelectionTarget, a mutation-ready ref, and preview metadata. Stateless and deterministic. |
@@ -665,8 +662,8 @@ The SDKs expose all operations from the [Document API](/document-api/overview) p
 | `doc.bookmarks.remove` | `bookmarks remove` | Remove a bookmark from the document. |
 | `doc.footnotes.list` | `footnotes list` | List all footnotes and endnotes in the document. |
 | `doc.footnotes.get` | `footnotes get` | Get detailed information about a specific footnote or endnote. |
-| `doc.footnotes.insert` | `footnotes insert` | Insert a new footnote or endnote at a target location or the current selection. Structured `body` content is currently available on v2-backed sessions only; v1-backed sessions return `CAPABILITY_UNAVAILABLE` for those shapes. |
-| `doc.footnotes.update` | `footnotes update` | Update the content of an existing footnote or endnote. Structured `body` content is currently available on v2-backed sessions only; v1-backed sessions return `CAPABILITY_UNAVAILABLE` for those shapes. |
+| `doc.footnotes.insert` | `footnotes insert` | Insert a new footnote or endnote at a target location or the current selection. Structured `body` content is not available in this v1-only branch; those shapes return `CAPABILITY_UNAVAILABLE`. |
+| `doc.footnotes.update` | `footnotes update` | Update the content of an existing footnote or endnote. Structured `body` content is not available in this v1-only branch; those shapes return `CAPABILITY_UNAVAILABLE`. |
 | `doc.footnotes.remove` | `footnotes remove` | Remove a footnote or endnote from the document. |
 | `doc.footnotes.configure` | `footnotes configure` | Configure numbering and placement for footnotes or endnotes. |
 | `doc.crossRefs.list` | `cross-refs list` | List all cross-reference fields in the document. |
@@ -816,7 +813,6 @@ The SDKs expose all operations from the [Document API](/document-api/overview) p
 | `doc.format.paragraph.clearBorder` | `format paragraph clear-border` | Remove border for a specific side or all sides of a paragraph. |
 | `doc.format.paragraph.setShading` | `format paragraph set-shading` | Set paragraph shading (background fill, pattern color, pattern type). |
 | `doc.format.paragraph.clearShading` | `format paragraph clear-shading` | Remove all paragraph shading. |
-| `doc.format.paragraph.setMarkRunProps` | `format paragraph set-mark-run-props` | Set the paragraph mark's run properties (w:pPr/w:rPr), e.g. the font size or specVanish carried by the paragraph-end mark. Available on v2-backed sessions only; v1-backed sessions currently return `CAPABILITY_UNAVAILABLE`. |
 | `doc.format.paragraph.setDirection` | `format paragraph set-direction` | Set paragraph base direction (LTR or RTL via w:bidi). Optionally align text to match. |
 | `doc.format.paragraph.clearDirection` | `format paragraph clear-direction` | Remove explicit paragraph direction, reverting to inherited or default (LTR). |
 | `doc.format.paragraph.setNumbering` | `format paragraph set-numbering` | Attach numbering (numId + level) to an existing paragraph or heading so it joins a numbered sequence. Numbering is a paragraph property; the node and its style are otherwise unchanged, though any direct paragraph indent is cleared so the numbering level controls indentation. Direct edits only; tracked mode is unsupported. |
@@ -898,11 +894,6 @@ The SDKs expose all operations from the [Document API](/document-api/overview) p
 | `doc.lists.setLevelText` | `lists set-level-text` | Set the level text pattern (e.g. "%1.", "(%1)") for a specific list level. Uses OOXML level-placeholder syntax. Sequence-local: clones shared definitions. |
 | `doc.lists.setLevelStart` | `lists set-level-start` | Set the start value for a specific list level. Rejects bullet levels and non-positive values. Sequence-local: clones shared definitions. |
 | `doc.lists.setLevelLayout` | `lists set-level-layout` | Set the layout properties (alignment, indentation, trailing character, tab stop) for a specific list level. Accepts partial updates: omitted fields are left unchanged. Sequence-local: clones shared definitions. |
-| `doc.lists.getState` | `lists get-state` | Read the numbering-aware list state for a paragraph (numId, ilvl, abstract reference, level format). Returns null when the target is not a list item. Available on v2-backed sessions only; v1-backed sessions currently return `CAPABILITY_UNAVAILABLE`. |
-| `doc.lists.apply` | `lists apply` | Apply a numbering definition to a paragraph. When `/word/numbering.xml` is absent it is materialized atomically together with the package content-type override and document relationship. Seeds bullet or ordered single-level definitions when no `reuseNumId` is provided. Available on v2-backed sessions only; v1-backed sessions currently return `CAPABILITY_UNAVAILABLE`. |
-| `doc.lists.continue` | `lists continue` | Continue from the previous compatible list item in the same story. Adopts the previous paragraph's numId+ilvl. Rejects with named reasons when no compatible previous item exists or when an intervening structural boundary blocks the continuation. Available on v2-backed sessions only; v1-backed sessions currently return `CAPABILITY_UNAVAILABLE`. |
-| `doc.lists.restart` | `lists restart` | Restart numbering at a list item. Creates a new `<w:num>` that references the existing `<w:abstractNumId>` with a `<w:lvlOverride><w:startOverride/></w:lvlOverride>`. Distant paragraphs sharing the old numId are intentionally untouched. Available on v2-backed sessions only; v1-backed sessions currently return `CAPABILITY_UNAVAILABLE`. |
-| `doc.lists.remove` | `lists remove` | Strip the `<w:numPr>` from a list-item paragraph. The numbering definition in `/word/numbering.xml` is intentionally NOT modified; orphan cleanup is handled by the export-side stripper. Available on v2-backed sessions only; v1-backed sessions currently return `CAPABILITY_UNAVAILABLE`. |
 
 #### Tables
 
@@ -917,7 +908,6 @@ The SDKs expose all operations from the [Document API](/document-api/overview) p
 | `doc.tables.setLayout` | `tables set-layout` | Set the layout mode of the target table. |
 | `doc.tables.insertRow` | `tables insert-row` | Insert a new row into the target table. The new row is cloned from an adjacent row, so it inherits the existing cell shading, borders, alignment, and padding. No follow-up styling call is needed unless the new row should look different from the rest of the table. |
 | `doc.tables.deleteRow` | `tables delete-row` | Delete a row from the target table. |
-| `doc.tables.moveRow` | `tables move-row` | Move a row to a new position within the same table. Available on v2-backed sessions only; v1-backed sessions currently return `CAPABILITY_UNAVAILABLE`. |
 | `doc.tables.setRowHeight` | `tables set-row-height` | Set the height of a table row. |
 | `doc.tables.distributeRows` | `tables distribute-rows` | Distribute row heights evenly across the target table. |
 | `doc.tables.setRowOptions` | `tables set-row-options` | Set options on a table row such as header repeat or page break. |
@@ -1009,7 +999,7 @@ The SDKs expose all operations from the [Document API](/document-api/overview) p
 | Operation | CLI command | Description |
 | --- | --- | --- |
 | `doc.comments.create` | `comments create` | Create a new comment thread (or reply when parentCommentId is given). Accepts TextAddress / TextTarget anchors, or a TrackedChangeCommentTarget that names a logical tracked-change id. The tracked-change target accepts both the explicit kind form and the Labs-compatible trackedChangeId-only form; the adapter normalizes it to a Word-compatible content anchor on the requested revision side. |
-| `doc.comments.patch` | `comments patch` | Patch exactly one field on an existing comment (`text`, `target`, or `status`). The `target` branch accepts a plain TextAddress or a TrackedChangeCommentTarget, with or without `kind: "trackedChange"`, that names a logical tracked-change id. The legacy `isInternal` input is preserved in the schema for v1 backward compatibility but is not a supported v2 product behavior. V2 adapters MUST fail a `comments.patch` request containing `isInternal` with `CAPABILITY_UNAVAILABLE` (kernel reason `internal-comments-unsupported`). Multi-field patches and no-op edits are rejected with `INVALID_INPUT`; reply target / status patches are rejected with `INVALID_CONTEXT`. |
+| `doc.comments.patch` | `comments patch` | Patch exactly one field on an existing comment (`text`, `target`, or `status`). The `target` branch accepts a plain TextAddress or a TrackedChangeCommentTarget, with or without `kind: "trackedChange"`, that names a logical tracked-change id. The legacy `isInternal` input is preserved in the schema for v1 backward compatibility but is not supported for new patch behavior and fails with `CAPABILITY_UNAVAILABLE` (kernel reason `internal-comments-unsupported`). Multi-field patches and no-op edits are rejected with `INVALID_INPUT`; reply target / status patches are rejected with `INVALID_CONTEXT`. |
 | `doc.comments.delete` | `comments delete` | Remove a comment or reply by ID. Deleting a root cascades through every descendant reply. |
 | `doc.comments.get` | `comments get` | Retrieve a single comment thread by ID. |
 | `doc.comments.list` | `comments list` | List all comment threads in the document. |
@@ -1034,7 +1024,7 @@ The SDKs expose all operations from the [Document API](/document-api/overview) p
 
 | Operation | CLI command | Description |
 | --- | --- | --- |
-| `client.open` | `open` | Open a document and create a persistent editing session. Pass `runtime: 'v1'` (default) or `runtime: 'v2'` to select the underlying engine. V2 single-socket collaboration supports only `y-websocket`; `hocuspocus` and `liveblocks` remain legacy v1-only collaboration providers. Optionally override the document body with contentOverride + overrideType (markdown, html, or text). |
+| `client.open` | `open` | Open a document and create a persistent editing session. Collaboration supports the `y-websocket`, `hocuspocus`, and `liveblocks` providers. Optionally override the document body with contentOverride + overrideType (markdown, html, or text). |
 | `doc.save` | `save` | Save the current session to the original file or a new path. Supports explicit review-preserving, final, and original export modes. |
 | `doc.close` | `close` | Close the active editing session and clean up resources. |
 
@@ -1069,9 +1059,6 @@ The SDKs expose all operations from the [Document API](/document-api/overview) p
 | `doc.blocks.list` | `blocks list` | List top-level blocks in document order with IDs, types, text previews, and optional full text when includeText:true. Supports pagination via offset/limit, optional nodeType filtering, and single-story scoping via `in: <StoryLocator>`. |
 | `doc.blocks.delete` | `blocks delete` | Delete an entire block node (paragraph, heading, list item, table, image, or sdt) deterministically. |
 | `doc.blocks.delete_range` | `blocks delete-range` | Delete a contiguous range of top-level blocks between two endpoints (inclusive). Both endpoints must be direct children of the document node. Supports dry-run preview. |
-| `doc.blocks.split` | `blocks split` | Split a paragraph at a visible-text offset, producing two paragraphs. Preserves unambiguous simple run properties around the cut. Rejects when the paragraph contains fields, content controls, drawings, equations, or unsupported tracked-change wrappers. Available on v2-backed sessions only; v1-backed sessions currently return `CAPABILITY_UNAVAILABLE`. |
-| `doc.blocks.merge` | `blocks merge` | Merge two adjacent paragraphs in the same story. The first paragraph keeps its pPr; the second paragraph is removed. Rejects when either paragraph carries a w:sectPr or when their numbering definitions differ. Available on v2-backed sessions only; v1-backed sessions currently return `CAPABILITY_UNAVAILABLE`. |
-| `doc.blocks.move` | `blocks move` | Move a paragraph within the same story to a new anchor paragraph (before or after). Cross-story and relationship-bearing moves reject with named reasons. Tracked-mode authoring emits paired `<w:moveFrom>` / `<w:moveTo>` review state with explicit move range marker identity; safe content (no comment/bookmark/permission anchors and no pre-existing tracked wrappers) is required for tracked authoring. Available on v2-backed sessions only; v1-backed sessions currently return `CAPABILITY_UNAVAILABLE`. |
 | `doc.templates.apply` | `templates apply` | Apply detected DOCX template/substrate (styles, numbering, settings, theme, font table, web settings, headers/footers, section defaults) from a source package onto the current document, preserving body content. Scopes are auto-detected from source package evidence. |
 | `doc.query.match` | `query match` | Deterministic selector-based search returning mutation-grade addresses and text ranges. Use this to discover targets before any mutation. |
 | `doc.ranges.resolve` | `ranges resolve` | Resolve two explicit anchors into a contiguous document range. Returns a transparent SelectionTarget, a mutation-ready ref, and preview metadata. Stateless and deterministic. |
@@ -1157,8 +1144,8 @@ The SDKs expose all operations from the [Document API](/document-api/overview) p
 | `doc.bookmarks.remove` | `bookmarks remove` | Remove a bookmark from the document. |
 | `doc.footnotes.list` | `footnotes list` | List all footnotes and endnotes in the document. |
 | `doc.footnotes.get` | `footnotes get` | Get detailed information about a specific footnote or endnote. |
-| `doc.footnotes.insert` | `footnotes insert` | Insert a new footnote or endnote at a target location or the current selection. Structured `body` content is currently available on v2-backed sessions only; v1-backed sessions return `CAPABILITY_UNAVAILABLE` for those shapes. |
-| `doc.footnotes.update` | `footnotes update` | Update the content of an existing footnote or endnote. Structured `body` content is currently available on v2-backed sessions only; v1-backed sessions return `CAPABILITY_UNAVAILABLE` for those shapes. |
+| `doc.footnotes.insert` | `footnotes insert` | Insert a new footnote or endnote at a target location or the current selection. Structured `body` content is not available in this v1-only branch; those shapes return `CAPABILITY_UNAVAILABLE`. |
+| `doc.footnotes.update` | `footnotes update` | Update the content of an existing footnote or endnote. Structured `body` content is not available in this v1-only branch; those shapes return `CAPABILITY_UNAVAILABLE`. |
 | `doc.footnotes.remove` | `footnotes remove` | Remove a footnote or endnote from the document. |
 | `doc.footnotes.configure` | `footnotes configure` | Configure numbering and placement for footnotes or endnotes. |
 | `doc.cross_refs.list` | `cross-refs list` | List all cross-reference fields in the document. |
@@ -1308,7 +1295,6 @@ The SDKs expose all operations from the [Document API](/document-api/overview) p
 | `doc.format.paragraph.clear_border` | `format paragraph clear-border` | Remove border for a specific side or all sides of a paragraph. |
 | `doc.format.paragraph.set_shading` | `format paragraph set-shading` | Set paragraph shading (background fill, pattern color, pattern type). |
 | `doc.format.paragraph.clear_shading` | `format paragraph clear-shading` | Remove all paragraph shading. |
-| `doc.format.paragraph.set_mark_run_props` | `format paragraph set-mark-run-props` | Set the paragraph mark's run properties (w:pPr/w:rPr), e.g. the font size or specVanish carried by the paragraph-end mark. Available on v2-backed sessions only; v1-backed sessions currently return `CAPABILITY_UNAVAILABLE`. |
 | `doc.format.paragraph.set_direction` | `format paragraph set-direction` | Set paragraph base direction (LTR or RTL via w:bidi). Optionally align text to match. |
 | `doc.format.paragraph.clear_direction` | `format paragraph clear-direction` | Remove explicit paragraph direction, reverting to inherited or default (LTR). |
 | `doc.format.paragraph.set_numbering` | `format paragraph set-numbering` | Attach numbering (numId + level) to an existing paragraph or heading so it joins a numbered sequence. Numbering is a paragraph property; the node and its style are otherwise unchanged, though any direct paragraph indent is cleared so the numbering level controls indentation. Direct edits only; tracked mode is unsupported. |
@@ -1390,11 +1376,6 @@ The SDKs expose all operations from the [Document API](/document-api/overview) p
 | `doc.lists.set_level_text` | `lists set-level-text` | Set the level text pattern (e.g. "%1.", "(%1)") for a specific list level. Uses OOXML level-placeholder syntax. Sequence-local: clones shared definitions. |
 | `doc.lists.set_level_start` | `lists set-level-start` | Set the start value for a specific list level. Rejects bullet levels and non-positive values. Sequence-local: clones shared definitions. |
 | `doc.lists.set_level_layout` | `lists set-level-layout` | Set the layout properties (alignment, indentation, trailing character, tab stop) for a specific list level. Accepts partial updates: omitted fields are left unchanged. Sequence-local: clones shared definitions. |
-| `doc.lists.get_state` | `lists get-state` | Read the numbering-aware list state for a paragraph (numId, ilvl, abstract reference, level format). Returns null when the target is not a list item. Available on v2-backed sessions only; v1-backed sessions currently return `CAPABILITY_UNAVAILABLE`. |
-| `doc.lists.apply` | `lists apply` | Apply a numbering definition to a paragraph. When `/word/numbering.xml` is absent it is materialized atomically together with the package content-type override and document relationship. Seeds bullet or ordered single-level definitions when no `reuseNumId` is provided. Available on v2-backed sessions only; v1-backed sessions currently return `CAPABILITY_UNAVAILABLE`. |
-| `doc.lists.continue` | `lists continue` | Continue from the previous compatible list item in the same story. Adopts the previous paragraph's numId+ilvl. Rejects with named reasons when no compatible previous item exists or when an intervening structural boundary blocks the continuation. Available on v2-backed sessions only; v1-backed sessions currently return `CAPABILITY_UNAVAILABLE`. |
-| `doc.lists.restart` | `lists restart` | Restart numbering at a list item. Creates a new `<w:num>` that references the existing `<w:abstractNumId>` with a `<w:lvlOverride><w:startOverride/></w:lvlOverride>`. Distant paragraphs sharing the old numId are intentionally untouched. Available on v2-backed sessions only; v1-backed sessions currently return `CAPABILITY_UNAVAILABLE`. |
-| `doc.lists.remove` | `lists remove` | Strip the `<w:numPr>` from a list-item paragraph. The numbering definition in `/word/numbering.xml` is intentionally NOT modified; orphan cleanup is handled by the export-side stripper. Available on v2-backed sessions only; v1-backed sessions currently return `CAPABILITY_UNAVAILABLE`. |
 
 #### Tables
 
@@ -1409,7 +1390,6 @@ The SDKs expose all operations from the [Document API](/document-api/overview) p
 | `doc.tables.set_layout` | `tables set-layout` | Set the layout mode of the target table. |
 | `doc.tables.insert_row` | `tables insert-row` | Insert a new row into the target table. The new row is cloned from an adjacent row, so it inherits the existing cell shading, borders, alignment, and padding. No follow-up styling call is needed unless the new row should look different from the rest of the table. |
 | `doc.tables.delete_row` | `tables delete-row` | Delete a row from the target table. |
-| `doc.tables.move_row` | `tables move-row` | Move a row to a new position within the same table. Available on v2-backed sessions only; v1-backed sessions currently return `CAPABILITY_UNAVAILABLE`. |
 | `doc.tables.set_row_height` | `tables set-row-height` | Set the height of a table row. |
 | `doc.tables.distribute_rows` | `tables distribute-rows` | Distribute row heights evenly across the target table. |
 | `doc.tables.set_row_options` | `tables set-row-options` | Set options on a table row such as header repeat or page break. |
@@ -1501,7 +1481,7 @@ The SDKs expose all operations from the [Document API](/document-api/overview) p
 | Operation | CLI command | Description |
 | --- | --- | --- |
 | `doc.comments.create` | `comments create` | Create a new comment thread (or reply when parentCommentId is given). Accepts TextAddress / TextTarget anchors, or a TrackedChangeCommentTarget that names a logical tracked-change id. The tracked-change target accepts both the explicit kind form and the Labs-compatible trackedChangeId-only form; the adapter normalizes it to a Word-compatible content anchor on the requested revision side. |
-| `doc.comments.patch` | `comments patch` | Patch exactly one field on an existing comment (`text`, `target`, or `status`). The `target` branch accepts a plain TextAddress or a TrackedChangeCommentTarget, with or without `kind: "trackedChange"`, that names a logical tracked-change id. The legacy `isInternal` input is preserved in the schema for v1 backward compatibility but is not a supported v2 product behavior. V2 adapters MUST fail a `comments.patch` request containing `isInternal` with `CAPABILITY_UNAVAILABLE` (kernel reason `internal-comments-unsupported`). Multi-field patches and no-op edits are rejected with `INVALID_INPUT`; reply target / status patches are rejected with `INVALID_CONTEXT`. |
+| `doc.comments.patch` | `comments patch` | Patch exactly one field on an existing comment (`text`, `target`, or `status`). The `target` branch accepts a plain TextAddress or a TrackedChangeCommentTarget, with or without `kind: "trackedChange"`, that names a logical tracked-change id. The legacy `isInternal` input is preserved in the schema for v1 backward compatibility but is not supported for new patch behavior and fails with `CAPABILITY_UNAVAILABLE` (kernel reason `internal-comments-unsupported`). Multi-field patches and no-op edits are rejected with `INVALID_INPUT`; reply target / status patches are rejected with `INVALID_CONTEXT`. |
 | `doc.comments.delete` | `comments delete` | Remove a comment or reply by ID. Deleting a root cascades through every descendant reply. |
 | `doc.comments.get` | `comments get` | Retrieve a single comment thread by ID. |
 | `doc.comments.list` | `comments list` | List all comment threads in the document. |
@@ -1526,7 +1506,7 @@ The SDKs expose all operations from the [Document API](/document-api/overview) p
 
 | Operation | CLI command | Description |
 | --- | --- | --- |
-| `client.open` | `open` | Open a document and create a persistent editing session. Pass `runtime: 'v1'` (default) or `runtime: 'v2'` to select the underlying engine. V2 single-socket collaboration supports only `y-websocket`; `hocuspocus` and `liveblocks` remain legacy v1-only collaboration providers. Optionally override the document body with contentOverride + overrideType (markdown, html, or text). |
+| `client.open` | `open` | Open a document and create a persistent editing session. Collaboration supports the `y-websocket`, `hocuspocus`, and `liveblocks` providers. Optionally override the document body with contentOverride + overrideType (markdown, html, or text). |
 | `doc.save` | `save` | Save the current session to the original file or a new path. Supports explicit review-preserving, final, and original export modes. |
 | `doc.close` | `close` | Close the active editing session and clean up resources. |
 

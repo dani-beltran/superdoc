@@ -778,6 +778,133 @@ describe('shapes converter', () => {
         },
       });
     });
+
+    it('derives inlineParagraphAlignment from a centered wrapper paragraph for inline textboxes', () => {
+      // A real import stores alignment only as the raw `w:jc` value on
+      // `paragraphProperties.justification`; the wrapper paragraph has no top-level `textAlign`.
+      const node: PMNode = {
+        type: 'shapeContainer',
+        attrs: {
+          width: 199,
+          height: 191,
+          wrap: { type: 'Inline' },
+          wrapperParagraph: {
+            paragraphProperties: { justification: 'center' },
+          },
+        },
+      };
+
+      const result = shapeContainerNodeToDrawingBlock(node, mockBlockIdGenerator, mockPositionMap) as DrawingBlock & {
+        attrs?: Record<string, unknown>;
+      };
+
+      expect(result.attrs?.inlineParagraphAlignment).toBe('center');
+    });
+
+    it('derives inlineParagraphAlignment "right" from a right-aligned wrapper paragraph', () => {
+      const node: PMNode = {
+        type: 'shapeContainer',
+        attrs: {
+          width: 199,
+          height: 191,
+          wrap: { type: 'Inline' },
+          wrapperParagraph: {
+            paragraphProperties: { justification: 'right' },
+          },
+        },
+      };
+
+      const result = shapeContainerNodeToDrawingBlock(node, mockBlockIdGenerator, mockPositionMap) as DrawingBlock & {
+        attrs?: Record<string, unknown>;
+      };
+
+      expect(result.attrs?.inlineParagraphAlignment).toBe('right');
+    });
+
+    it('derives wrapper paragraph indents with inlineParagraphAlignment for centered inline textboxes', () => {
+      const node: PMNode = {
+        type: 'shapeContainer',
+        attrs: {
+          width: 199,
+          height: 191,
+          wrap: { type: 'Inline' },
+          wrapperParagraph: {
+            paragraphProperties: {
+              justification: 'center',
+              indent: { left: 720, right: 360 },
+            },
+          },
+        },
+      };
+
+      const result = shapeContainerNodeToDrawingBlock(node, mockBlockIdGenerator, mockPositionMap) as DrawingBlock & {
+        attrs?: Record<string, unknown>;
+      };
+
+      expect(result.attrs?.inlineParagraphAlignment).toBe('center');
+      expect(result.attrs?.paragraphIndentLeft).toBe(48);
+      expect(result.attrs?.paragraphIndentRight).toBe(24);
+    });
+
+    it('derives inlineParagraphAlignment "center" from a distribute wrapper paragraph', () => {
+      const node: PMNode = {
+        type: 'shapeContainer',
+        attrs: {
+          width: 199,
+          height: 191,
+          wrap: { type: 'Inline' },
+          wrapperParagraph: {
+            paragraphProperties: { justification: 'distribute' },
+          },
+        },
+      };
+
+      const result = shapeContainerNodeToDrawingBlock(node, mockBlockIdGenerator, mockPositionMap) as DrawingBlock & {
+        attrs?: Record<string, unknown>;
+      };
+
+      expect(result.attrs?.inlineParagraphAlignment).toBe('center');
+    });
+
+    it('does not derive inlineParagraphAlignment for non-inline (anchored) textboxes', () => {
+      const node: PMNode = {
+        type: 'shapeContainer',
+        attrs: {
+          width: 199,
+          height: 191,
+          wrap: { type: 'Square' },
+          wrapperParagraph: {
+            paragraphProperties: { justification: 'center' },
+          },
+        },
+      };
+
+      const result = shapeContainerNodeToDrawingBlock(node, mockBlockIdGenerator, mockPositionMap) as DrawingBlock & {
+        attrs?: Record<string, unknown>;
+      };
+
+      expect(result.attrs?.inlineParagraphAlignment).toBeUndefined();
+    });
+
+    it('does not derive inlineParagraphAlignment for left-aligned wrapper paragraphs', () => {
+      const node: PMNode = {
+        type: 'shapeContainer',
+        attrs: {
+          width: 199,
+          height: 191,
+          wrap: { type: 'Inline' },
+          wrapperParagraph: {
+            paragraphProperties: { justification: 'left' },
+          },
+        },
+      };
+
+      const result = shapeContainerNodeToDrawingBlock(node, mockBlockIdGenerator, mockPositionMap) as DrawingBlock & {
+        attrs?: Record<string, unknown>;
+      };
+
+      expect(result.attrs?.inlineParagraphAlignment).toBeUndefined();
+    });
   });
 
   describe('shapeTextboxNodeToDrawingBlock', () => {

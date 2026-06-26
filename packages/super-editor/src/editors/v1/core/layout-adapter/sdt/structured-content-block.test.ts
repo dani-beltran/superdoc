@@ -5,7 +5,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { handleStructuredContentBlockNode } from './structured-content-block.js';
 import type { PMNode, NodeHandlerContext } from '../types.js';
-import type { FlowBlock, ParagraphBlock, SdtMetadata } from '@superdoc/contracts';
+import type { FlowBlock, ListBlock, ParagraphBlock, SdtMetadata } from '@superdoc/contracts';
 import * as metadataModule from './metadata.js';
 
 // Mock the metadata module
@@ -702,6 +702,98 @@ describe('structured-content-block', () => {
         expect(blocks).toHaveLength(3);
         expect(mockParagraphConverter).toHaveBeenCalledTimes(3);
         expect(recordBlockKind).toHaveBeenCalledTimes(3);
+      });
+
+      it('should preserve child SDT metadata on a nested list item after a bookmark-only paragraph', () => {
+        const markerParagraph: PMNode = {
+          type: 'paragraph',
+          content: [{ type: 'bookmarkStart', attrs: { id: '42', name: 'beforeChildSdt' } }],
+        };
+        const childListParagraph: PMNode = nonEmptyParagraph('Nested heading');
+        const childBodyParagraph: PMNode = nonEmptyParagraph('Nested body');
+        const childSdt: PMNode = {
+          type: 'structuredContentBlock',
+          attrs: { id: 'child-sdt' },
+          content: [childListParagraph, childBodyParagraph],
+        };
+        const node: PMNode = {
+          type: 'structuredContentBlock',
+          attrs: { id: 'parent-sdt' },
+          content: [markerParagraph, childSdt],
+        };
+        const childMetadata: SdtMetadata = {
+          type: 'structuredContent',
+          scope: 'block',
+          id: 'child-sdt',
+        };
+        const childListBlock: ListBlock = {
+          kind: 'list',
+          id: 'child-list',
+          listType: 'number',
+          items: [
+            {
+              id: 'child-list-item',
+              marker: { text: 'Item 8.2', style: {} },
+              paragraph: {
+                kind: 'paragraph',
+                id: 'child-list-paragraph',
+                runs: [{ text: 'Nested heading', fontFamily: 'Arial', fontSize: 12 }],
+              },
+            },
+          ],
+        };
+
+        const blocks: FlowBlock[] = [];
+        const recordBlockKind = vi.fn();
+        vi.mocked(metadataModule.resolveNodeSdtMetadata).mockImplementation((target) =>
+          target === childSdt ? childMetadata : scbMetadata,
+        );
+        vi.mocked(metadataModule.applySdtMetadataToParagraphBlocks).mockImplementation((paragraphBlocks, metadata) => {
+          paragraphBlocks.forEach((block) => {
+            block.attrs = { ...(block.attrs ?? {}), sdt: metadata };
+          });
+        });
+
+        const mockParagraphConverter = vi.fn(({ para }) => {
+          if (para === childListParagraph) return [childListBlock];
+          return [
+            {
+              kind: 'paragraph',
+              id: `p-${para === markerParagraph ? 'marker' : 'child-body'}`,
+              runs: [{ text: para === markerParagraph ? '' : 'Nested body', fontFamily: 'Arial', fontSize: 12 }],
+            } as ParagraphBlock,
+          ];
+        });
+
+        const context: NodeHandlerContext = {
+          blocks,
+          recordBlockKind,
+          nextBlockId: mockBlockIdGenerator,
+          positions: mockPositionMap,
+          defaultFont: 'Arial',
+          defaultSize: 12,
+          trackedChangesConfig: mockTrackedChangesConfig,
+          bookmarks: mockBookmarks,
+          hyperlinkConfig: mockHyperlinkConfig,
+          enableComments: mockEnableComments,
+          converterContext: mockConverterContext,
+          converters: {
+            paragraphToFlowBlocks: mockParagraphConverter,
+          },
+        };
+
+        handleStructuredContentBlockNode(node, context);
+
+        expect(blocks).toHaveLength(3);
+        expect(blocks[1]).toBe(childListBlock);
+        expect(childListBlock.items[0].paragraph.attrs).toEqual({
+          sdt: childMetadata,
+          containerSdt: scbMetadata,
+        });
+        expect((blocks[2] as ParagraphBlock).attrs).toEqual({
+          sdt: childMetadata,
+          containerSdt: scbMetadata,
+        });
       });
 
       it('should resolve node metadata with correct override type', () => {

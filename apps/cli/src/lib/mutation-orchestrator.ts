@@ -8,9 +8,8 @@
  * Two branches: stateless (--doc) and session (unified local + collab,
  * host + oneshot).
  *
- * Runtime-neutral: dispatches through {@link OpenedRuntimeDocument} so v1
- * (editor-backed) and v2 (SDDocumentSession-backed) sessions share the same
- * orchestrator. Engine specifics (`editor.*`) MUST stay out of this file.
+ * Dispatches through {@link OpenedRuntimeDocument}; engine specifics
+ * (`editor.*`) MUST stay out of this file.
  */
 
 import { COMMAND_CATALOG } from '@superdoc/document-api';
@@ -348,8 +347,7 @@ export async function executeMutationOperation(request: DocOperationRequest): Pr
           updatedMetadata = synced.updatedMetadata;
           byteLength = synced.output.byteLength;
         } else {
-          // Oneshot local / v2: export to disk through the runtime-neutral
-          // contract.
+          // Oneshot local: export to disk through the opened-document contract.
           const workingOutput = await opened.exportToPath(paths.workingDocPath, true);
           updatedMetadata = markContextUpdated(context.io, metadata, {
             dirty: true,

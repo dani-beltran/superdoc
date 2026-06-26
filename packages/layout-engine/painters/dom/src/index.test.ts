@@ -15188,6 +15188,156 @@ describe('applyRunDataAttributes', () => {
         expect(fragment.dataset.sdtContainerEnd).toBe('true');
       });
 
+      it('continues parent block SDT chrome across a nested child block SDT fragment', () => {
+        const parentSdt = {
+          type: 'structuredContent' as const,
+          scope: 'block' as const,
+          id: 'parent-sdt',
+          alias: 'Parent',
+        };
+        const childSdt = {
+          type: 'structuredContent' as const,
+          scope: 'block' as const,
+          id: 'child-sdt',
+          alias: 'Child',
+        };
+        const blocks: FlowBlock[] = [
+          {
+            kind: 'paragraph',
+            id: 'parent-marker',
+            runs: [{ text: '', fontFamily: 'Arial', fontSize: 16 }],
+            attrs: { sdt: parentSdt },
+          },
+          {
+            kind: 'paragraph',
+            id: 'child-content',
+            runs: [{ text: 'Child text', fontFamily: 'Arial', fontSize: 16 }],
+            attrs: { sdt: childSdt, containerSdt: parentSdt },
+          },
+        ];
+        const measures: Measure[] = [
+          {
+            kind: 'paragraph',
+            lines: [{ fromRun: 0, fromChar: 0, toRun: 0, toChar: 0, width: 0, ascent: 12, descent: 4, lineHeight: 20 }],
+            totalHeight: 20,
+          },
+          {
+            kind: 'paragraph',
+            lines: [
+              { fromRun: 0, fromChar: 0, toRun: 0, toChar: 10, width: 80, ascent: 12, descent: 4, lineHeight: 20 },
+            ],
+            totalHeight: 20,
+          },
+        ];
+        const layout: Layout = {
+          pageSize: { w: 400, h: 500 },
+          pages: [
+            {
+              number: 1,
+              fragments: [
+                { kind: 'para', blockId: 'parent-marker', fromLine: 0, toLine: 1, x: 20, y: 30, width: 320 },
+                { kind: 'para', blockId: 'child-content', fromLine: 0, toLine: 1, x: 20, y: 50, width: 320 },
+              ],
+            },
+          ],
+        };
+
+        const painter = createTestPainter({ blocks, measures });
+        painter.paint(layout, mount);
+
+        const fragments = Array.from(mount.querySelectorAll<HTMLElement>('.superdoc-fragment'));
+        expect(fragments).toHaveLength(2);
+        expect(fragments[0].dataset.sdtId).toBe('parent-sdt');
+        expect(fragments[0].dataset.sdtContainerStart).toBe('true');
+        expect(fragments[0].dataset.sdtContainerEnd).toBe('false');
+        expect(fragments[0].dataset.sdtNextOwnContainerStartsNested).toBe('true');
+        expect(fragments[1].dataset.sdtId).toBe('child-sdt');
+        expect(fragments[1].dataset.sdtContainerId).toBe('parent-sdt');
+        expect(fragments[1].dataset.sdtContainerStart).toBe('false');
+        expect(fragments[1].dataset.sdtContainerEnd).toBe('true');
+        expect(fragments[1].dataset.sdtOwnContainerStart).toBe('true');
+        expect(fragments[1].dataset.sdtOwnContainerEnd).toBe('true');
+        expect(fragments[1].dataset.sdtOwnContainerNested).toBe('true');
+        expect(fragments[0].querySelector('.superdoc-structured-content__label')?.textContent).toBe('Parent');
+        expect(fragments[1].querySelector('.superdoc-structured-content__label')?.textContent).toBe('Child');
+      });
+
+      it('keeps the parent label available when a parent block SDT starts with a child block SDT', () => {
+        const parentSdt = {
+          type: 'structuredContent' as const,
+          scope: 'block' as const,
+          id: 'parent-sdt',
+          alias: 'Parent',
+        };
+        const childSdt = {
+          type: 'structuredContent' as const,
+          scope: 'block' as const,
+          id: 'child-sdt',
+          alias: 'Child',
+        };
+        const blocks: FlowBlock[] = [
+          {
+            kind: 'paragraph',
+            id: 'child-content',
+            runs: [{ text: 'Child text', fontFamily: 'Arial', fontSize: 16 }],
+            attrs: { sdt: childSdt, containerSdt: parentSdt },
+          },
+          {
+            kind: 'paragraph',
+            id: 'parent-content',
+            runs: [{ text: 'Parent text', fontFamily: 'Arial', fontSize: 16 }],
+            attrs: { sdt: parentSdt },
+          },
+        ];
+        const measures: Measure[] = [
+          {
+            kind: 'paragraph',
+            lines: [
+              { fromRun: 0, fromChar: 0, toRun: 0, toChar: 10, width: 80, ascent: 12, descent: 4, lineHeight: 20 },
+            ],
+            totalHeight: 20,
+          },
+          {
+            kind: 'paragraph',
+            lines: [
+              { fromRun: 0, fromChar: 0, toRun: 0, toChar: 11, width: 90, ascent: 12, descent: 4, lineHeight: 20 },
+            ],
+            totalHeight: 20,
+          },
+        ];
+        const layout: Layout = {
+          pageSize: { w: 400, h: 500 },
+          pages: [
+            {
+              number: 1,
+              fragments: [
+                { kind: 'para', blockId: 'child-content', fromLine: 0, toLine: 1, x: 20, y: 30, width: 320 },
+                { kind: 'para', blockId: 'parent-content', fromLine: 0, toLine: 1, x: 20, y: 50, width: 320 },
+              ],
+            },
+          ],
+        };
+
+        const painter = createTestPainter({ blocks, measures });
+        painter.paint(layout, mount);
+
+        const fragments = Array.from(mount.querySelectorAll<HTMLElement>('.superdoc-fragment'));
+        expect(fragments).toHaveLength(2);
+        expect(fragments[0].dataset.sdtId).toBe('child-sdt');
+        expect(fragments[0].dataset.sdtContainerId).toBe('parent-sdt');
+        expect(fragments[0].dataset.sdtContainerStart).toBe('true');
+        expect(fragments[0].dataset.sdtContainerEnd).toBe('false');
+        expect(fragments[0].dataset.sdtOwnContainerStart).toBe('true');
+        expect(fragments[0].dataset.sdtOwnContainerEnd).toBe('true');
+        expect(fragments[0].dataset.sdtOwnContainerNested).toBe('true');
+        expect(fragments[1].dataset.sdtId).toBe('parent-sdt');
+        expect(fragments[1].dataset.sdtContainerStart).toBe('false');
+        expect(fragments[1].dataset.sdtContainerEnd).toBe('true');
+        expect(
+          fragments.map((fragment) => fragment.querySelector('.superdoc-structured-content__label')?.textContent),
+        ).toEqual(['Child', 'Parent']);
+      });
+
       it('limits block SDT chrome to paragraph content width', () => {
         const textSdtBlock: FlowBlock = {
           kind: 'paragraph',

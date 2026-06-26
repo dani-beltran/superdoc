@@ -40,7 +40,6 @@ function createFakeEditor(opts: FakeEditorOptions = {}) {
     setDocumentModeSpy: typeof setDocumentModeSpy;
   } = {
     options: { documentId: opts.documentId ?? 'doc-1', documentMode: opts.documentMode },
-    editorVersion: 1,
     state: {
       doc: {
         textBetween: (f: number, t: number, sep?: string) => {

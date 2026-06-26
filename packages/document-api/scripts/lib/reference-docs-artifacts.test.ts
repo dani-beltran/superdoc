@@ -54,17 +54,6 @@ describe('reference docs artifacts', () => {
     expect(formatApply!).toContain('- Operation ID: `format.apply`');
   });
 
-  it('generates a non-empty markRunProps example for paragraph mark run props docs', () => {
-    const artifacts = artifactContentByPath();
-
-    const setMarkRunPropsDoc = artifacts.get(
-      'apps/docs/document-api/reference/format/paragraph/set-mark-run-props.mdx',
-    );
-    expect(setMarkRunPropsDoc).toBeDefined();
-    expect(setMarkRunPropsDoc!).not.toContain('"markRunProps": {}');
-    expect(setMarkRunPropsDoc!).toContain('"fontSizeCs"');
-  });
-
   it('uses a valid raw TOC instruction in create.tableOfContents example requests', () => {
     const artifacts = artifactContentByPath();
 

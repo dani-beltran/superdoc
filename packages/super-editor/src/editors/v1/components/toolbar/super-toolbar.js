@@ -701,9 +701,9 @@ export class SuperToolbar extends EventEmitter {
     return fontFamily || null;
   }
 
-  // Headless currently represents mixed font-size selections as active + null value.
+  // Headless represents mixed selections (e.g. font-size, font-family) as active + null value.
   // The built-in toolbar still needs to translate that shape into the legacy isMultiple UI state.
-  #isFontSizeMixedState(commandState) {
+  #isMixedState(commandState) {
     return Boolean(commandState?.active) && commandState?.value == null;
   }
 
@@ -751,6 +751,11 @@ export class SuperToolbar extends EventEmitter {
           return;
         }
 
+        if (this.#isMixedState(commandState)) {
+          item.activate({}, true);
+          return;
+        }
+
         const fallbackFontFamily = this.#getFontFamilyFallbackValue();
         if (fallbackFontFamily) {
           item.activate({ fontFamily: fallbackFontFamily });
@@ -764,7 +769,7 @@ export class SuperToolbar extends EventEmitter {
           item.activate({ fontSize: commandState.value });
           return;
         }
-        if (this.#isFontSizeMixedState(commandState)) {
+        if (this.#isMixedState(commandState)) {
           item.activate({}, true);
           return;
         }

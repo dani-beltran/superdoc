@@ -6,7 +6,7 @@
 //
 // Boundary rules (the runtime contract, enforced by `import-boundary.test.ts`):
 // This module depends on the runtime contract (`./types.js`) and the
-//     shell-owned root marker only. It imports NO concrete v1/v2 editor.
+//     shell-owned root marker only. It imports NO concrete editor implementation.
 // The registry NEVER interprets runtime positions, maps click coordinates,
 //     or dispatches edit commands. Event-target resolution selects a runtime; it
 //     does nothing editor-semantic.
@@ -14,9 +14,8 @@
 //     `setActiveEditor(...)` remains the sole writer of `SuperDoc.activeEditor`.
 //     The registry only OBSERVES active changes and surfaces the next runtime's
 //     legacy editor projection on the active-change event; SuperDoc routes that
-//     projection through `setActiveEditor(...)` so the v1 toolbar rebind / v2
-//     no-rebind side effects are preserved. The registry never assigns
-//     `activeEditor` itself.
+//     projection through `setActiveEditor(...)` so legacy toolbar rebind side
+//     effects are preserved. The registry never assigns `activeEditor` itself.
 
 import type { EditorRuntime, EditorRuntimeId } from './types.js';
 import { RUNTIME_ROOT_ATTRIBUTE } from './root-marker.js';

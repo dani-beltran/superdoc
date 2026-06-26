@@ -2,15 +2,15 @@ import type { TextTarget, TrackedChangeAddress } from './address.js';
 import type { DiscoveryOutput } from './discovery.js';
 import type { StoryLocator } from './story.types.js';
 /**
- * Canonical v2 tracked-change broad-type vocabulary defined by
+ * Canonical tracked-change broad-type vocabulary defined by
  * `../labs/tests/requirements/specs/tracked-changes-comments/tracked-changes-spec.md`
  * §3 / §5.
  *
  * Public adapters MUST emit one of these values. Existing v1 emitters and
  * tests still produce the legacy `insert` / `delete` / `format` strings; both
  * sets are accepted by {@link TrackChangeType} during the vocabulary
- * legacy strings are documented compatibility aliases only — new code must
- * emit the canonical vocabulary.
+ * transition. Legacy strings are documented compatibility aliases only — new
+ * code must emit the canonical vocabulary.
  */
 export type TrackChangeBroadType = 'insertion' | 'deletion' | 'replacement' | 'formatting' | 'move' | 'structural';
 /**
@@ -19,9 +19,9 @@ export type TrackChangeBroadType = 'insertion' | 'deletion' | 'replacement' | 'f
  */
 export type LegacyTrackChangeType = 'insert' | 'delete' | 'format';
 /**
- * Tracked-change broad type accepted by the public API. The v2 logical
- * projection emits {@link TrackChangeBroadType}; legacy v1 emitters may still
- * produce {@link LegacyTrackChangeType}. Filters accept either spelling.
+ * Tracked-change broad type accepted by the public API. Logical projections
+ * emit {@link TrackChangeBroadType}; legacy v1 emitters may still produce
+ * {@link LegacyTrackChangeType}. Filters accept either spelling.
  */
 export type TrackChangeType = TrackChangeBroadType | LegacyTrackChangeType;
 /**
@@ -214,8 +214,8 @@ export interface TrackChangeSnapshot {
   structural?: TrackChangeStructuralSnapshot;
 }
 /**
- * Source-platform provenance per spec §3. Imported Word DOCX revisions
- * surface as `word`; v2 native edits surface `superdoc`.
+ * Source-platform provenance per spec §3. Imported Word DOCX revisions surface
+ * as `word`; native edits surface `superdoc`.
  */
 export type TrackChangeProvenanceOrigin = 'word' | 'google-docs' | 'superdoc' | 'custom' | 'unknown';
 export type TrackChangeSourcePlatform = TrackChangeProvenanceOrigin;
@@ -255,7 +255,7 @@ export type TrackChangeOverlapRelationship = 'parent' | 'child' | 'standalone';
 export interface TrackChangeOverlapLayer {
   /** SuperDoc logical id of the contributing tracked change. */
   id: string;
-  /** Broad type of the layer (canonical v2 spelling). */
+  /** Broad type of the layer (canonical spelling). */
   type: TrackChangeType;
   /** Layer relationship to the parent overlap surface. */
   relationship: TrackChangeOverlapRelationship;

@@ -47,6 +47,7 @@ import {
   mergeWrapDistancesFromPadding,
   ptToPx,
 } from '../utilities.js';
+import { computeParagraphAttrs } from '../attributes/index.js';
 import { getLastParagraphFont } from './paragraph.js';
 
 // ============================================================================
@@ -838,6 +839,59 @@ export function shapeGroupNodeToDrawingBlock(
 }
 
 /**
+ * Inline textbox/shape paragraphs whose only content is the drawing are lifted to the
+ * document top level by the importer, which stashes the original host paragraph props on
+ * `wrapperParagraph`. Those drawings keep their authored width, so a centered/right-aligned
+ * host paragraph must still offset the whole box on the page. Derive the alignment metadata
+ * the layout engine consumes (`inlineParagraphAlignment` plus wrapper indents) from that
+ * wrapper (SD: IT-1140).
+ *
+ * Only applies to inline-wrapped drawings; anchored drawings are positioned by their anchor.
+ */
+const resolveWrapperAlignment = (justification: unknown): 'center' | 'right' | undefined => {
+  switch (justification) {
+    // `distribute` visually centers a sole inline drawing in Word.
+    case 'center':
+    case 'distribute':
+      return 'center';
+    case 'right':
+    case 'end':
+      return 'right';
+    default:
+      return undefined;
+  }
+};
+
+const resolveInlineAlignmentFromWrapper = (rawAttrs: Record<string, unknown>): Record<string, unknown> => {
+  const wrapType = (rawAttrs.wrap as { type?: unknown } | undefined)?.type;
+  if (wrapType !== 'Inline' || !isPlainObject(rawAttrs.wrapperParagraph)) {
+    return {};
+  }
+  const wrapper = rawAttrs.wrapperParagraph as Record<string, unknown>;
+  const paragraphProperties = isPlainObject(wrapper.paragraphProperties)
+    ? (wrapper.paragraphProperties as Record<string, unknown>)
+    : undefined;
+  // The paragraph node has no top-level `textAlign`; the text-align extension and the
+  // importer both store alignment as the raw OOXML `w:jc` value on
+  // `paragraphProperties.justification` (e.g. "center", "right", "distribute"). Map that
+  // to a physical alignment, treating "distribute" as visual centering for a sole inline
+  // drawing. `wrapper.textAlign` is only an additional fallback for callers that surface a
+  // pre-resolved alignment.
+  const justification = paragraphProperties?.justification;
+  const textAlign = typeof wrapper.textAlign === 'string' ? wrapper.textAlign : undefined;
+  const effectiveAlignment = resolveWrapperAlignment(justification) ?? textAlign;
+  if (effectiveAlignment !== 'center' && effectiveAlignment !== 'right') {
+    return {};
+  }
+  const metadata: Record<string, unknown> = { inlineParagraphAlignment: effectiveAlignment };
+  const { paragraphAttrs } = computeParagraphAttrs({ type: 'paragraph', attrs: wrapper } as PMNode);
+  const indent = paragraphAttrs.indent;
+  if (typeof indent?.left === 'number') metadata.paragraphIndentLeft = indent.left;
+  if (typeof indent?.right === 'number') metadata.paragraphIndentRight = indent.right;
+  return metadata;
+};
+
+/**
  * Convert a ProseMirror shapeContainer node to a DrawingBlock
  *
  * @param node - Shape container node to convert
@@ -869,6 +923,7 @@ export function shapeContainerNodeToDrawingBlock(
   return buildDrawingBlock(
     {
       ...rawAttrs,
+      ...resolveInlineAlignmentFromWrapper(rawAttrs),
       ...(textContent ? { textContent } : {}),
       ...(rawAttrs.textAlign == null && textContent?.horizontalAlign ? { textAlign: textContent.horizontalAlign } : {}),
       ...(rawAttrs.textInsets == null ? { textInsets: resolveTextboxInsetsFromAttrs(textboxAttrs) } : {}),

@@ -151,6 +151,33 @@ describe('ensureSdtContainerStyles', () => {
     );
   });
 
+  it('shows nested child top chrome only on the active child SDT', () => {
+    ensureSdtContainerStyles(document);
+
+    const styleEl = document.querySelector('[data-superdoc-sdt-container-styles="true"]');
+    const cssText = styleEl?.textContent ?? '';
+    const nestedInactiveRule =
+      cssText.match(
+        /\.superdoc-structured-content-block\[data-sdt-own-container-nested="true"\]\[data-sdt-own-container-start="true"\]:not\(\.ProseMirror-selectednode\)::after\s*\{([^}]*)\}/,
+      )?.[1] ?? '';
+
+    expect(nestedInactiveRule).toContain('border-top: none;');
+    expect(cssText).toContain(
+      '.superdoc-structured-content-block[data-sdt-next-own-container-starts-nested="true"]::after',
+    );
+    expect(cssText).toContain(
+      '.superdoc-structured-content-block.sdt-ancestor-selected[data-sdt-next-own-container-starts-nested="true"]::after',
+    );
+    expect(cssText).toContain(
+      '.superdoc-structured-content-block.sdt-container-selected:not(.ProseMirror-selectednode):not(.sdt-ancestor-selected)::after',
+    );
+    const nestedActiveRule =
+      cssText.match(
+        /\.superdoc-structured-content-block\.ProseMirror-selectednode\[data-sdt-container-start="false"\]::after\s*\{([^}]*)\}/,
+      )?.[1] ?? '';
+    expect(nestedActiveRule).toContain('border-top: none;');
+  });
+
   it('gives empty inline SDTs a default visible affordance', () => {
     ensureSdtContainerStyles(document);
 

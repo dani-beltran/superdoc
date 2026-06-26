@@ -373,11 +373,10 @@ export async function tryRunLegacyCompatCommand(
 }
 
 function assertV1Opened(opened: OpenedRuntimeDocument, label: string): OpenedDocument {
-  if (opened.runtime !== 'v1') {
-    throw new CliError('RUNTIME_V2_UNAVAILABLE', `${label}: this command is not available in the v2 runtime.`, {
-      runtime: opened.runtime,
-      command: label,
-    });
+  // This branch is v1-only, so every opened document is editor-backed. Guard
+  // defensively against a runtime-neutral handle that lacks the v1 editor.
+  if (!('editor' in opened)) {
+    throw new CliError('COMMAND_FAILED', `${label}: expected a v1 editor-backed session.`);
   }
   return opened as OpenedDocument;
 }

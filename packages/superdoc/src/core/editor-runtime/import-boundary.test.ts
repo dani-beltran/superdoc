@@ -1,14 +1,13 @@
 // Import-boundary guard for the editor-runtime contract.
 //
 // The shared runtime contract is the one surface shell code uses to talk to a
-// mounted editor. current implementation hard gate: it must NOT depend on ProseMirror, the
+// mounted editor. Current implementation hard gate: it must NOT depend on ProseMirror, the
 // concrete v1 editor package, `PresentationEditor`/`EditorInputManager`/
-// `PositionHit`, the concrete v2 host implementation files, or
-// `SDPosition`/`SDRange`/Document API internals.
+// `PositionHit`, or `SDPosition`/`SDRange`/Document API internals.
 //
 // This guard scans every non-test source under `core/editor-runtime/` for both
 // forbidden import specifiers AND forbidden path-string references to concrete
-// v1/v2 implementation files. Conformance fixtures are scanned too: they must
+// editor implementation files. Conformance fixtures are scanned too: they must
 // prove the contract is satisfiable without importing forbidden modules.
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
@@ -33,16 +32,13 @@ const FORBIDDEN_IMPORT_FRAGMENTS = [
   'PresentationEditor',
   'EditorInputManager',
   'edit-command-adapters',
-  'create-v2-editor-host',
 ];
 
 // Forbidden path-string / identifier references anywhere in source (not just
 // imports). These catch a back-door like a string path to a concrete impl file
 // or a type reference smuggled past the import scan.
 const FORBIDDEN_REFERENCE_FRAGMENTS = [
-  'create-v2-editor-host',
   'presentation-editor/PresentationEditor',
-  'V2EditorHost',
   'SDPosition',
   'SDRange',
   'PositionHit',
@@ -124,7 +120,7 @@ describe('editor-runtime contract  -  import boundary', () => {
   });
 
   it('self-test: reference scanner flags a smuggled concrete-impl path string', () => {
-    const line = `const p = require('@superdoc/v2-host/src/create-v2-editor-host.js');`;
+    const line = `const p = require('@superdoc/super-editor/src/presentation-editor/PresentationEditor.js');`;
     const flagged = FORBIDDEN_REFERENCE_FRAGMENTS.some((f) => line.includes(f));
     expect(flagged).toBe(true);
   });

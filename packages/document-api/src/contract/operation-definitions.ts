@@ -98,28 +98,8 @@ export interface IntentGroupMeta {
   inputExamples?: Record<string, unknown>[];
 }
 
-export const V1_RUNTIME_UNAVAILABLE_OPERATION_IDS = [
-  'blocks.split',
-  'blocks.merge',
-  'blocks.move',
-  'lists.getState',
-  'lists.apply',
-  'lists.continue',
-  'lists.restart',
-  'lists.remove',
-  'format.paragraph.setMarkRunProps',
-  'tables.moveRow',
-] as const;
-
-const V2_BACKED_ONLY_DESCRIPTION_NOTE =
-  ' Available on v2-backed sessions only; v1-backed sessions currently return `CAPABILITY_UNAVAILABLE`.';
-
-function v2BackedOnlyDescription(description: string): string {
-  return `${description}${V2_BACKED_ONLY_DESCRIPTION_NOTE}`;
-}
-
 const FOOTNOTE_STRUCTURED_BODY_V1_NOTE =
-  ' Structured `body` content is currently available on v2-backed sessions only; v1-backed sessions return `CAPABILITY_UNAVAILABLE` for those shapes.';
+  ' Structured `body` content is not available in this v1-only branch; those shapes return `CAPABILITY_UNAVAILABLE`.';
 
 const FIELD_PRESERVE_CACHED_V1_NOTE =
   ' The current v1 runtime supports rebuild flows; `cachedResultText` / `updatePolicy: "preserveCached"` currently return `CAPABILITY_UNAVAILABLE`.';
@@ -419,7 +399,7 @@ export const INTENT_GROUP_META: Record<string, IntentGroupMeta> = {
       'To create a comment, first use superdoc_search to find the target text, then pass action "create" with the comment text and a target built from items[0].blocks. For a single-block match use {kind:"text", blockId: items[0].blocks[0].blockId, range: items[0].blocks[0].range}. For a cross-block match use {kind:"text", segments: items[0].blocks.map(b => ({blockId: b.blockId, range: b.range}))}. Do NOT use items[0].highlightRange (snippet-relative, not block-relative) or items[0].target (a SelectionTarget, not accepted by comments.create). ' +
       'For threaded replies, pass "parentId" with the parent comment ID. ' +
       'Action "list" returns all comments with optional pagination (limit, offset) and filtering (includeResolved:true to include resolved). ' +
-      'Action "get" retrieves a single comment by ID. Action "update" changes comment text, re-anchors the thread, or changes status to "resolved". The legacy `isInternal` field remains in schema for v1 compatibility but the v2 surface rejects it with `CAPABILITY_UNAVAILABLE`. Action "delete" removes a comment or reply by ID. ' +
+      'Action "get" retrieves a single comment by ID. Action "update" changes comment text, re-anchors the thread, or changes status to "resolved". The legacy `isInternal` field remains in schema for v1 compatibility but is not supported for new comment patch behavior. Action "delete" removes a comment or reply by ID. ' +
       'Do NOT pass "ref", "id", or "parentId" when creating a new top-level comment; only "action", "text", and "target" are needed.',
     inputExamples: [
       {
@@ -1042,78 +1022,6 @@ export const OPERATION_DEFINITIONS = {
       ],
     }),
     referenceDocPath: 'blocks/delete-range.mdx',
-    referenceGroup: 'blocks',
-  },
-  'blocks.split': {
-    memberPath: 'blocks.split',
-    description: v2BackedOnlyDescription(
-      'Split a paragraph at a visible-text offset, producing two paragraphs. Preserves unambiguous simple run properties around the cut. Rejects when the paragraph contains fields, content controls, drawings, equations, or unsupported tracked-change wrappers.',
-    ),
-    expectedResult:
-      'Returns a BlocksSplitResult; on success carries the new tail paragraph address, affectedStories, and (for engines that report them) story-absolute textRangeShifts and a txId for history correlation.',
-    requiresDocumentContext: true,
-    metadata: mutationOperation({
-      idempotency: 'non-idempotent',
-      supportsDryRun: false,
-      supportsTrackedMode: true,
-      possibleFailureCodes: [
-        'INVALID_TARGET',
-        'TARGET_NOT_FOUND',
-        'CAPABILITY_UNAVAILABLE',
-        'INVALID_CONTEXT',
-        'INVALID_INPUT',
-      ],
-      throws: [...T_NOT_FOUND_CAPABLE, 'INVALID_TARGET', 'INVALID_INPUT'],
-    }),
-    referenceDocPath: 'blocks/split.mdx',
-    referenceGroup: 'blocks',
-  },
-  'blocks.merge': {
-    memberPath: 'blocks.merge',
-    description: v2BackedOnlyDescription(
-      'Merge two adjacent paragraphs in the same story. The first paragraph keeps its pPr; the second paragraph is removed. Rejects when either paragraph carries a w:sectPr or when their numbering definitions differ.',
-    ),
-    expectedResult:
-      'Returns a BlocksMergeResult; on success carries the removed paragraph address plus affectedStories, textRangeShifts, and a txId.',
-    requiresDocumentContext: true,
-    metadata: mutationOperation({
-      idempotency: 'non-idempotent',
-      supportsDryRun: false,
-      supportsTrackedMode: true,
-      possibleFailureCodes: [
-        'INVALID_TARGET',
-        'TARGET_NOT_FOUND',
-        'CAPABILITY_UNAVAILABLE',
-        'INVALID_CONTEXT',
-        'INVALID_INPUT',
-      ],
-      throws: [...T_NOT_FOUND_CAPABLE, 'INVALID_TARGET', 'INVALID_INPUT'],
-    }),
-    referenceDocPath: 'blocks/merge.mdx',
-    referenceGroup: 'blocks',
-  },
-  'blocks.move': {
-    memberPath: 'blocks.move',
-    description: v2BackedOnlyDescription(
-      'Move a paragraph within the same story to a new anchor paragraph (before or after). Cross-story and relationship-bearing moves reject with named reasons. Tracked-mode authoring emits paired `<w:moveFrom>` / `<w:moveTo>` review state with explicit move range marker identity; safe content (no comment/bookmark/permission anchors and no pre-existing tracked wrappers) is required for tracked authoring.',
-    ),
-    expectedResult:
-      'Returns a BlocksMoveResult; on success carries the moved paragraph address plus affectedStories and a txId. Tracked-mode results include `trackedChangeRefs` pointing at the paired move review entity.',
-    requiresDocumentContext: true,
-    metadata: mutationOperation({
-      idempotency: 'non-idempotent',
-      supportsDryRun: false,
-      supportsTrackedMode: true,
-      possibleFailureCodes: [
-        'INVALID_TARGET',
-        'TARGET_NOT_FOUND',
-        'CAPABILITY_UNAVAILABLE',
-        'INVALID_CONTEXT',
-        'INVALID_INPUT',
-      ],
-      throws: [...T_NOT_FOUND_CAPABLE, 'INVALID_TARGET', 'INVALID_INPUT'],
-    }),
-    referenceDocPath: 'blocks/move.mdx',
     referenceGroup: 'blocks',
   },
   'format.apply': {
@@ -1823,24 +1731,6 @@ export const OPERATION_DEFINITIONS = {
     referenceDocPath: 'format/paragraph/clear-shading.mdx',
     referenceGroup: 'format.paragraph',
   },
-  'format.paragraph.setMarkRunProps': {
-    memberPath: 'format.paragraph.setMarkRunProps',
-    description: v2BackedOnlyDescription(
-      "Set the paragraph mark's run properties (w:pPr/w:rPr), e.g. the font size or specVanish carried by the paragraph-end mark.",
-    ),
-    expectedResult:
-      'Returns a ParagraphMutationResult; reports NO_OP if the encoded mark run properties already match.',
-    requiresDocumentContext: true,
-    metadata: mutationOperation({
-      idempotency: 'conditional',
-      supportsDryRun: true,
-      supportsTrackedMode: false,
-      possibleFailureCodes: ['NO_OP', 'CAPABILITY_UNAVAILABLE'],
-      throws: T_PARAGRAPH_MUTATION,
-    }),
-    referenceDocPath: 'format/paragraph/set-mark-run-props.mdx',
-    referenceGroup: 'format.paragraph',
-  },
   'format.paragraph.setDirection': {
     memberPath: 'format.paragraph.setDirection',
     description: 'Set paragraph base direction (LTR or RTL via w:bidi). Optionally align text to match.',
@@ -2521,103 +2411,6 @@ export const OPERATION_DEFINITIONS = {
     referenceDocPath: 'lists/set-level-layout.mdx',
     referenceGroup: 'lists',
   },
-  // v2 numbering-aware list operation surface.
-  'lists.getState': {
-    memberPath: 'lists.getState',
-    description: v2BackedOnlyDescription(
-      'Read the numbering-aware list state for a paragraph (numId, ilvl, abstract reference, level format). Returns null when the target is not a list item.',
-    ),
-    expectedResult:
-      'Returns a ListsGetStateResult with `isListItem` plus numId/ilvl/abstract/numFmt metadata when present.',
-    requiresDocumentContext: true,
-    metadata: readOperation({
-      possibleFailureCodes: ['TARGET_NOT_FOUND', 'CAPABILITY_UNAVAILABLE'],
-      throws: [...T_NOT_FOUND_CAPABLE],
-    }),
-    referenceDocPath: 'lists/get-state.mdx',
-    referenceGroup: 'lists',
-  },
-  'lists.apply': {
-    memberPath: 'lists.apply',
-    description: v2BackedOnlyDescription(
-      'Apply a numbering definition to a paragraph. When `/word/numbering.xml` is absent it is materialized atomically together with the package content-type override and document relationship. Seeds bullet or ordered single-level definitions when no `reuseNumId` is provided.',
-    ),
-    expectedResult:
-      'Returns a ListsMutateItemResult receipt with txId; partsChanged includes numbering / content-types / rels when first-list materialization fires.',
-    requiresDocumentContext: true,
-    metadata: mutationOperation({
-      idempotency: 'non-idempotent',
-      supportsDryRun: false,
-      supportsTrackedMode: true,
-      possibleFailureCodes: [
-        'INVALID_TARGET',
-        'TARGET_NOT_FOUND',
-        'CAPABILITY_UNAVAILABLE',
-        'INVALID_CONTEXT',
-        'INVALID_INPUT',
-      ],
-      throws: [...T_NOT_FOUND_CAPABLE, 'INVALID_TARGET', 'INVALID_INPUT'],
-    }),
-    referenceDocPath: 'lists/apply.mdx',
-    referenceGroup: 'lists',
-  },
-  'lists.continue': {
-    memberPath: 'lists.continue',
-    description: v2BackedOnlyDescription(
-      "Continue from the previous compatible list item in the same story. Adopts the previous paragraph's numId+ilvl. Rejects with named reasons when no compatible previous item exists or when an intervening structural boundary blocks the continuation.",
-    ),
-    expectedResult: 'Returns a ListsMutateItemResult receipt with txId.',
-    requiresDocumentContext: true,
-    metadata: mutationOperation({
-      idempotency: 'non-idempotent',
-      supportsDryRun: false,
-      supportsTrackedMode: true,
-      possibleFailureCodes: ['INVALID_TARGET', 'TARGET_NOT_FOUND', 'CAPABILITY_UNAVAILABLE', 'INVALID_CONTEXT'],
-      throws: [...T_NOT_FOUND_CAPABLE, 'INVALID_TARGET'],
-    }),
-    referenceDocPath: 'lists/continue.mdx',
-    referenceGroup: 'lists',
-  },
-  'lists.restart': {
-    memberPath: 'lists.restart',
-    description: v2BackedOnlyDescription(
-      'Restart numbering at a list item. Creates a new `<w:num>` that references the existing `<w:abstractNumId>` with a `<w:lvlOverride><w:startOverride/></w:lvlOverride>`. Distant paragraphs sharing the old numId are intentionally untouched.',
-    ),
-    expectedResult: 'Returns a ListsMutateItemResult receipt with txId; partsChanged includes /word/numbering.xml.',
-    requiresDocumentContext: true,
-    metadata: mutationOperation({
-      idempotency: 'non-idempotent',
-      supportsDryRun: false,
-      supportsTrackedMode: true,
-      possibleFailureCodes: [
-        'INVALID_TARGET',
-        'TARGET_NOT_FOUND',
-        'CAPABILITY_UNAVAILABLE',
-        'INVALID_CONTEXT',
-        'INVALID_INPUT',
-      ],
-      throws: [...T_NOT_FOUND_CAPABLE, 'INVALID_TARGET', 'INVALID_INPUT'],
-    }),
-    referenceDocPath: 'lists/restart.mdx',
-    referenceGroup: 'lists',
-  },
-  'lists.remove': {
-    memberPath: 'lists.remove',
-    description: v2BackedOnlyDescription(
-      'Strip the `<w:numPr>` from a list-item paragraph. The numbering definition in `/word/numbering.xml` is intentionally NOT modified; orphan cleanup is handled by the export-side stripper.',
-    ),
-    expectedResult: 'Returns a ListsMutateItemResult receipt with txId.',
-    requiresDocumentContext: true,
-    metadata: mutationOperation({
-      idempotency: 'non-idempotent',
-      supportsDryRun: false,
-      supportsTrackedMode: true,
-      possibleFailureCodes: ['INVALID_TARGET', 'TARGET_NOT_FOUND', 'CAPABILITY_UNAVAILABLE', 'INVALID_CONTEXT'],
-      throws: [...T_NOT_FOUND_CAPABLE, 'INVALID_TARGET'],
-    }),
-    referenceDocPath: 'lists/remove.mdx',
-    referenceGroup: 'lists',
-  },
   'comments.create': {
     memberPath: 'comments.create',
     description:
@@ -2646,7 +2439,7 @@ export const OPERATION_DEFINITIONS = {
   'comments.patch': {
     memberPath: 'comments.patch',
     description:
-      'Patch exactly one field on an existing comment (`text`, `target`, or `status`). The `target` branch accepts a plain TextAddress or a TrackedChangeCommentTarget, with or without `kind: "trackedChange"`, that names a logical tracked-change id. The legacy `isInternal` input is preserved in the schema for v1 backward compatibility but is not a supported v2 product behavior. V2 adapters MUST fail a `comments.patch` request containing `isInternal` with `CAPABILITY_UNAVAILABLE` (kernel reason `internal-comments-unsupported`). Multi-field patches and no-op edits are rejected with `INVALID_INPUT`; reply target / status patches are rejected with `INVALID_CONTEXT`.',
+      'Patch exactly one field on an existing comment (`text`, `target`, or `status`). The `target` branch accepts a plain TextAddress or a TrackedChangeCommentTarget, with or without `kind: "trackedChange"`, that names a logical tracked-change id. The legacy `isInternal` input is preserved in the schema for v1 backward compatibility but is not supported for new patch behavior and fails with `CAPABILITY_UNAVAILABLE` (kernel reason `internal-comments-unsupported`). Multi-field patches and no-op edits are rejected with `INVALID_INPUT`; reply target / status patches are rejected with `INVALID_CONTEXT`.',
     expectedResult:
       'Returns a Receipt with `updated` populated on success. Reports `NO_OP` for byte-identical edits, rejects empty-body / trim-equivalent edits with `INVALID_INPUT`, no-op resolve/reopen with `INVALID_INPUT`, reply target/status with `INVALID_CONTEXT`, cross-story moves with `INVALID_CONTEXT`, materializing inherited slot moves with `CAPABILITY_UNAVAILABLE`, stale tracked-change targets with `TARGET_NOT_FOUND`, formatting / structural / unpaired-move tracked-change targets with `CAPABILITY_UNAVAILABLE`, and `isInternal` patches with `CAPABILITY_UNAVAILABLE`.',
     requiresDocumentContext: true,
@@ -3067,24 +2860,6 @@ export const OPERATION_DEFINITIONS = {
     referenceGroup: 'tables',
     intentGroup: 'table',
     intentAction: 'delete_row',
-  },
-  'tables.moveRow': {
-    memberPath: 'tables.moveRow',
-    description: v2BackedOnlyDescription('Move a row to a new position within the same table.'),
-    expectedResult:
-      'Returns a TableMutationResult receipt; reports NO_OP if the row is already at the requested position.',
-    requiresDocumentContext: true,
-    metadata: mutationOperation({
-      idempotency: 'conditional',
-      supportsDryRun: true,
-      supportsTrackedMode: false,
-      possibleFailureCodes: ['INVALID_TARGET', 'NO_OP', 'CAPABILITY_UNAVAILABLE'],
-      throws: [...T_NOT_FOUND_COMMAND, 'INVALID_TARGET'],
-    }),
-    referenceDocPath: 'tables/move-row.mdx',
-    referenceGroup: 'tables',
-    intentGroup: 'table',
-    intentAction: 'move_row',
   },
   'tables.setRowHeight': {
     memberPath: 'tables.setRowHeight',

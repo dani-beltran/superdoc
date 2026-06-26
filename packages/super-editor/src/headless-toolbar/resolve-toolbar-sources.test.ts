@@ -182,12 +182,11 @@ describe('resolveToolbarSources', () => {
     expect(result.presentationEditor).toBe(narrowPresentationEditor);
   });
 
-  it('accepts an explicit v2 active-editor facade without creating a v1 toolbar context', () => {
+  it('ignores an active editor that exposes no v1 command surface', () => {
     const result = resolveToolbarSources({
       activeEditor: {
-        editorVersion: 2,
         options: {
-          documentId: 'doc-v2',
+          documentId: 'doc-without-commands',
           documentMode: 'editing',
         },
         commands: null,

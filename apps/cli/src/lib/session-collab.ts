@@ -4,11 +4,7 @@ import { exportToPath, getFileChecksum, type OpenedRuntimeDocument } from './doc
 import { CliError } from './errors';
 import type { CliIO } from './types';
 
-/**
- * v1-only helper. Collaborative sync depends on the live Yjs editor; v2
- * collaboration is not implemented at this plan close, so v2 sessions never
- * reach this function (they reject at open).
- */
+/** Collaborative sync depends on the live Yjs editor. */
 export async function syncCollaborativeSessionSnapshot(
   io: CliIO,
   metadata: ContextMetadata,
@@ -42,9 +38,8 @@ export async function syncCollaborativeSessionSnapshot(
 }
 
 /**
- * Runtime-neutral entry: accepts an {@link OpenedRuntimeDocument} and routes
- * to the runtime's own export path. This keeps v1 and v2 collaborative
- * sessions aligned at the CLI sync checkpoint seam.
+ * Accepts an {@link OpenedRuntimeDocument} and routes to the runtime's own
+ * export path at the CLI sync checkpoint.
  */
 export async function syncCollaborativeSessionSnapshotFromOpened(
   io: CliIO,

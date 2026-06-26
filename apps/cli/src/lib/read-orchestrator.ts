@@ -4,9 +4,8 @@
  * Replaces the per-operation runReadOperation() calls scattered across
  * operation-extra-invokers.ts with a single generic path.
  *
- * Runtime-neutral: dispatches through {@link OpenedRuntimeDocument} so v1
- * (editor-backed) and v2 (SDDocumentSession-backed) sessions share the same
- * orchestrator. Engine specifics (`editor.*`) MUST stay out of this file.
+ * Dispatches through {@link OpenedRuntimeDocument}; engine specifics
+ * (`editor.*`) MUST stay out of this file.
  */
 
 import { SUCCESS_VERB } from '../cli/operation-hints.js';

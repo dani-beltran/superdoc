@@ -1,16 +1,14 @@
 import { createHash } from 'node:crypto';
 import type { CollaborationProfile } from '../lib/collaboration';
 import {
-  loadV2Runtime,
   openCollaborativeDocument,
   openDocument,
   type EditorPassThroughOptions,
   type FileOutputMeta,
   type OpenedRuntimeDocument,
 } from '../lib/document';
-import { CliError } from '../lib/errors';
 import type { TrackChangesOpenOptions } from '../lib/context';
-import type { CliIO, DocumentRuntimeKind, UserIdentity } from '../lib/types';
+import type { CliIO, UserIdentity } from '../lib/types';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -25,7 +23,6 @@ const AUTOSAVE_DEBOUNCE_MS = 3_000;
 export type SessionType = 'local' | 'collab';
 
 export interface AcquireMetadata {
-  runtime: DocumentRuntimeKind;
   sessionType: SessionType;
   workingDocPath: string;
   metadataRevision: number;
@@ -36,7 +33,6 @@ export interface AcquireMetadata {
 }
 
 export interface AdoptMetadata {
-  runtime: DocumentRuntimeKind;
   sessionType: SessionType;
   workingDocPath: string;
   metadataRevision: number;
@@ -62,21 +58,9 @@ export interface SessionPoolDeps {
     profile: CollaborationProfile,
     options?: { user?: UserIdentity; editorOpenOptions?: EditorPassThroughOptions },
   ) => Promise<OpenedRuntimeDocument>;
-  openV2?: (
-    docPath: string,
-    io: CliIO,
-    options?: { user?: UserIdentity; editorOpenOptions?: EditorPassThroughOptions },
-  ) => Promise<OpenedRuntimeDocument>;
-  openV2Collaborative?: (
-    docPath: string | undefined,
-    io: CliIO,
-    profile: CollaborationProfile,
-    options?: { user?: UserIdentity; editorOpenOptions?: EditorPassThroughOptions },
-  ) => Promise<OpenedRuntimeDocument>;
   /**
-   * Optional override for checkpointing. Receives the runtime-neutral opened
-   * document so v1 and v2 paths can share the contract. The default
-   * implementation calls {@link OpenedRuntimeDocument.exportToPath}.
+   * Optional override for checkpointing. Receives the opened document and
+   * defaults to {@link OpenedRuntimeDocument.exportToPath}.
    */
   exportToPath?: (opened: OpenedRuntimeDocument, docPath: string, overwrite: boolean) => Promise<FileOutputMeta>;
   now?: () => number;
@@ -158,7 +142,6 @@ function createSessionLocks(): {
 
 interface PooledSession {
   opened: OpenedRuntimeDocument;
-  runtime: DocumentRuntimeKind;
   sessionType: SessionType;
   dirty: boolean;
   leased: boolean;
@@ -183,8 +166,6 @@ export class InMemorySessionPool implements SessionPool {
 
   private readonly openLocal: NonNullable<SessionPoolDeps['openLocal']>;
   private readonly openCollaborative: NonNullable<SessionPoolDeps['openCollaborative']>;
-  private readonly openV2: NonNullable<SessionPoolDeps['openV2']>;
-  private readonly openV2Collaborative: NonNullable<SessionPoolDeps['openV2Collaborative']>;
   private readonly exportToPathFn: NonNullable<SessionPoolDeps['exportToPath']>;
   private readonly now: () => number;
   private readonly createTimer: NonNullable<SessionPoolDeps['createTimer']>;
@@ -193,18 +174,6 @@ export class InMemorySessionPool implements SessionPool {
   constructor(deps: SessionPoolDeps = {}) {
     this.openLocal = deps.openLocal ?? openDocument;
     this.openCollaborative = deps.openCollaborative ?? openCollaborativeDocument;
-    this.openV2 =
-      deps.openV2 ??
-      (async (docPath, io, options) => {
-        const mod = await loadV2Runtime();
-        return mod.openV2Document(docPath, io, options);
-      });
-    this.openV2Collaborative =
-      deps.openV2Collaborative ??
-      (async (docPath, io, profile, options) => {
-        const mod = await loadV2Runtime();
-        return mod.openV2CollaborativeDocument(docPath, io, profile, options);
-      });
     this.exportToPathFn =
       deps.exportToPath ?? ((opened, docPath, overwrite) => opened.exportToPath(docPath, overwrite));
     this.now = deps.now ?? Date.now;
@@ -244,14 +213,6 @@ export class InMemorySessionPool implements SessionPool {
   // -------------------------------------------------------------------------
 
   adoptFromOpen(sessionId: string, opened: OpenedRuntimeDocument, metadata: AdoptMetadata): void {
-    if (opened.runtime !== metadata.runtime) {
-      throw new CliError(
-        'RUNTIME_MISMATCH',
-        `Session pool adopt: opened runtime '${opened.runtime}' does not match metadata runtime '${metadata.runtime}'.`,
-        { sessionId, openedRuntime: opened.runtime, metadataRuntime: metadata.runtime },
-      );
-    }
-
     const existing = this.sessions.get(sessionId);
     if (existing) {
       this.clearAutosaveTimer(existing);
@@ -260,7 +221,6 @@ export class InMemorySessionPool implements SessionPool {
 
     this.sessions.set(sessionId, {
       opened,
-      runtime: metadata.runtime,
       sessionType: metadata.sessionType,
       dirty: false,
       leased: false,
@@ -370,11 +330,6 @@ export class InMemorySessionPool implements SessionPool {
   // -------------------------------------------------------------------------
 
   private isSessionValid(session: PooledSession, metadata: AcquireMetadata): boolean {
-    // Runtime drift always invalidates: a v1-pooled session cannot honor a
-    // v2 acquire request, and vice versa. Mismatched sessions are destroyed
-    // and reopened in {@link acquire}.
-    if (session.runtime !== metadata.runtime) return false;
-
     if (session.sessionType === 'collab') {
       const incomingFingerprint = metadata.collaboration ? profileToFingerprint(metadata.collaboration) : undefined;
       return session.fingerprint === incomingFingerprint && session.workingDocPath === metadata.workingDocPath;
@@ -392,19 +347,7 @@ export class InMemorySessionPool implements SessionPool {
           modules: { trackChanges: metadata.trackChanges },
         }
       : undefined;
-    if (metadata.runtime === 'v2') {
-      if (metadata.sessionType === 'collab') {
-        if (!metadata.collaboration) {
-          throw new CliError('COMMAND_FAILED', 'Session is marked as collaborative but has no collaboration profile.');
-        }
-        opened = await this.openV2Collaborative(metadata.workingDocPath, io, metadata.collaboration, {
-          user: metadata.user,
-          editorOpenOptions,
-        });
-      } else {
-        opened = await this.openV2(metadata.workingDocPath, io, { user: metadata.user, editorOpenOptions });
-      }
-    } else if (metadata.sessionType === 'collab' && metadata.collaboration) {
+    if (metadata.sessionType === 'collab' && metadata.collaboration) {
       opened = await this.openCollaborative(metadata.workingDocPath, io, metadata.collaboration, {
         user: metadata.user,
         editorOpenOptions,
@@ -415,7 +358,6 @@ export class InMemorySessionPool implements SessionPool {
 
     return {
       opened,
-      runtime: metadata.runtime,
       sessionType: metadata.sessionType,
       dirty: false,
       leased: true,
@@ -433,7 +375,7 @@ export class InMemorySessionPool implements SessionPool {
   private createLease(sessionId: string, session: PooledSession): OpenedRuntimeDocument {
     const pooled = session.opened;
     const lease: OpenedRuntimeDocument = {
-      runtime: pooled.runtime,
+      runtime: 'v1',
       doc: pooled.doc,
       meta: pooled.meta,
       exportBytes: (options) => pooled.exportBytes(options),
@@ -445,7 +387,6 @@ export class InMemorySessionPool implements SessionPool {
     };
     // Preserve the v1 `editor` reference on the lease when present so v1-only
     // code paths (collab sync helper, headless comment bridge) keep working.
-    // v2 leases never carry an editor.
     if (pooled.runtime === 'v1' && 'editor' in pooled) {
       (lease as { editor?: unknown }).editor = (pooled as unknown as { editor: unknown }).editor;
     }
