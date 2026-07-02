@@ -963,7 +963,7 @@ export const OPERATION_DEFINITIONS = {
   'blocks.list': {
     memberPath: 'blocks.list',
     description:
-      'List top-level blocks in document order with IDs, types, text previews, and optional full text when includeText:true. Supports pagination via offset/limit, optional nodeType filtering, and single-story scoping via `in: <StoryLocator>`.',
+      'List top-level blocks in document order with IDs, types, text previews, and optional full text when includeText:true. Text, previews, lengths, and formatting hints use the VISIBLE model: pending tracked deletions are excluded (matching how edit refs resolve), and inline atoms render as a single placeholder character. Supports pagination via offset/limit, optional nodeType filtering, and single-story scoping via `in: <StoryLocator>`.',
     expectedResult:
       'Returns a BlocksListResult with total block count, an ordered array of block entries (ordinal, nodeId, nodeType, textPreview, optional text, isEmpty), and the current document revision.',
     requiresDocumentContext: true,

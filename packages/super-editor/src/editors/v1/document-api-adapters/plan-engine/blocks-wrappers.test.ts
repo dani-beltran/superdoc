@@ -5,6 +5,8 @@ import type { BlocksDeleteInput, MutationOptions } from '@superdoc/document-api'
 import { blocksDeleteWrapper, blocksDeleteRangeWrapper, blocksListWrapper } from './blocks-wrappers.js';
 import { registerBuiltInExecutors } from './register-executors.js';
 import { DocumentApiAdapterError } from '../errors.js';
+import { TrackDeleteMarkName } from '../../extensions/track-changes/constants.js';
+import { decodeRef } from '../story-runtime/story-ref-codec.js';
 
 // Ensure the domain.command executor is registered for executeDomainCommand
 registerBuiltInExecutors();
@@ -604,6 +606,103 @@ describe('blocksListWrapper', () => {
     const result = blocksListWrapper(editor, { includeText: true });
     expect(result.blocks[0]!.text).toBe('Longer full text value');
     expect(result.blocks[0]!.textPreview).toBe('Longer full text value');
+  });
+
+  // Regression: blocks.list must report length/ref/isEmpty on the VISIBLE text
+  // model, matching `text`. A raw length would encode a whole-block ref ending
+  // past the visible text, and re-editing that already-redlined block via the
+  // ref throws "text offset out of range". See SD-3552.
+  it('encodes textPreview/ref on the visible model for a redlined block', () => {
+    const paragraph = createNode(
+      'paragraph',
+      [
+        // tracked-deleted "abc" (raw length 3) + visible "X" (visible length 1)
+        createNode('text', [], { text: 'abc', marks: [{ type: { name: TrackDeleteMarkName }, attrs: {} }] }),
+        createNode('text', [], { text: 'X' }),
+      ],
+      { attrs: { paraId: 'p1', sdBlockId: 'p1' }, isBlock: true, inlineContent: true },
+    );
+    const doc = createNode('doc', [paragraph], { isBlock: false });
+    const editor = { state: { doc } } as unknown as Editor;
+
+    const entry = blocksListWrapper(editor, { includeText: true }).blocks[0]!;
+    expect(entry.text).toBe('X');
+    expect(entry.textPreview).toBe('X');
+    const decoded = decodeRef(entry.ref!) as { segments?: Array<{ end: number }> } | null;
+    // Visible length (1), NOT raw length (4). Raw would fail compilation later.
+    expect(decoded?.segments?.[0]?.end).toBe(1);
+  });
+
+  it('reports a fully tracked-deleted block as empty with no ref (visible model)', () => {
+    const paragraph = createNode(
+      'paragraph',
+      [createNode('text', [], { text: 'gone', marks: [{ type: { name: TrackDeleteMarkName }, attrs: {} }] })],
+      { attrs: { paraId: 'p1', sdBlockId: 'p1' }, isBlock: true, inlineContent: true },
+    );
+    const doc = createNode('doc', [paragraph], { isBlock: false });
+    const editor = { state: { doc } } as unknown as Editor;
+
+    const entry = blocksListWrapper(editor, { includeText: true }).blocks[0]!;
+    expect(entry.text).toBe('');
+    expect(entry.isEmpty).toBe(true); // raw length (4) would report false
+    expect(entry.ref).toBeUndefined();
+  });
+
+  // Regression: formatting hints must come from the first VISIBLE run, matching
+  // the visible text model. The agent prompt tells callers to copy
+  // fontFamily/fontSize/bold from blocks.list, so sampling a tracked-deleted
+  // run would replicate rejected formatting into new content.
+  it('samples formatting from the first visible run, not a leading tracked-deleted run', () => {
+    const paragraph = createNode(
+      'paragraph',
+      [
+        createNode('text', [], {
+          text: 'gone',
+          marks: [
+            { type: { name: TrackDeleteMarkName }, attrs: {} },
+            { type: { name: 'textStyle' }, attrs: { fontFamily: 'DeletedFont', fontSize: 33 } },
+            { type: { name: 'bold' }, attrs: { value: true } },
+          ],
+        }),
+        createNode('text', [], {
+          text: 'X',
+          marks: [{ type: { name: 'textStyle' }, attrs: { fontFamily: 'VisibleFont', fontSize: 11 } }],
+        }),
+      ],
+      { attrs: { paraId: 'p1', sdBlockId: 'p1' }, isBlock: true, inlineContent: true },
+    );
+    const doc = createNode('doc', [paragraph], { isBlock: false });
+    const editor = { state: { doc } } as unknown as Editor;
+
+    const entry = blocksListWrapper(editor, { includeText: true }).blocks[0]!;
+    expect(entry.text).toBe('X');
+    expect(entry.fontFamily).toBe('VisibleFont');
+    expect(entry.fontSize).toBe(11);
+    expect(entry.bold).toBeUndefined();
+  });
+
+  it('emits no run-formatting fields for a fully tracked-deleted block', () => {
+    const paragraph = createNode(
+      'paragraph',
+      [
+        createNode('text', [], {
+          text: 'gone',
+          marks: [
+            { type: { name: TrackDeleteMarkName }, attrs: {} },
+            { type: { name: 'textStyle' }, attrs: { fontFamily: 'DeletedFont' } },
+            { type: { name: 'bold' }, attrs: { value: true } },
+          ],
+        }),
+      ],
+      { attrs: { paraId: 'p1', sdBlockId: 'p1' }, isBlock: true, inlineContent: true },
+    );
+    const doc = createNode('doc', [paragraph], { isBlock: false });
+    const editor = { state: { doc } } as unknown as Editor;
+
+    const entry = blocksListWrapper(editor, { includeText: true }).blocks[0]!;
+    // Nothing visible to copy from: no stale formatting may leak out.
+    expect(entry.fontFamily).toBeUndefined();
+    expect(entry.bold).toBeUndefined();
   });
 
   it('omits full block text when includeText is false or omitted', () => {
