@@ -46,7 +46,8 @@ Before adding a visual or direction-aware path, run:
 
 ```bash
 # Painter must not import upstream packages or the concrete v1 adapter.
-rg "@superdoc/(super-editor|style-engine|layout-bridge|layout-resolved)" packages/layout-engine/painters/dom/src
+# Runtime sources only; test files may import @superdoc/layout-resolved.
+rg "@superdoc/(super-editor|style-engine|layout-bridge|layout-resolved)" packages/layout-engine/painters/dom/src -g '!*.test.ts' -g '!_test-utils.ts'
 ```
 
 More checks in `packages/layout-engine/AGENTS.md`.

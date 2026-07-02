@@ -37,7 +37,7 @@ This is enforced as two hard invariants, not aspirational language:
 1. **No upstream package imports.** The painter has zero runtime imports
    from the v1 adapter (`@superdoc/super-editor`), `@superdoc/layout-bridge`, or
    `@superdoc/layout-resolved`. Guard D in
-   `tests/src/architecture-boundaries.test.ts` enforces this (SD-2836).
+   `tests/src/architecture-boundaries.test.ts` enforces this.
 2. **No paint-time DOM measurement.** The painter never reads
    `clientHeight`, `offsetWidth`, or `getBoundingClientRect` off rendered
    content. Every size and offset comes pre-computed from the resolved
@@ -50,6 +50,16 @@ The painter also does not coalesce resolved-item fields with the legacy
 `fragment` back-pointer (no `resolvedItem?.X ?? fragment.X` patterns); the
 resolve stage is the unique source of truth for every field the painter
 reads.
+
+Run all architecture guards (import boundaries, bidi pre-mirroring,
+PresentationEditor OOXML, converter cascade — ~2s) before claiming a
+boundary-touching change done:
+
+```bash
+pnpm --dir packages/layout-engine/tests exec vitest run src/architecture-boundaries.test.ts src/workspace-import-boundaries.test.ts
+```
+
+CI runs the same files via the other-packages vitest shard.
 
 ## Common Tasks
 
