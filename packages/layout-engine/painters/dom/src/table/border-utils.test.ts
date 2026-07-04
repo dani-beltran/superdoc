@@ -97,18 +97,11 @@ describe('applyBorder', () => {
     expect(element.style.borderTop).toMatch(/2px dashed (#00FF00|rgb\(0,\s*255,\s*0\))/i);
   });
 
-<<<<<<< HEAD
-  it('paints a thick border at the authored width, not doubled', () => {
-    const border: BorderSpec = { style: 'thick', width: 1, color: '#000000' };
-    applyBorder(element, 'Top', border);
-    // SD-3028: thick paints at the authored width (1px floor), matching Word.
-=======
   it('should handle thick border at the authored width', () => {
     const border: BorderSpec = { style: 'thick', width: 1, color: '#000000' };
     applyBorder(element, 'Top', border);
     // SD-3028: thick paints at the authored w:sz width (no 2x), min 1px — matches
     // getBorderBandWidthPx in contracts/border-band.ts and border-band.test.ts.
->>>>>>> origin/main
     expect(element.style.borderTop).toMatch(/1px solid (#000000|rgb\(0,\s*0,\s*0\))/i);
   });
 

@@ -125,14 +125,9 @@ export const applyBorder = (
   const safeColor = isValidHexColor(color) ? color : '#000000';
   // Band width comes from the shared contracts helper so the painted width and the
   // measuring engine's row-height reservation can never disagree. Word semantics:
-<<<<<<< HEAD
-  // thick = authored width (1px floor); double = 3x the per-rule w:sz (min 3px so CSS renders both
-  // rules); everything else = authored width. `widthOverridePx` carries the
-=======
   // thick = authored w:sz width (SD-3028: no 2x; min 1px); double = 3x the per-rule
   // w:sz (min 3px so CSS renders both rules); everything else = authored width.
   // `widthOverridePx` carries the
->>>>>>> origin/main
   // straddled half-band for interior compound edges (Word centers those bands on
   // the gridline, half in each adjacent cell). (SD-3308)
   const actualWidth = widthOverridePx ?? getBorderBandWidthPx(border);
