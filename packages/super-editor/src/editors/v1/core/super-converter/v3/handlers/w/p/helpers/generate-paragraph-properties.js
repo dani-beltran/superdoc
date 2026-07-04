@@ -95,6 +95,15 @@ export function generateParagraphProperties(params) {
 
   const paragraphProperties = carbonCopy(attrs.paragraphProperties || {});
 
+  // Final-doc export flattens tracked changes to the accepted result (like the
+  // ins/del translators, which strip their wrappers when params.isFinalDoc). A
+  // tracked paragraph-property revision (w:pPrChange) must NOT appear in a
+  // "final" DOCX — drop the change record so only the accepted current
+  // numbering/alignment (already carried on paragraphProperties) is exported.
+  if (params?.isFinalDoc && paragraphProperties.change) {
+    delete paragraphProperties.change;
+  }
+
   // Only include w:rPr in pPr when the paragraph had inline rPr on import; filter to inline keys and drop if empty.
   const inlineKeys = paragraphProperties.runPropertiesInlineKeys;
   delete paragraphProperties.runPropertiesInlineKeys;
@@ -122,7 +131,13 @@ export function generateParagraphProperties(params) {
         partPath: resolveExportPartPath(params),
       }
     : null;
-  let pPr = wPPrNodeTranslator.decode({ node: { ...node, attrs: { paragraphProperties } } });
+  let pPr = wPPrNodeTranslator.decode({
+    node: { ...node, attrs: { paragraphProperties } },
+    // Thread the Word revision-id allocator + part path so a tracked w:pPrChange
+    // mints a doc-unique w:id via the allocator (not a collision-prone hash).
+    converter: params?.converter,
+    currentPartPath: resolveExportPartPath(params),
+  });
   if (!params?.isFinalDoc && paragraphSplitTrackFormatMark) {
     const insertionElement = createParagraphSplitInsertionElement(
       paragraphSplitTrackFormatMark,

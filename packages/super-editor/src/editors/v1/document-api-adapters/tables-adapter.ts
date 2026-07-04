@@ -3654,7 +3654,16 @@ export function tablesSetShadingAdapter(
 
     currentProps.shading = { fill: normalizedColor, val: 'clear', color: 'auto' };
     const syncAttrs = resolved.scope === 'table' ? syncExtractedTableAttrs(currentProps) : {};
-    tr.setNodeMarkup(resolved.pos, null, { ...currentAttrs, [propsKey]: currentProps, ...syncAttrs });
+    const nextAttrs: Record<string, unknown> = { ...currentAttrs, [propsKey]: currentProps, ...syncAttrs };
+    if (resolved.scope === 'cell') {
+      // The cell renderer and the DOCX exporter read `background`, not
+      // tableCellProperties.shading — without this the receipt reports
+      // success while the document shows (and saves) nothing. Mirrors
+      // applyShadingToCells, which the table-level path already uses.
+      if (normalizedColor === 'auto') delete nextAttrs.background;
+      else nextAttrs.background = { color: normalizedColor };
+    }
+    tr.setNodeMarkup(resolved.pos, null, nextAttrs);
 
     if (resolved.scope === 'table') {
       applyShadingToCells(tr, resolved.node, resolved.pos + 1, normalizedColor);
@@ -3700,7 +3709,16 @@ export function tablesClearShadingAdapter(
 
     delete currentProps.shading;
     const syncAttrs = resolved.scope === 'table' ? syncExtractedTableAttrs(currentProps) : {};
-    tr.setNodeMarkup(resolved.pos, null, { ...currentAttrs, [propsKey]: currentProps, ...syncAttrs });
+    const nextAttrs: Record<string, unknown> = { ...currentAttrs, [propsKey]: currentProps, ...syncAttrs };
+    if (resolved.scope === 'cell') {
+      // The cell renderer and DOCX exporter read `background`, not
+      // tableCellProperties.shading (mirrors tablesSetShadingAdapter). A
+      // cell-scoped clear must drop `background` too, or the cell stays shaded
+      // on screen and on export while the receipt reports success. The
+      // table-scoped path already clears it per-cell below.
+      delete nextAttrs.background;
+    }
+    tr.setNodeMarkup(resolved.pos, null, nextAttrs);
 
     if (resolved.scope === 'table') {
       const tableNode = resolved.node;

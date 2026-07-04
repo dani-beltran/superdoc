@@ -14,6 +14,7 @@ import {
 } from '../../extensions/track-changes/constants.js';
 import { getTrackChanges } from '../../extensions/track-changes/trackChangesHelpers/getTrackChanges.js';
 import { enumerateStructuralRowChanges } from '../../extensions/track-changes/trackChangesHelpers/structuralRowChanges.js';
+import { enumeratePprChanges } from '../../extensions/track-changes/trackChangesHelpers/pprChanges.js';
 import {
   projectInternalTrackChangeType,
   type InternalTrackChangeSubtype,
@@ -576,6 +577,35 @@ export function groupTrackedChanges(editor: Editor): GroupedTrackedChange[] {
           ? { insert: structural.sourceId }
           : { delete: structural.sourceId }
         : undefined,
+    });
+  }
+
+  // Paragraph-property revisions (w:pPrChange: tracked numbering / alignment)
+  // also live on node attrs, not marks, so they are enumerated separately and
+  // appended as their own decidable formatting changes. The record id
+  // (`paragraphProperties.change.id`) is stored on the node, so it is stable
+  // within the session and doubles as the public id and the command id the
+  // review graph keys by.
+  const pprChanges = enumeratePprChanges(editor.state);
+  for (const ppr of pprChanges) {
+    const excerpt = normalizeExcerpt(editor.state.doc.textBetween(ppr.from, ppr.to, ' ', '￼'));
+    grouped.push({
+      rawId: ppr.id,
+      commandRawId: ppr.id,
+      id: ppr.id,
+      from: ppr.from,
+      to: ppr.to,
+      hasInsert: false,
+      hasDelete: false,
+      hasFormat: true,
+      attrs: {
+        id: ppr.id,
+        author: ppr.author || undefined,
+        authorEmail: ppr.authorEmail || undefined,
+        authorImage: ppr.authorImage || undefined,
+        date: ppr.date || undefined,
+      },
+      excerpt,
     });
   }
 

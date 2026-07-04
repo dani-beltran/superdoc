@@ -47,12 +47,16 @@ describe('generateParagraphProperties', () => {
 
     expect(result).toBe(pPrNode);
     expect(wPPrNodeTranslator.decode).toHaveBeenCalledTimes(1);
-    expect(wPPrNodeTranslator.decode).toHaveBeenCalledWith({
-      node: {
-        ...node,
-        attrs: { paragraphProperties: { spacing: { line: 240 } } },
-      },
-    });
+    // objectContaining: the pPr decode also receives the Word-id allocator
+    // threading (converter + currentPartPath); this test only cares about node.
+    expect(wPPrNodeTranslator.decode).toHaveBeenCalledWith(
+      expect.objectContaining({
+        node: {
+          ...node,
+          attrs: { paragraphProperties: { spacing: { line: 240 } } },
+        },
+      }),
+    );
   });
 
   it('appends sectPr to decoded paragraph properties', () => {

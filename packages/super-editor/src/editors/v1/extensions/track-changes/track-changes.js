@@ -332,14 +332,14 @@ export const TrackChanges = Extension.create({
         },
 
       acceptTrackedChangeById:
-        (id) =>
+        (id, options = {}) =>
         ({ state, dispatch, editor }) => {
           const reviewDecision = dispatchReviewDecision({
             editor,
             state,
             dispatch,
             decision: 'accept',
-            target: { kind: 'id', id },
+            target: { kind: 'id', id, ...(options.side ? { side: options.side } : {}) },
           });
           return reviewDecision.applied;
         },
@@ -358,14 +358,14 @@ export const TrackChanges = Extension.create({
         },
 
       rejectTrackedChangeById:
-        (id) =>
+        (id, options = {}) =>
         ({ state, dispatch, editor }) => {
           const reviewDecision = dispatchReviewDecision({
             editor,
             state,
             dispatch,
             decision: 'reject',
-            target: { kind: 'id', id },
+            target: { kind: 'id', id, ...(options.side ? { side: options.side } : {}) },
           });
           return reviewDecision.applied;
         },

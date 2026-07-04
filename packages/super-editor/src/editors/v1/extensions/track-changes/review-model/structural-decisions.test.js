@@ -156,6 +156,88 @@ describe('structural decide semantics', () => {
     expect((cellText.marks || []).some((m) => m.type.name === TrackInsertMarkName)).toBe(false);
   });
 
+  it('resolves a tracked pPrChange inside a KEPT table via planPprDecision, not the mark cascade', () => {
+    // A tracked numbering change lives on a cell paragraph's node attr (not an
+    // inline mark). When accept-all keeps the table, the pPr change must be
+    // resolved by id (planPprDecision), NOT routed through the mark-based
+    // table-child cascade — which, since pPr is typed "formatting" with no mark
+    // to toggle, would no-op on accept (numbering + change record left behind).
+    const schema = createReviewGraphTestSchema();
+    const pprId = 'ppr-1';
+    const { state } = stateWithTrackedTable({
+      schema,
+      trackChange: insertTrackChange('t1'),
+      cellText: 'Numbered cell',
+      cellParagraphAttrs: {
+        paragraphProperties: {
+          numberingProperties: { numId: 1, ilvl: 0 },
+          change: {
+            id: pprId,
+            author: ALICE.name,
+            authorEmail: ALICE.email,
+            date: '2026-05-20T16:00:00Z',
+            paragraphProperties: {}, // former (unnumbered) state
+          },
+        },
+      },
+    });
+
+    // Both the structural table change and the pПr change are enumerated.
+    const graph = buildReviewGraph({ state });
+    expect(graph.changes.get('t1')?.type).toBe(CanonicalChangeType.Structural);
+    expect(graph.changes.get(pprId)?.pprChange, 'pPr change enumerated inside the table').toBeTruthy();
+
+    const result = decideTrackedChanges({ state, editor: editorFor(), decision: 'accept', target: { kind: 'all' } });
+    expect(result.ok, result.ok ? '' : JSON.stringify(result.failure)).toBe(true);
+    const next = state.apply(result.tr);
+
+    // Table stays; pPr change record cleared (accept), numbering kept.
+    expect(next.doc.child(1).type.name).toBe('table');
+    const cellPara = next.doc.child(1).child(0).child(0).child(0);
+    expect(cellPara.attrs.paragraphProperties?.change, 'pPr change record cleared on accept').toBeFalsy();
+    expect(cellPara.attrs.paragraphProperties?.numberingProperties, 'numbering kept on accept').toBeTruthy();
+  });
+
+  it('accepting a tracked table BY ID also resolves a contained pPr change', () => {
+    // Accepting the table by its own change id keeps the table AND its contents.
+    // The contained pPr change is NOT in the selection (only the table is), so it
+    // is reached via the side-effect sweep — which must resolve it through
+    // planPprDecision rather than skip it, leaving numbering revisions pending.
+    const schema = createReviewGraphTestSchema();
+    const pprId = 'ppr-2';
+    const { state } = stateWithTrackedTable({
+      schema,
+      trackChange: insertTrackChange('t2'),
+      cellText: 'Numbered cell',
+      cellParagraphAttrs: {
+        paragraphProperties: {
+          numberingProperties: { numId: 1, ilvl: 0 },
+          change: {
+            id: pprId,
+            author: ALICE.name,
+            authorEmail: ALICE.email,
+            date: '2026-05-20T16:00:00Z',
+            paragraphProperties: {},
+          },
+        },
+      },
+    });
+
+    const result = decideTrackedChanges({
+      state,
+      editor: editorFor(),
+      decision: 'accept',
+      target: { kind: 'id', id: 't2' },
+    });
+    expect(result.ok, result.ok ? '' : JSON.stringify(result.failure)).toBe(true);
+    const next = state.apply(result.tr);
+
+    expect(next.doc.child(1).type.name).toBe('table');
+    const cellPara = next.doc.child(1).child(0).child(0).child(0);
+    expect(cellPara.attrs.paragraphProperties?.change, 'contained pPr resolved on accept-by-id').toBeFalsy();
+    expect(cellPara.attrs.paragraphProperties?.numberingProperties, 'numbering kept').toBeTruthy();
+  });
+
   it('a RANGE/cursor decide over a tracked table resolves the STRUCTURAL change (not the inline child)', () => {
     // Range and collapsed-cursor targets must prefer the structural change for a
     // shared id, same as the by-id path — otherwise a cursor inside the table

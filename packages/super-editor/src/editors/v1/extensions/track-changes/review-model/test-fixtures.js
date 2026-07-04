@@ -21,6 +21,10 @@ const NODES = {
   paragraph: {
     content: 'inline*',
     group: 'block',
+    // paragraphProperties carries a tracked w:pPrChange record on the node attr
+    // (numbering/alignment revisions) — mirrors the production paragraph node so
+    // the pPrChange enumerator can find one in tests.
+    attrs: { paragraphProperties: { default: null } },
     parseDOM: [{ tag: 'p' }],
     toDOM: () => ['p', 0],
   },
@@ -132,12 +136,19 @@ export const stateFromTrackedSpans = ({ schema, spans }) => {
  *   trackChange: { type: 'rowInsert'|'rowDelete', id: string, [k: string]: unknown },
  *   rowCount?: number,
  *   cellText?: string,
+ *   cellParagraphAttrs?: Record<string, unknown>,
  * }} input
  * @returns {{ state: EditorState, schema: Schema, tablePos: number }}
  */
-export const stateWithTrackedTable = ({ schema, trackChange, rowCount = 1, cellText = 'Cell' }) => {
+export const stateWithTrackedTable = ({
+  schema,
+  trackChange,
+  rowCount = 1,
+  cellText = 'Cell',
+  cellParagraphAttrs = {},
+}) => {
   const makeRow = () => {
-    const cellParagraph = schema.nodes.paragraph.create({}, [schema.text(cellText)]);
+    const cellParagraph = schema.nodes.paragraph.create(cellParagraphAttrs, [schema.text(cellText)]);
     const cell = schema.nodes.tableCell.create({}, [cellParagraph]);
     return schema.nodes.tableRow.create({ trackChange }, [cell]);
   };

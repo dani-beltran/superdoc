@@ -3490,6 +3490,28 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
                 },
                 additionalProperties: false,
               },
+              numbering: {
+                type: 'object',
+                description:
+                  'Computed numbering rendering (marker/path/kind) for numbered list items and numbered headings — e.g. the rendered clause label "2.3.". Absent for non-numbered blocks.',
+                properties: {
+                  marker: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+                  path: { oneOf: [{ type: 'array', items: { type: 'number' } }, { type: 'null' }] },
+                  kind: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+                },
+                additionalProperties: false,
+              },
+              indent: {
+                type: 'object',
+                description: 'Direct paragraph indentation in twips (only non-zero fields present).',
+                properties: {
+                  left: { type: 'number' },
+                  right: { type: 'number' },
+                  firstLine: { type: 'number' },
+                  hanging: { type: 'number' },
+                },
+                additionalProperties: false,
+              },
               ref: {
                 type: 'string',
                 description:
@@ -5377,6 +5399,11 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
                   description:
                     "Optional move pairing assertion. 'pair' requires the resolved tracked change to be a paired move; 'source' / 'destination' further narrow to a specific half. When the assertion does not hold the decide adapter fails closed.",
                 },
+                side: {
+                  enum: ['inserted', 'deleted'],
+                  description:
+                    "Optional replacement side. When the id resolves to a paired replacement, decides only the 'inserted' or 'deleted' half, leaving the other half as a standalone pending change.",
+                },
               },
               ['kind', 'id'],
             ),
@@ -5432,6 +5459,11 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
                   enum: ['pair', 'source', 'destination'],
                   description:
                     "Optional move pairing assertion. 'pair' requires the resolved tracked change to be a paired move; 'source' / 'destination' further narrow to a specific half. When the assertion does not hold the decide adapter fails closed.",
+                },
+                side: {
+                  enum: ['inserted', 'deleted'],
+                  description:
+                    "Optional replacement side. When the id resolves to a paired replacement, decides only the 'inserted' or 'deleted' half.",
                 },
               },
               ['id'],

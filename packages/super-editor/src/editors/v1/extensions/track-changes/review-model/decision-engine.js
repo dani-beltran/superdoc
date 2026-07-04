@@ -165,6 +165,18 @@ export const decideTrackedChanges = ({ state, editor, decision, target, replacem
  *   - `{ from, to }`                          → `{ kind: 'range', from, to }`
  *   - canonical `{ kind: 'id'|'range'|'all' }` is passed through.
  */
+/**
+ * Normalize a replacement-side selector to a canonical {@link SegmentSide}
+ * value, or null when absent/unrecognized.
+ *
+ * @param {unknown} value
+ * @returns {'inserted' | 'deleted' | null}
+ */
+const normalizeReplacementSide = (value) => {
+  if (value === SegmentSide.Inserted || value === SegmentSide.Deleted) return value;
+  return null;
+};
+
 const normalizeDecisionTarget = (target) => {
   if (!target || typeof target !== 'object') {
     return { ok: false, failure: failure('INVALID_TARGET', 'decision target must be an object.') };
@@ -174,7 +186,14 @@ const normalizeDecisionTarget = (target) => {
     if (typeof t.id !== 'string' || !t.id) {
       return { ok: false, failure: failure('INVALID_TARGET', 'target.kind = "id" requires a non-empty id.') };
     }
-    return { ok: true, value: { kind: 'id', id: t.id } };
+    const side = normalizeReplacementSide(t.side);
+    if (t.side != null && !side) {
+      return {
+        ok: false,
+        failure: failure('INVALID_TARGET', 'target.side must be "inserted" or "deleted" when provided.'),
+      };
+    }
+    return { ok: true, value: { kind: 'id', id: t.id, ...(side ? { side } : {}) } };
   }
   if (t.kind === 'range') {
     const from = Number(t.from);
@@ -273,6 +292,7 @@ const resolveTargetToSelections = ({ graph, normalized }) => {
           change,
           coverage: 'full',
           ranges: change.segments.map((s) => ({ from: s.from, to: s.to })),
+          ...(normalized.side ? { side: normalized.side } : {}),
         },
       ],
     };
@@ -567,10 +587,64 @@ const buildMutationPlan = ({ state, graph, selections, decision }) => {
     // through the dedicated child planner here (instead of the normal path
     // below) keeps `scope:'all'` from double-planning the same change. Recorded
     // as an affected child in the side-effect pass below.
-    if (isInsideStayingTable(change)) {
+    // A pPr change is EXCLUDED: it has no inline mark (its type is Formatting but
+    // there is nothing to toggle), so the mark-based child planner would no-op
+    // on accept / throw on reject. It falls through to the normal path below and
+    // is resolved by id via planPprDecision — same guard as the side-effect
+    // sweep.
+    if (!change.pprChange && isInsideStayingTable(change)) {
       const failureResult = planContainedInlineChild(change);
       if (failureResult) return { ok: false, failure: failureResult };
       continue;
+    }
+    // Side-targeted replacement decision: resolve only the inserted OR deleted
+    // half of a replacement, leaving the other half as a standalone pending
+    // change. The shared change id is intentionally NOT retired — on the next
+    // graph rebuild the surviving side's marks project as a standalone
+    // insertion/deletion.
+    if (change.type === CanonicalChangeType.Replacement && selection.side) {
+      touched.add(change.id);
+      const sideResult = planReplacementSideDecision({
+        ops,
+        change,
+        decision,
+        side: selection.side,
+        removedRanges,
+        retired,
+        resolvedRanges,
+      });
+      if (!sideResult.ok) return { ok: false, failure: sideResult.failure };
+      continue;
+    }
+    // A `side` selector only means something on a paired replacement (choose the
+    // inserted or deleted half). Reaching here with a side set means the change
+    // is NOT a paired replacement — most commonly the targeted half was already
+    // resolved and only the other side survives as a standalone change. Fail
+    // closed unless the surviving standalone side is exactly the one requested;
+    // otherwise the generic planner below would silently resolve the OTHER side,
+    // acting against the caller's intent. Only `id` targets set selection.side
+    // (range/all never do), so this cannot narrow a range decision.
+    if (selection.side) {
+      const standaloneSide =
+        change.type === CanonicalChangeType.Insertion
+          ? 'inserted'
+          : change.type === CanonicalChangeType.Deletion
+            ? 'deleted'
+            : null;
+      if (standaloneSide !== selection.side) {
+        return {
+          ok: false,
+          failure: failure(
+            'INVALID_TARGET',
+            `target.side "${selection.side}" does not apply: this change is not a paired replacement` +
+              `${standaloneSide ? ` (its only side is "${standaloneSide}")` : ''}. ` +
+              'The targeted side may have already been resolved.',
+            { details: { changeId: change.id, requestedSide: selection.side, currentSide: standaloneSide } },
+          ),
+        };
+      }
+      // standaloneSide === selection.side → fall through to the standalone
+      // insertion/deletion planner below, which resolves it correctly.
     }
     const isFull = selection.coverage === 'full';
     if (!isFull) {
@@ -609,7 +683,10 @@ const buildMutationPlan = ({ state, graph, selections, decision }) => {
       }
     }
     touched.add(change.id);
-    if (isFull) {
+    // A pPr change flips a node attr and changes no text content, so its
+    // whole-block segment must NOT enter resolvedRanges — otherwise
+    // planCommentEffects would detach unrelated comments anchored in that block.
+    if (isFull && !change.pprChange) {
       for (const segment of change.segments) {
         resolvedRanges.push({
           from: segment.from,
@@ -619,7 +696,13 @@ const buildMutationPlan = ({ state, graph, selections, decision }) => {
       }
     }
 
-    if (change.type === CanonicalChangeType.Structural) {
+    if (change.pprChange) {
+      // Paragraph-property change (w:pPrChange). Routed before the type-based
+      // branches: it is typed Formatting but has no mark, so the mark-based
+      // formatting planner cannot resolve it.
+      const pprResult = planPprDecision({ ops, change, decision, retired });
+      if (!pprResult.ok) return { ok: false, failure: pprResult.failure };
+    } else if (change.type === CanonicalChangeType.Structural) {
       const structuralResult = planStructuralDecision({ ops, change, decision, removedRanges, retired });
       if (!structuralResult.ok) return { ok: false, failure: structuralResult.failure };
     } else if (
@@ -679,6 +762,19 @@ const buildMutationPlan = ({ state, graph, selections, decision }) => {
       seenStaying.add(change);
       if (decidedObjects.has(change) || cascadedInsideStayingTable.has(change.id)) continue;
       if (!isInsideStayingTable(change)) continue;
+      // A pPr change has no inline mark, so it must NOT go through the mark-based
+      // contained-child planner (that would deref a null mark). But accepting a
+      // table accepts its contents, so a contained pPr revision IS resolved here
+      // — by id via planPprDecision — rather than left pending. This covers
+      // accept-table-BY-ID (the pPr is not in the selection, only the sweep sees
+      // it); accept-all resolves it in the main loop.
+      if (change.pprChange) {
+        cascadedInsideStayingTable.add(change.id);
+        touched.add(change.id);
+        const pprResult = planPprDecision({ ops, change, decision, retired });
+        if (!pprResult.ok) return { ok: false, failure: pprResult.failure };
+        continue;
+      }
       const failureResult = planContainedInlineChild(change);
       if (failureResult) return { ok: false, failure: failureResult };
     }
@@ -892,6 +988,35 @@ const planStructuralDecision = ({ ops, change, decision, removedRanges, retired 
   return { ok: true };
 };
 
+/**
+ * Plan an accept/reject for a paragraph-property change (w:pPrChange: tracked
+ * numbering / alignment). There is no mark — the record lives on
+ * `node.attrs.paragraphProperties.change`. Both decisions keep the paragraph:
+ *   accept → drop the `change` record, keep the new properties (numbering stays)
+ *   reject → restore the former properties recorded on the change (numbering gone)
+ * Applied via `setNodeMarkup` in the mark pass (position-stable, same node size).
+ *
+ * @param {{ ops: any[], change: any, decision: 'accept'|'reject', retired: Set<string> }} input
+ */
+const planPprDecision = ({ ops, change, decision, retired }) => {
+  const ppr = change.pprChange;
+  if (!ppr) {
+    return {
+      ok: false,
+      failure: failure('CAPABILITY_UNAVAILABLE', `change "${change.id}" is not a paragraph-property change.`),
+    };
+  }
+  ops.push({
+    kind: 'resolvePprChange',
+    from: ppr.from,
+    changeId: change.id,
+    decision,
+    formerProperties: ppr.formerProperties,
+  });
+  retired.add(change.id);
+  return { ok: true };
+};
+
 const planReplacementDecision = ({ ops, graph, change, decision, removedRanges, retired }) => {
   const inserted = change.insertedSegments;
   const deleted = change.deletedSegments;
@@ -956,6 +1081,59 @@ const planReplacementDecision = ({ ops, graph, change, decision, removedRanges, 
     }
   }
   retired.add(change.id);
+  return { ok: true };
+};
+
+/**
+ * Resolve ONE side of a replacement, treating each half as its own pending
+ * change. The other half is left untouched (it survives as a standalone
+ * insertion or deletion after the graph rebuilds), so the change id is NOT
+ * retired here.
+ *
+ *   - deleted side, accept → remove the deleted content (deletion takes effect)
+ *   - deleted side, reject → keep the text, drop the delete mark (deletion undone)
+ *   - inserted side, accept → keep the text, drop the insert mark (insertion kept)
+ *   - inserted side, reject → remove the inserted content (insertion undone)
+ *
+ * @param {{ ops: any[], change: any, decision: 'accept'|'reject', side: 'inserted'|'deleted', removedRanges: any[], retired: Set<string>, resolvedRanges: any[] }} input
+ */
+const planReplacementSideDecision = ({ ops, change, decision, side, removedRanges, resolvedRanges }) => {
+  const inserted = change.insertedSegments;
+  const deleted = change.deletedSegments;
+  if (!inserted.length || !deleted.length) {
+    return {
+      ok: false,
+      failure: failure('PRECONDITION_FAILED', `replacement "${change.id}" missing inserted or deleted side.`),
+    };
+  }
+
+  const segments = side === SegmentSide.Inserted ? inserted : deleted;
+  for (const seg of segments) {
+    resolvedRanges.push({ from: seg.from, to: seg.to, cause: `${decision}-replacement-${side}:${change.id}` });
+  }
+
+  const removeContent = (seg, cause) => {
+    ops.push({ kind: 'removeContent', from: seg.from, to: seg.to, changeId: change.id, side });
+    removedRanges.push({ from: seg.from, to: seg.to, cause: `${cause}:${change.id}` });
+  };
+  const dropMark = (seg) => pushRemoveMarkOpsForSegment({ ops, segment: seg, changeId: change.id, side });
+
+  if (side === SegmentSide.Deleted) {
+    if (decision === 'accept') {
+      for (const seg of deleted) removeContent(seg, 'accept-replacement-deleted-side');
+    } else {
+      for (const seg of deleted) dropMark(seg);
+    }
+  } else {
+    if (decision === 'accept') {
+      for (const seg of inserted) dropMark(seg);
+    } else {
+      for (const seg of inserted) removeContent(seg, 'reject-replacement-inserted-side');
+    }
+  }
+
+  // Intentionally do NOT retire change.id: the untouched side remains pending
+  // and re-projects as a standalone change on the next rebuild.
   return { ok: true };
 };
 
@@ -1312,6 +1490,41 @@ const applyPlan = ({ state, plan }) => {
         const rowNode = tr.doc.nodeAt(mappedFrom);
         if (rowNode && rowNode.type.name === 'tableRow') {
           tr.setNodeMarkup(mappedFrom, undefined, { ...rowNode.attrs, trackChange: null });
+        }
+        continue;
+      }
+      if (op.kind === 'resolvePprChange') {
+        // Paragraph-property accept/reject. setNodeMarkup is position-stable, so
+        // it is safe in the mark pass; map through the accumulated mapping in
+        // case an earlier op shifted positions.
+        const mappedFrom = tr.mapping.map(op.from, 1);
+        const node = tr.doc.nodeAt(mappedFrom);
+        const pp = node?.attrs?.paragraphProperties;
+        if (node && pp && pp.change) {
+          if (op.decision === 'accept') {
+            // Keep the new properties; drop only the change record. Top-level
+            // numberingProperties / listRendering already reflect the accepted
+            // state, so they are left untouched.
+            const kept = { ...pp };
+            delete kept.change;
+            tr.setNodeMarkup(mappedFrom, undefined, { ...node.attrs, paragraphProperties: kept });
+          } else {
+            // Reject: restore the former paragraph properties. The attach path
+            // mirrors numbering onto the TOP-LEVEL numberingProperties (and the
+            // numbering plugin computes listRendering), and the block index /
+            // list rendering read those as a fallback — so sync them to the
+            // restored state here too. Otherwise a rejected block keeps behaving
+            // and rendering as a numbered list item in any path that does not
+            // re-run the numbering plugin.
+            const former = { ...(op.formerProperties || {}) };
+            const nextAttrs = {
+              ...node.attrs,
+              paragraphProperties: former,
+              numberingProperties: former.numberingProperties ?? null,
+            };
+            if (!former.numberingProperties) nextAttrs.listRendering = null;
+            tr.setNodeMarkup(mappedFrom, undefined, nextAttrs);
+          }
         }
         continue;
       }

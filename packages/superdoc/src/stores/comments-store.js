@@ -2190,6 +2190,16 @@ export const useCommentsStore = defineStore('comments', () => {
       // original DOCX-schema JSON captured at import time. Otherwise, fall back
       // to rebuilding commentJSON from the rich-text HTML.
       const docxSchema = normalizeDocxSchemaForExport(values.docxCommentJSON);
+      // Synthetic tracked-change projection rows (one per revision, so the
+      // sidebar can render revisions beside comments) must never export as a
+      // <w:comment>. Decide BEFORE synthesizing commentJSON: convertHtmlToSchema
+      // of an empty body still yields one empty paragraph, which reads as a
+      // truthy body downstream and would leak the row past the converter's
+      // body-presence filter. A genuine comment carries commentText and/or the
+      // DOCX-schema JSON captured at import — imported comments that round-trip
+      // the custom:trackedChange flag keep their body, so they still export.
+      const hasGenuineBody = (typeof richText === 'string' && richText.length > 0) || docxSchema.length > 0;
+      if (values.trackedChange && !hasGenuineBody) return;
       const schema = docxSchema.length ? docxSchema : convertHtmlToSchema(richText);
       processedComments.push({
         ...values,

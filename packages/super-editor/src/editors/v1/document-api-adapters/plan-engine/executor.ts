@@ -54,6 +54,7 @@ import { resolveWithinScope, scopeByRange } from '../helpers/adapter-utils.js';
 import { normalizeReplacementText } from './replacement-normalizer.js';
 import { getWordChanges } from './word-diff.js';
 import { calculateResolvedParagraphProperties } from '../../extensions/paragraph/resolvedPropertiesCache.js';
+import { v4 as uuidv4 } from 'uuid';
 import { Fragment, Slice } from 'prosemirror-model';
 import type { Mark as ProseMirrorMark, MarkType, Node as ProseMirrorNode, NodeType } from 'prosemirror-model';
 import type { Transaction } from 'prosemirror-state';
@@ -1250,9 +1251,43 @@ export function executeTextDelete(
 }
 
 /**
+ * Wrap a next-state paragraphProperties object with a tracked `change`
+ * (w:pPrChange) recording the FORMER paragraph properties, so a reviewer sees
+ * a paragraph-format revision and accept/reject toggles it. No-op when not in
+ * tracked mode, when nothing changed, or when a pPrChange is already recorded
+ * (we never overwrite an existing reviewer's pPrChange).
+ *
+ * The former state is the existing paragraphProperties minus its own nested
+ * `change` — exactly what Word records inside `<w:pPrChange><w:pPr>`.
+ */
+function withTrackedParagraphPropertyChange(
+  editor: Editor,
+  existing: Record<string, unknown> | undefined,
+  nextParagraphProperties: Record<string, unknown>,
+  changeMode: 'direct' | 'tracked' | undefined,
+): Record<string, unknown> {
+  if (changeMode !== 'tracked') return nextParagraphProperties;
+  if (existing?.change) return nextParagraphProperties;
+
+  const { change: _existingChange, ...formerProperties } = existing ?? {};
+  const user = (editor?.options as { user?: { name?: string; email?: string } } | undefined)?.user ?? {};
+  return {
+    ...nextParagraphProperties,
+    change: {
+      id: uuidv4(),
+      author: user.name || '',
+      authorEmail: user.email || '',
+      date: new Date().toISOString(),
+      paragraphProperties: formerProperties,
+    },
+  };
+}
+
+/**
  * Applies alignment to the paragraph node(s) that contain the given range.
  * Uses the same mechanism as paragraphsSetAlignmentWrapper: updates
- * paragraphProperties.justification via tr.setNodeMarkup.
+ * paragraphProperties.justification via tr.setNodeMarkup. In tracked mode the
+ * former paragraph properties are recorded as a w:pPrChange.
  */
 function applyAlignmentToRange(
   editor: Editor,
@@ -1260,6 +1295,7 @@ function applyAlignmentToRange(
   absFrom: number,
   absTo: number,
   alignment: string,
+  changeMode?: 'direct' | 'tracked',
 ): boolean {
   if (!alignment) return false;
 
@@ -1278,7 +1314,12 @@ function applyAlignmentToRange(
 
     if (currentJustification === justification) return;
 
-    const updated = { ...(existing ?? {}), justification };
+    const updated = withTrackedParagraphPropertyChange(
+      editor,
+      existing,
+      { ...(existing ?? {}), justification },
+      changeMode,
+    );
     tr.setNodeMarkup(pos, undefined, { ...node.attrs, paragraphProperties: updated });
     changed = true;
   });
@@ -1315,6 +1356,7 @@ export function executeStyleApply(
   target: CompiledRangeTarget,
   step: StyleApplyStep,
   mapping: Mapping,
+  changeMode?: 'direct' | 'tracked',
 ): { changed: boolean } {
   let absFrom = mapping.map(target.absFrom);
   let absTo = mapping.map(target.absTo);
@@ -1333,7 +1375,7 @@ export function executeStyleApply(
   }
 
   if (step.args.alignment) {
-    changed = applyAlignmentToRange(editor, tr, absFrom, absTo, step.args.alignment) || changed;
+    changed = applyAlignmentToRange(editor, tr, absFrom, absTo, step.args.alignment, changeMode) || changed;
   }
 
   return { changed };
@@ -1481,6 +1523,7 @@ export function executeSpanStyleApply(
   target: CompiledSpanTarget,
   step: StyleApplyStep,
   mapping: Mapping,
+  changeMode?: 'direct' | 'tracked',
 ): { changed: boolean } {
   validateMappedSpanContiguity(target, mapping, step.id);
 
@@ -1503,7 +1546,7 @@ export function executeSpanStyleApply(
   }
 
   if (step.args.alignment) {
-    changed = applyAlignmentToRange(editor, tr, absFrom, absTo, step.args.alignment) || changed;
+    changed = applyAlignmentToRange(editor, tr, absFrom, absTo, step.args.alignment, changeMode) || changed;
   }
 
   return { changed };

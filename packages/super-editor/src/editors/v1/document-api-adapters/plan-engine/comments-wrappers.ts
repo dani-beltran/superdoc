@@ -41,7 +41,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { DocumentApiAdapterError } from '../errors.js';
 import { requireEditorCommand } from '../helpers/mutation-helpers.js';
 import { clearIndexCache, getBlockIndex } from '../helpers/index-cache.js';
-import { checkRevision, getRevision } from './revision-tracker.js';
+import { checkRevision, getRevision, incrementRevision } from './revision-tracker.js';
 import { resolveTextTarget, paginate, validatePaginationInput } from '../helpers/adapter-utils.js';
 import { executeDomainCommand } from './plan-wrappers.js';
 import { getCachedProjectedTrackedChangeSnapshot, projectSnapshots } from './track-changes-wrappers.js';
@@ -1270,6 +1270,15 @@ function replyToCommentHandler(
   if (trackedPayload && inheritedTrackedFields) {
     emitCommentLifecycleUpdate(editor, 'update', trackedPayload);
   }
+
+  // A threaded reply lives only in the comment entity store — the underlying
+  // ProseMirror transaction is not `docChanged`, so the transaction-driven
+  // revision tracker never advances. A reply IS caller-visible exported
+  // content (it adds a w:comment to comments.xml + threading in
+  // commentsExtended.xml), so bump the revision explicitly. Without this the
+  // CLI host's `mutated = revisionBefore !== revisionAfter` gate reads false
+  // and the working document is never re-exported, silently dropping the reply.
+  incrementRevision(editor);
 
   return { success: true, id: replyId, inserted: [toCommentAddress(replyId)] };
 }

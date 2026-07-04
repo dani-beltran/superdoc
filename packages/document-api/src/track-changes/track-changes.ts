@@ -14,11 +14,23 @@ export interface TrackChangesAcceptInput {
   id: string;
   /** Story containing the tracked change. Omit for body (backward compatible). */
   story?: StoryLocator;
+  /**
+   * Optional replacement side. When the id resolves to a paired replacement,
+   * `'inserted'` / `'deleted'` decides only that half, leaving the other half
+   * as a standalone pending change.
+   */
+  side?: 'inserted' | 'deleted';
 }
 export interface TrackChangesRejectInput {
   id: string;
   /** Story containing the tracked change. Omit for body (backward compatible). */
   story?: StoryLocator;
+  /**
+   * Optional replacement side. When the id resolves to a paired replacement,
+   * `'inserted'` / `'deleted'` decides only that half, leaving the other half
+   * as a standalone pending change.
+   */
+  side?: 'inserted' | 'deleted';
 }
 export interface TrackChangesAcceptAllInput {
   story?: StoryLocator | 'all';
@@ -43,6 +55,14 @@ export interface TrackChangesRangeInput {
 // `{ kind: 'id' }` / `{ kind: 'all' }`.
 // ---------------------------------------------------------------------------
 export type ReviewDecideTargetSide = 'insert' | 'inserted' | 'delete' | 'deleted' | 'source' | 'destination';
+/**
+ * Replacement side for an `id` decide target: which half of a paired
+ * replacement to resolve. Only `'inserted'` / `'deleted'` are valid here (a
+ * paired replacement has no move roles), matching the published schema and the
+ * runtime validator. The broader {@link ReviewDecideTargetSide} — which also
+ * carries range/move-only values — applies to `range` targets.
+ */
+export type ReplacementSide = 'inserted' | 'deleted';
 /**
  * Tracked-move pairing assertion for a decide target. Callers that resolved an
  * ambiguous shape (e.g. surface guesses a paragraph delete+insert might be a
@@ -80,13 +100,19 @@ export type ReviewDecideLogicalRangeTarget = ReviewDecideRangeTargetOptions & {
 };
 /** Semantic target for {@link ReviewDecideInput}. */
 export type ReviewDecideTarget =
-  | { kind: 'id'; id: string; story?: StoryLocator; moveRole?: ReviewDecideTargetMoveRole }
+  | {
+      kind: 'id';
+      id: string;
+      story?: StoryLocator;
+      moveRole?: ReviewDecideTargetMoveRole;
+      side?: ReplacementSide;
+    }
   | ReviewDecideTextRangeTarget
   | ReviewDecideLogicalRangeTarget
   | { kind: 'all'; story?: StoryLocator | 'all' };
 /** Legacy compatibility shapes accepted by the validator. */
 export type LegacyReviewDecideTarget =
-  | { id: string; story?: StoryLocator; moveRole?: ReviewDecideTargetMoveRole }
+  | { id: string; story?: StoryLocator; moveRole?: ReviewDecideTargetMoveRole; side?: ReplacementSide }
   | { scope: 'all'; story?: StoryLocator | 'all' };
 export type ReviewDecisionTarget = ReviewDecideTarget | LegacyReviewDecideTarget;
 export interface ReviewDecideInput {
@@ -227,10 +253,11 @@ export function executeTrackChangesDecide(
     return adapter.rejectAll(input, revisionOptions);
   }
   const { id, story } = canonical.target;
+  const side = (canonical.target as { side?: 'inserted' | 'deleted' }).side;
   if (canonical.decision === 'accept') {
-    return adapter.accept({ id, ...(story ? { story } : {}) }, revisionOptions);
+    return adapter.accept({ id, ...(story ? { story } : {}), ...(side ? { side } : {}) }, revisionOptions);
   }
-  return adapter.reject({ id, ...(story ? { story } : {}) }, revisionOptions);
+  return adapter.reject({ id, ...(story ? { story } : {}), ...(side ? { side } : {}) }, revisionOptions);
 }
 function isValidLegacyPartialIdRangeTarget(input: ReviewDecideInput): boolean {
   if (typeof input !== 'object' || input == null) return false;
@@ -296,11 +323,13 @@ function normalizeReviewDecideTarget(target: Record<string, unknown>): ReviewDec
     }
     const story = readOptionalStory(target, 'target.story', false);
     const moveRole = readOptionalMoveRole(target);
+    const side = readOptionalReplacementSide(target);
     return {
       kind: 'id',
       id,
       ...(story ? { story } : {}),
       ...(moveRole ? { moveRole } : {}),
+      ...(side ? { side } : {}),
     };
   }
   if (kind === 'range') {
@@ -394,11 +423,13 @@ function normalizeReviewDecideTarget(target: Record<string, unknown>): ReviewDec
     if (typeof target.id === 'string' && target.id.length > 0) {
       const story = readOptionalStory(target, 'target.story', false);
       const moveRole = readOptionalMoveRole(target);
+      const side = readOptionalReplacementSide(target);
       return {
         kind: 'id',
         id: target.id,
         ...(story ? { story } : {}),
         ...(moveRole ? { moveRole } : {}),
+        ...(side ? { side } : {}),
       };
     }
   }
@@ -595,6 +626,25 @@ function readOptionalMoveRole(target: Record<string, unknown>): ReviewDecideTarg
     );
   }
   return moveRole;
+}
+/**
+ * Read + normalize an id-target replacement side to the canonical
+ * `'inserted'` / `'deleted'` the kernel expects. Only those two values are
+ * accepted — matching the published `trackChanges.decide` id-target schema
+ * (`enum: ['inserted','deleted']`). `source` / `destination` (move roles) are
+ * not valid for an id-side decision and fail closed.
+ */
+function readOptionalReplacementSide(target: Record<string, unknown>): ReplacementSide | undefined {
+  if (!('side' in target)) return undefined;
+  const side = target.side;
+  if (side === undefined || side === null) return undefined;
+  if (side === 'inserted') return 'inserted';
+  if (side === 'deleted') return 'deleted';
+  throw new DocumentApiValidationError(
+    'INVALID_TARGET',
+    'trackChanges.decide id target.side must be "inserted" or "deleted" when provided.',
+    { field: 'target.side', value: side },
+  );
 }
 function validateRangeTargetSide(side: unknown): asserts side is ReviewDecideTargetSide {
   if (

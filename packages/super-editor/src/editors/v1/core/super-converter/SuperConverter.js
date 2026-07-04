@@ -1245,8 +1245,34 @@ class SuperConverter {
     // Reset export warnings for this export cycle
     this.exportWarnings = [];
 
-    // Filter out synthetic tracked change comments - they shouldn't be exported to comments.xml
-    const exportableComments = comments.filter((c) => !c.trackedChange);
+    // Filter out SYNTHETIC tracked-change projection rows - they shouldn't be
+    // exported to comments.xml. `comments.list()` returns one such row per
+    // tracked change (so the sidebar can show revisions next to comments); its
+    // identity IS the tracked change (commentId/id === trackedChangeLink.
+    // trackedChangeId) and it carries only the change excerpt as `text`, no real
+    // comment body. Those must never become a <w:comment>. A GENUINE user comment
+    // ANCHORED ON a tracked change also carries trackedChange:true + a
+    // trackedChangeLink, but keeps its OWN distinct id, so the identity check
+    // spares it. (`!c.trackedChange` alone silently dropped real
+    // comments-on-revisions — comment-on-insertion/deletion.)
+    const isSyntheticTrackedChangeRow = (c) => {
+      const linkId = c.trackedChangeLink?.trackedChangeId;
+      if (!c.trackedChange || !linkId) return false;
+      const identity = c.commentId ?? c.id;
+      return identity != null && String(identity) === String(linkId);
+    };
+    // A tracked-change row with no body at all is also synthetic noise; keep the
+    // body check so bodiless rows drop even if they somehow lack a link.
+    const hasCommentBody = (c) =>
+      Boolean(
+        (typeof c.commentText === 'string' && c.commentText.length > 0) ||
+          c.commentJSON ||
+          (Array.isArray(c.elements) && c.elements.length) ||
+          (typeof c.text === 'string' && c.text.length > 0),
+      );
+    const exportableComments = comments.filter(
+      (c) => !isSyntheticTrackedChangeRow(c) && !(c.trackedChange && !hasCommentBody(c)),
+    );
     const commentsWithParaIds = exportableComments.map((c) => prepareCommentParaIds(c));
     const commentDefinitions = commentsWithParaIds.map((c, index) =>
       getCommentDefinition(c, index, commentsWithParaIds, editor),

@@ -11,6 +11,27 @@ import { describe, it, expect } from 'vitest';
 import { translator } from './pPrChange-translator.js';
 import { NodeTranslator } from '@translator';
 
+describe('w:pPrChange w:id is Word-safe on export', () => {
+  const decodeWid = (id) =>
+    translator.decode({ node: { attrs: { change: { id, author: 'A', date: '2026-01-01T00:00:00Z' } } } }).attributes[
+      'w:id'
+    ];
+
+  it('preserves an already-decimal change id (imported pPrChange round-trip)', () => {
+    expect(decodeWid('42')).toBe('42');
+  });
+
+  it('converts a uuidv4 change id to a stable decimal in the allocator-clear range', () => {
+    const wid = decodeWid('f43e484b-398b-4e25-968c-48f67c1f02e0');
+    expect(wid).toMatch(/^\d+$/);
+    const n = Number(wid);
+    expect(n).toBeGreaterThanOrEqual(1_000_000);
+    expect(n).toBeLessThanOrEqual(1_000_999_999);
+    // Deterministic — the same UUID always exports the same w:id.
+    expect(decodeWid('f43e484b-398b-4e25-968c-48f67c1f02e0')).toBe(wid);
+  });
+});
+
 describe('w:pPrChange translator', () => {
   describe('config', () => {
     it('should have correct properties', () => {

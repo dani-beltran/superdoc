@@ -23,6 +23,8 @@ import {
   type ParagraphNumbering,
 } from '@superdoc/document-api';
 import { clearIndexCache, getBlockIndex } from '../helpers/index-cache.js';
+import { textContentInBlock } from '../helpers/text-offset-resolver.js';
+import { TrackDeleteMarkName } from '../../extensions/track-changes/constants.js';
 import {
   findBlockByIdStrict,
   mapBlockNodeType,
@@ -61,14 +63,27 @@ const RANGE_DELETE_SAFE_NODE_TYPES = new Set(['passthroughBlock', 'passthroughIn
 
 function extractTextPreview(node: ProseMirrorNode): string | null {
   if (!node.isTextblock) return null;
-  const text = node.textContent;
+  // VISIBLE text, so a preview of a mid-redline block does not include
+  // tracked-deleted runs (consistent with extractBlockText and textLength).
+  const text = textContentInBlock(node, { textModel: 'visible' });
   if (text.length <= TEXT_PREVIEW_MAX_LENGTH) return text;
   return text.slice(0, TEXT_PREVIEW_MAX_LENGTH);
 }
 
 function extractBlockText(node: ProseMirrorNode): string | null {
   if (!node.isTextblock) return null;
-  return node.textContent;
+  // Use the VISIBLE text model: tracked deletions remain in the doc as marked
+  // text nodes but are not part of the document's current reading. node.textContent
+  // would include them, so a block mid-redline reads e.g. "in relationZZ" (deleted
+  // "in relation" + inserted "ZZ"). That raw text is the model the agent and the
+  // scoped replace_text action see — but the plan-engine resolves text offsets in
+  // the 'visible' model (resolveTextRangeInBlock / getBlockText, compiler.ts), so a
+  // SECOND edit to an already-edited block computed offsets past the visible length
+  // and threw "Offset N out of range". Returning visible text here aligns the read
+  // model with the apply model. Note this is the OFFSET model's rendering, not
+  // node.textContent: inline leaf atoms (images, tabs) contribute one character
+  // (their leafText or U+FFFC), so text.length always equals the encoded ref end.
+  return textContentInBlock(node, { textModel: 'visible' });
 }
 
 const HEADING_PATTERN = /^Heading(\d)$/;
@@ -156,7 +171,10 @@ function extractBlockNumbering(node: ProseMirrorNode): ParagraphNumbering | unde
 }
 
 /**
- * Extract key formatting from a block node's first text run marks.
+ * Extract key formatting from a block node's first VISIBLE text run marks
+ * (tracked-deleted runs are skipped, matching the visible text model used by
+ * text/textPreview/textLength). A fully tracked-deleted block therefore emits
+ * no run-formatting fields, since there is no visible run to copy from.
  * When styleCtx is provided, resolves fontSize from the block's paragraph style
  * chain when inline marks don't specify one (common for inherited styles).
  */
@@ -171,12 +189,31 @@ function extractBlockFormatting(
   underline?: boolean;
   color?: string;
   alignment?: string;
+  indent?: { left?: number; right?: number; firstLine?: number; hanging?: number };
   headingLevel?: number;
 } {
   const pProps = (node.attrs as Record<string, unknown>).paragraphProperties as
-    | { styleId?: string; justification?: string }
+    | {
+        styleId?: string;
+        justification?: string;
+        indent?: { left?: number; right?: number; firstLine?: number; hanging?: number };
+      }
     | undefined;
   const styleId = pProps?.styleId ?? null;
+  // Direct paragraph indentation (twips), so a contextual-formatting match can
+  // align an inserted paragraph with its neighbors instead of leaving it flush.
+  const rawIndent = pProps?.indent;
+  // Only NON-ZERO fields: a 0 carries no indent intent, and emitting both
+  // firstLine:0 and hanging:0 trips setIndentation's mutual-exclusivity guard
+  // (firstLine and hanging cannot coexist).
+  const indent =
+    rawIndent && typeof rawIndent === 'object'
+      ? (Object.fromEntries(
+          (['left', 'right', 'firstLine', 'hanging'] as const)
+            .filter((k) => typeof rawIndent[k] === 'number' && (rawIndent[k] as number) !== 0)
+            .map((k) => [k, rawIndent[k]]),
+        ) as { left?: number; right?: number; firstLine?: number; hanging?: number })
+      : undefined;
 
   let fontFamily: string | undefined;
   let fontSize: number | undefined;
@@ -188,6 +225,13 @@ function extractBlockFormatting(
     if (fontFamily !== undefined) return false;
     const marks = child.marks ?? [];
     if (!child.isText || marks.length === 0) return;
+    // VISIBLE model, matching text/textPreview/textLength: a tracked-deleted
+    // run is not part of the document's current reading, so its formatting
+    // must not be sampled. Without this, a block whose leading run is a styled
+    // tracked deletion reports visible `text` but the DELETED run's
+    // fontFamily/bold. The agent prompt says to copy these values, so
+    // rejected formatting would be replicated into new content.
+    if (marks.some((mark) => (mark.type as { name?: string }).name === TrackDeleteMarkName)) return;
     for (const mark of marks) {
       const markName = (mark.type as { name?: string }).name;
       const attrs = mark.attrs as Record<string, unknown>;
@@ -229,6 +273,7 @@ function extractBlockFormatting(
     ...(underline ? { underline } : {}),
     ...(color ? { color } : {}),
     ...(pProps?.justification ? { alignment: pProps.justification } : {}),
+    ...(indent && Object.keys(indent).length > 0 ? { indent } : {}),
     ...(headingLevel ? { headingLevel } : {}),
   };
 }
@@ -342,7 +387,12 @@ export function blocksListWrapper(editor: Editor, input?: BlocksListInput): Bloc
   const styleCtx = buildStyleContext(editor);
 
   const blocks: BlockListEntry[] = paged.map((candidate, i) => {
-    const textLength = computeTextContentLength(candidate.node);
+    // VISIBLE length, matching extractBlockText and the plan-engine's apply
+    // model. The encoded `ref` (segments[].end) and `isEmpty` derive from this;
+    // using raw length here would hand out a whole-block ref ending past the
+    // visible text, so re-editing an already-redlined block via that ref throws
+    // "text offset out of range" in resolveTextRangeInBlock.
+    const textLength = computeTextContentLength(candidate.node, { textModel: 'visible' });
     const fullText = input?.includeText ? extractBlockText(candidate.node) : undefined;
     const numbering = extractBlockNumbering(candidate.node);
     const ref =
@@ -358,6 +408,16 @@ export function blocksListWrapper(editor: Editor, input?: BlocksListInput): Bloc
           })
         : undefined;
 
+    // Computed numbering rendering (markerText/path) is maintained on the
+    // node by the numbering plugin. Surfacing it here lets agents see legal
+    // clause numbers ("2.3.") that live on numbered headings/paragraphs and
+    // are otherwise invisible to every read operation.
+    const listRendering = (
+      candidate.node.attrs as {
+        listRendering?: { markerText?: string; path?: number[]; numberingType?: string } | null;
+      }
+    )?.listRendering;
+
     return {
       ordinal: offset + i,
       nodeId: candidate.nodeId,
@@ -366,6 +426,15 @@ export function blocksListWrapper(editor: Editor, input?: BlocksListInput): Bloc
       ...(fullText !== undefined ? { text: fullText } : {}),
       isEmpty: textLength === 0,
       ...extractBlockFormatting(candidate.node, styleCtx),
+      ...(listRendering
+        ? {
+            numbering: {
+              marker: listRendering.markerText ?? null,
+              path: listRendering.path ?? null,
+              kind: listRendering.numberingType ?? null,
+            },
+          }
+        : {}),
       ...(numbering ? { paragraphNumbering: numbering } : {}),
       ...(ref ? { ref } : {}),
     };

@@ -4328,4 +4328,44 @@ describe('comments-store', () => {
       expect(floating.map((c) => c.commentId).sort()).toEqual(['inline-outside', 'user-comment']);
     });
   });
+
+  describe('translateCommentsForExport', () => {
+    // Synthetic tracked-change projection rows (one per revision, for the
+    // sidebar) must not reach the DOCX exporter: convertHtmlToSchema('') still
+    // yields one empty paragraph, so a synthesized commentJSON reads as a
+    // truthy body downstream and the row would export as an empty <w:comment>.
+    it('skips synthetic tracked-change rows but keeps real comments, including imported comments-on-revisions', () => {
+      const asModel = (values) => ({ ...values, getValues: () => values });
+      store.commentsList = [
+        // Synthetic sidebar row: identity IS the tracked change, no body.
+        asModel({
+          commentId: 'change-1',
+          trackedChange: true,
+          trackedChangeText: 'inserted text excerpt',
+          commentText: '',
+        }),
+        // Genuine user comment.
+        asModel({
+          commentId: 'real-1',
+          trackedChange: false,
+          commentText: '<p>Looks good</p>',
+        }),
+        // Imported comment ANCHORED ON a revision: round-trips the
+        // custom:trackedChange flag but carries a genuine DOCX body — must export.
+        asModel({
+          commentId: 'imported-on-revision',
+          trackedChange: true,
+          commentText: '',
+          docxCommentJSON: [{ type: 'paragraph', content: [{ type: 'text', text: 'imported body' }] }],
+        }),
+      ];
+
+      const exported = store.translateCommentsForExport();
+
+      expect(exported.map((c) => c.commentId).sort()).toEqual(['imported-on-revision', 'real-1']);
+      // Every exported row carries a commentJSON body; the synthetic row is gone
+      // rather than exported with a synthesized empty-paragraph body.
+      exported.forEach((c) => expect(Array.isArray(c.commentJSON) && c.commentJSON.length > 0).toBe(true));
+    });
+  });
 });

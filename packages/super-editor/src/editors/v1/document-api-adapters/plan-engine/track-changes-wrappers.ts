@@ -574,6 +574,7 @@ function decideSingle(
   id: string,
   story: StoryLocator | undefined,
   options: RevisionGuardOptions | undefined,
+  side?: 'inserted' | 'deleted',
 ): Receipt {
   const resolved = resolveTrackedChangeInStory(hostEditor, {
     kind: 'entity',
@@ -587,7 +588,12 @@ function decideSingle(
   }
 
   const commandName = decision === 'accept' ? 'acceptTrackedChangeById' : 'rejectTrackedChangeById';
-  const command = (resolved.editor.commands as Record<string, ((rawId: string) => boolean) | undefined>)[commandName];
+  const command = (
+    resolved.editor.commands as Record<
+      string,
+      ((rawId: string, options?: { side?: 'inserted' | 'deleted' }) => boolean) | undefined
+    >
+  )[commandName];
   if (typeof command !== 'function') {
     throw new DocumentApiAdapterError(
       'CAPABILITY_UNAVAILABLE',
@@ -599,7 +605,9 @@ function decideSingle(
   checkRevision(hostEditor, options?.expectedRevision);
 
   const commandRawId = resolved.change.commandRawId ?? resolved.change.rawId;
-  const receipt = executeDomainCommand(resolved.editor, () => Boolean(command(commandRawId)));
+  const receipt = executeDomainCommand(resolved.editor, () =>
+    Boolean(command(commandRawId, side ? { side } : undefined)),
+  );
 
   if (receipt.steps[0]?.effect !== 'changed') {
     return decisionFailureReceipt(
@@ -627,7 +635,14 @@ export function trackChangesAcceptWrapper(
   input: TrackChangesAcceptInput,
   options?: RevisionGuardOptions,
 ): Receipt {
-  return decideSingle(editor, 'accept', input.id, input.story, options);
+  return decideSingle(
+    editor,
+    'accept',
+    input.id,
+    input.story,
+    options,
+    (input as { side?: 'inserted' | 'deleted' }).side,
+  );
 }
 
 export function trackChangesRejectWrapper(
@@ -635,7 +650,14 @@ export function trackChangesRejectWrapper(
   input: TrackChangesRejectInput,
   options?: RevisionGuardOptions,
 ): Receipt {
-  return decideSingle(editor, 'reject', input.id, input.story, options);
+  return decideSingle(
+    editor,
+    'reject',
+    input.id,
+    input.story,
+    options,
+    (input as { side?: 'inserted' | 'deleted' }).side,
+  );
 }
 
 function decideAll(

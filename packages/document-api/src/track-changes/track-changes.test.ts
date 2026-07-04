@@ -64,6 +64,42 @@ describe('executeTrackChangesDecide validation', () => {
     expect((caught as Error | undefined)?.message).toContain('exactly one selector');
   });
 
+  it('rejects id-target side aliases "insert"/"delete" (canonical inserted/deleted only)', () => {
+    // The published id-target side schema is strictly ['inserted','deleted'];
+    // the runtime must not accept the looser aliases the schema forbids.
+    for (const side of ['insert', 'delete']) {
+      expect(() =>
+        executeTrackChangesDecide(stubAdapter(), {
+          decision: 'reject',
+          target: { kind: 'id', id: 'tc1', side } as any,
+        }),
+      ).toThrow(/must be "inserted" or "deleted"/);
+    }
+  });
+
+  it('forwards canonical id-target side "deleted" to the adapter', () => {
+    const adapter = { ...stubAdapter(), decide: mock(() => ({ success: true })) };
+    const result = executeTrackChangesDecide(adapter, {
+      decision: 'reject',
+      target: { kind: 'id', id: 'tc1', side: 'deleted' },
+    });
+    expect(result.success).toBe(true);
+    expect((adapter.decide as any).mock.calls[0][0].target.side).toBe('deleted');
+  });
+
+  it('still accepts range-target side aliases (range validation is unchanged)', () => {
+    const adapter = { ...stubAdapter(), decideRange: mock(() => ({ success: true })) };
+    const result = executeTrackChangesDecide(adapter, {
+      decision: 'reject',
+      target: {
+        kind: 'range',
+        range: { kind: 'text', segments: [{ blockId: 'p1', range: { start: 0, end: 2 } }] },
+        side: 'delete',
+      } as any,
+    });
+    expect(result.success).toBe(true);
+  });
+
   it('routes canonical range targets to decideRange', () => {
     const adapter = {
       ...stubAdapter(),

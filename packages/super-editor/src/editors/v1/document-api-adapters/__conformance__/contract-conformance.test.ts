@@ -5433,18 +5433,16 @@ const mutationVectors: Partial<Record<OperationId, MutationVector>> = {
   },
   'lists.attach': {
     throwCase: () => {
-      const editor = makeListEditor([
-        makeListParagraph({ id: 'p-1' }),
-        makeListParagraph({ id: 'li-1', numId: 1, ilvl: 0, numberingType: 'decimal' }),
-      ]);
-      return listsAttachWrapper(
-        editor,
-        {
-          target: { kind: 'block', nodeType: 'paragraph', nodeId: 'p-1' },
-          attachTo: { kind: 'block', nodeType: 'listItem', nodeId: 'li-1' },
-        },
-        { changeMode: 'tracked' },
-      );
+      // Pre-apply throw is a missing target (TARGET_NOT_FOUND), which is
+      // mode-independent. Use DIRECT mode to isolate it: tracked mode is
+      // supported for lists.attach (it records the former paragraph properties
+      // as a w:pPrChange), but the tracked path requires a configured user, so
+      // on this no-user conformance editor the capability guard would fire first.
+      const editor = makeListEditor([makeListParagraph({ id: 'li-1', numId: 1, ilvl: 0, numberingType: 'decimal' })]);
+      return listsAttachWrapper(editor, {
+        target: { kind: 'block', nodeType: 'paragraph', nodeId: 'missing' },
+        attachTo: { kind: 'block', nodeType: 'listItem', nodeId: 'li-1' },
+      });
     },
     failureCase: () => {
       const editor = makeListEditor([makeListParagraph({ id: 'li-1', numId: 1, ilvl: 0, numberingType: 'decimal' })]);

@@ -146,6 +146,13 @@ Returns a Receipt. `removed` lists retired tracked-change ids; `inserted` lists 
                 "destination"
               ]
             },
+            "side": {
+              "description": "Optional replacement side. When the id resolves to a paired replacement, decides only the 'inserted' or 'deleted' half, leaving the other half as a standalone pending change.",
+              "enum": [
+                "inserted",
+                "deleted"
+              ]
+            },
             "story": {
               "$ref": "#/$defs/StoryLocator"
             }
@@ -337,6 +344,13 @@ Returns a Receipt. `removed` lists retired tracked-change ids; `inserted` lists 
                 "pair",
                 "source",
                 "destination"
+              ]
+            },
+            "side": {
+              "description": "Optional replacement side. When the id resolves to a paired replacement, decides only the 'inserted' or 'deleted' half.",
+              "enum": [
+                "inserted",
+                "deleted"
               ]
             },
             "story": {

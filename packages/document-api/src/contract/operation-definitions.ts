@@ -963,7 +963,7 @@ export const OPERATION_DEFINITIONS = {
   'blocks.list': {
     memberPath: 'blocks.list',
     description:
-      'List top-level blocks in document order with IDs, types, text previews, and optional full text when includeText:true. Supports pagination via offset/limit, optional nodeType filtering, and single-story scoping via `in: <StoryLocator>`.',
+      'List top-level blocks in document order with IDs, types, text previews, and optional full text when includeText:true. Text, previews, lengths, and formatting hints use the VISIBLE model: pending tracked deletions are excluded (matching how edit refs resolve), and inline atoms render as a single placeholder character. Supports pagination via offset/limit, optional nodeType filtering, and single-story scoping via `in: <StoryLocator>`.',
     expectedResult:
       'Returns a BlocksListResult with total block count, an ordered array of block entries (ordinal, nodeId, nodeType, textPreview, optional text, isEmpty), and the current document revision.',
     requiresDocumentContext: true,
@@ -1842,13 +1842,14 @@ export const OPERATION_DEFINITIONS = {
   },
   'lists.attach': {
     memberPath: 'lists.attach',
-    description: 'Convert non-list paragraphs to list items under an existing list sequence.',
+    description:
+      'Convert non-list paragraphs to list items under an existing list sequence. With changeMode:"tracked" the former (unnumbered) paragraph properties are recorded as a w:pPrChange so a reviewer can accept/reject the numbering.',
     expectedResult: 'Returns a ListsMutateItemResult confirming attachment.',
     requiresDocumentContext: true,
     metadata: mutationOperation({
       idempotency: 'conditional',
       supportsDryRun: true,
-      supportsTrackedMode: false,
+      supportsTrackedMode: true,
       possibleFailureCodes: ['INVALID_TARGET', 'NO_OP'],
       throws: [...T_NOT_FOUND_CAPABLE, 'INVALID_TARGET'],
     }),
