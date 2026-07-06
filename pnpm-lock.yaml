@@ -1667,6 +1667,18 @@ importers:
         specifier: ^4.21.0
         version: 4.21.0
 
+  examples/ai/core-actions-agent:
+    dependencies:
+      '@superdoc-dev/sdk':
+        specifier: workspace:*
+        version: link:../../../packages/sdk/langs/node
+      dotenv:
+        specifier: ^17.4.2
+        version: 17.4.2
+      openai:
+        specifier: ^6.33.0
+        version: 6.35.0(ws@8.20.0)(zod@4.3.6)
+
   examples/ai/footnote-tool-agent:
     dependencies:
       dotenv:
@@ -46757,7 +46769,7 @@ snapshots:
       jest-worker: 27.5.1
       schema-utils: 4.3.3
       terser: 5.46.1
-      webpack: 5.105.4(esbuild@0.27.7)(webpack-cli@5.1.4)
+      webpack: 5.105.4(esbuild@0.27.7)(webpack-cli@6.0.1)
     optionalDependencies:
       esbuild: 0.27.7
 
