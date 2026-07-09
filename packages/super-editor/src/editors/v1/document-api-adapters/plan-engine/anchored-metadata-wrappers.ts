@@ -1,4 +1,5 @@
 import type { Node as ProseMirrorNode } from 'prosemirror-model';
+import { TextSelection } from 'prosemirror-state';
 import { v4 as uuidv4 } from 'uuid';
 import type {
   AnchoredMetadataAdapter,
@@ -247,6 +248,7 @@ function wrapRangeInAnchor(editor: Editor, target: SelectionTarget, id: string):
   if (absFrom >= absTo) {
     throw new DocumentApiAdapterError('INVALID_TARGET', 'metadata.attach requires a non-empty text range.');
   }
+  assertNoOverlappingMetadataAnchor(editor, absFrom, absTo);
 
   const nodeType = editor.schema.nodes[SDT_INLINE_NAME];
   if (!nodeType) {
@@ -268,7 +270,8 @@ function wrapRangeInAnchor(editor: Editor, target: SelectionTarget, id: string):
     const selectedContent = parentRun.content.cut($from.parentOffset, $to.parentOffset);
     const leftContent = parentRun.content.cut(0, $from.parentOffset);
     const rightContent = parentRun.content.cut($to.parentOffset);
-    const sdtNode = nodeType.create(attrs, selectedContent);
+    const sdtContent = runType.create(parentRun.attrs, selectedContent, parentRun.marks);
+    const sdtNode = nodeType.create(attrs, sdtContent);
     const replacement: ProseMirrorNode[] = [];
     if (leftContent.size > 0) replacement.push(runType.create(parentRun.attrs, leftContent, parentRun.marks));
     replacement.push(sdtNode);
@@ -288,8 +291,20 @@ function wrapRangeInAnchor(editor: Editor, target: SelectionTarget, id: string):
 function unwrapAnchor(editor: Editor, id: string): boolean {
   const anchor = findAnchorsById(editor, id)[0];
   if (!anchor) return false;
+  const { selection } = editor.state;
   const { tr } = editor.state;
-  tr.replaceWith(anchor.pos, anchor.pos + anchor.node.nodeSize, anchor.node.content);
+  const from = anchor.pos;
+  const to = from + anchor.node.nodeSize;
+  tr.replaceWith(from, to, anchor.node.content);
+  // Normalize only a selection that genuinely intersects the wrapper interior
+  // or is a NodeSelection on the wrapper (a stale NodeSelection maps to an
+  // invalid selection). A strict overlap test excludes collapsed carets sitting
+  // exactly on the start or end boundary: those are adjacent, map cleanly
+  // through the replaceWith, and must be left alone so removal-by-id does not
+  // steal the caret.
+  if (selection.from < to && from < selection.to) {
+    tr.setSelection(TextSelection.create(tr.doc, tr.mapping.map(from, -1)));
+  }
   dispatchTransaction(editor, tr);
   clearIndexCache(editor);
   return true;
@@ -328,6 +343,36 @@ function rangesOverlap(aFrom: number, aTo: number, bFrom: number, bTo: number): 
     return aFrom <= bTo && bFrom <= aTo;
   }
   return aFrom < bTo && bFrom < aTo;
+}
+
+function isMetadataAnchorNode(metadataIds: ReadonlySet<string>, node: ProseMirrorNode): boolean {
+  const tag = node.attrs?.tag;
+  if (typeof tag !== 'string' || tag.length === 0) return false;
+  if (node.attrs?.alias === 'Anchored metadata') return true;
+  // Payload-id match alone is not enough: a foreign content control whose
+  // w:tag collides with a stored entry id must not block attach. Require the
+  // hidden appearance metadata.attach stamps on every anchor it creates.
+  return metadataIds.has(tag) && node.attrs?.appearance === 'hidden';
+}
+
+function findOverlappingMetadataAnchor(editor: Editor, absFrom: number, absTo: number) {
+  const convertedXml = getConvertedXml(editor);
+  const metadataIds = new Set(listMetadataParts(convertedXml).flatMap((part) => part.entries.map((entry) => entry.id)));
+  return findAllSdtNodes(editor.state.doc).find((sdt) => {
+    if (sdt.kind !== 'inline') return false;
+    if (!isMetadataAnchorNode(metadataIds, sdt.node)) return false;
+    const anchorFrom = sdt.pos + 1;
+    const anchorTo = sdt.pos + sdt.node.nodeSize - 1;
+    return rangesOverlap(anchorFrom, anchorTo, absFrom, absTo);
+  });
+}
+
+function assertNoOverlappingMetadataAnchor(editor: Editor, absFrom: number, absTo: number): void {
+  // AIDEV-NOTE: v1 text-range metadata anchors are non-overlapping. Reject
+  // containment too; nested SDTs are schema-valid, but safely supporting them
+  // needs a range model that does not duplicate existing SDT ids through open slices.
+  if (!findOverlappingMetadataAnchor(editor, absFrom, absTo)) return;
+  throw new DocumentApiAdapterError('INVALID_TARGET', 'metadata.attach does not support overlapping metadata anchors.');
 }
 
 function anchorOverlaps(editor: Editor, id: string, within: SelectionTarget): boolean {
@@ -481,9 +526,10 @@ export function metadataAttachWrapper(
   rejectTrackedMode('metadata.attach', options);
   const id = input.id ?? uuidv4();
   const convertedXml = getConvertedXml(editor);
+  let resolvedTarget: ReturnType<typeof resolveSelectionTarget>;
 
   try {
-    resolveSelectionTarget(editor, input.target);
+    resolvedTarget = resolveSelectionTarget(editor, input.target);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     // Preserve the distinction the resolver makes between a missing
@@ -506,6 +552,18 @@ export function metadataAttachWrapper(
     return failure('INVALID_INPUT', `Anchored metadata id "${id}" already exists.`);
   }
 
+  try {
+    assertNoOverlappingMetadataAnchor(editor, resolvedTarget.absFrom, resolvedTarget.absTo);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (error instanceof DocumentApiAdapterError) {
+      if (error.code === 'TARGET_NOT_FOUND' || error.code === 'INVALID_TARGET') {
+        return failure(error.code, message);
+      }
+    }
+    throw error;
+  }
+
   const preview = writeEntry(editor, input.namespace, id, input.payload, true);
   if (options?.dryRun) {
     // Mirror the revision guard that the live path runs inside
@@ -515,15 +573,26 @@ export function metadataAttachWrapper(
     return { success: true, id, namespace: input.namespace, partName: preview.partName };
   }
 
-  const receipt = executeDomainCommand(
-    editor,
-    () => {
-      wrapRangeInAnchor(editor, input.target, id);
-      writeEntry(editor, input.namespace, id, input.payload, false);
-      return true;
-    },
-    { expectedRevision: options?.expectedRevision },
-  );
+  let receipt: ReturnType<typeof executeDomainCommand>;
+  try {
+    receipt = executeDomainCommand(
+      editor,
+      () => {
+        wrapRangeInAnchor(editor, input.target, id);
+        writeEntry(editor, input.namespace, id, input.payload, false);
+        return true;
+      },
+      { expectedRevision: options?.expectedRevision },
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (error instanceof DocumentApiAdapterError) {
+      if (error.code === 'TARGET_NOT_FOUND' || error.code === 'INVALID_TARGET') {
+        return failure(error.code, message);
+      }
+    }
+    throw error;
+  }
 
   if (receipt.steps[0]?.effect !== 'changed') {
     return failure('INVALID_TARGET', 'metadata.attach did not change the document.');
