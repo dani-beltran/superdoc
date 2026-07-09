@@ -41,6 +41,7 @@ import { findAllSdtNodes, SDT_INLINE_NAME } from '../helpers/content-controls/in
 import { executeOutOfBandMutation } from '../out-of-band-mutation.js';
 import { executeDomainCommand } from './plan-wrappers.js';
 import { checkRevision, getRevision } from './revision-tracker.js';
+import { mutateCustomXmlParts } from './custom-xml-part-mutation.js';
 
 type XmlNode = {
   type?: string;
@@ -394,56 +395,83 @@ function writeEntry(
   const convertedXml = getConvertedXml(editor);
   const converter = getConverter(editor);
   const existing = findPartByNamespace(convertedXml, namespace);
-  const entries = existing?.entries.filter((entry) => entry.id !== id) ?? [];
   const next: MetadataEntry = {
     id,
     namespace,
     partName: existing?.partName ?? predictPartName(convertedXml, converter),
     payload,
   };
-  const xml = buildEnvelopeXml(namespace, [...entries, next]);
 
   if (dryRun) {
+    // Serialize just the new entry during the preview so a non-serializable
+    // payload (BigInt, cyclic object) fails here, before the live path mutates
+    // the document. metadata.attach runs this preview before wrapRangeInAnchor;
+    // without it, the live path would insert the SDT anchor and only then throw
+    // while building the envelope, leaving an anchor with no customXml payload.
+    // Only the new entry needs checking: existing entries were validated when
+    // they were written, and the live path re-serializes the full envelope.
+    buildEnvelopeXml(namespace, [next]);
     return { partName: next.partName };
   }
 
-  if (existing) {
-    patchCustomXmlPart(
-      convertedXml,
-      { partName: existing.partName },
-      { content: xml, schemaRefs: undefined },
-      converter ?? undefined,
-    );
-    markConverterDirty(editor);
-    return { partName: existing.partName };
-  }
+  const partName = mutateCustomXmlParts(editor, 'metadata.writeEntry', (sandboxXml, sandboxConverter) => {
+    const sandboxExisting = findPartByNamespace(sandboxXml, namespace);
+    const sandboxEntries = sandboxExisting?.entries.filter((entry) => entry.id !== id) ?? [];
+    const sandboxNext: MetadataEntry = {
+      id,
+      namespace,
+      partName: sandboxExisting?.partName ?? predictPartName(sandboxXml, sandboxConverter),
+      payload,
+    };
+    const sandboxEnvelope = buildEnvelopeXml(namespace, [...sandboxEntries, sandboxNext]);
 
-  const created = createCustomXmlPart(convertedXml, { content: xml, schemaRefs: undefined }, converter ?? undefined);
-  markConverterDirty(editor);
-  return { partName: created.partName };
+    if (sandboxExisting) {
+      patchCustomXmlPart(
+        sandboxXml,
+        { partName: sandboxExisting.partName },
+        { content: sandboxEnvelope, schemaRefs: undefined },
+        sandboxConverter,
+      );
+      return sandboxExisting.partName;
+    }
+
+    const created = createCustomXmlPart(
+      sandboxXml,
+      { content: sandboxEnvelope, schemaRefs: undefined },
+      sandboxConverter,
+    );
+    return created.partName;
+  });
+
+  return { partName };
 }
 
 function removeEntry(editor: Editor, id: string, dryRun: boolean): boolean {
   const convertedXml = getConvertedXml(editor);
-  const converter = getConverter(editor);
   const part = listMetadataParts(convertedXml).find((candidate) => candidate.entries.some((entry) => entry.id === id));
   if (!part) return false;
 
   if (dryRun) return true;
 
-  const remaining = part.entries.filter((entry) => entry.id !== id);
-  if (remaining.length === 0) {
-    removeCustomXmlPart(convertedXml, { partName: part.partName }, converter ?? undefined);
-  } else {
-    patchCustomXmlPart(
-      convertedXml,
-      { partName: part.partName },
-      { content: buildEnvelopeXml(part.namespace, remaining), schemaRefs: undefined },
-      converter ?? undefined,
+  return mutateCustomXmlParts(editor, 'metadata.removeEntry', (sandboxXml, sandboxConverter) => {
+    const sandboxPart = listMetadataParts(sandboxXml).find((candidate) =>
+      candidate.entries.some((entry) => entry.id === id),
     );
-  }
-  markConverterDirty(editor);
-  return true;
+    if (!sandboxPart) return false;
+
+    const remaining = sandboxPart.entries.filter((entry) => entry.id !== id);
+    if (remaining.length === 0) {
+      removeCustomXmlPart(sandboxXml, { partName: sandboxPart.partName }, sandboxConverter);
+    } else {
+      patchCustomXmlPart(
+        sandboxXml,
+        { partName: sandboxPart.partName },
+        { content: buildEnvelopeXml(sandboxPart.namespace, remaining), schemaRefs: undefined },
+        sandboxConverter,
+      );
+    }
+    return true;
+  });
 }
 
 function toSummary(entry: MetadataEntry, editor: Editor): AnchoredMetadataSummary {
@@ -619,7 +647,7 @@ export function metadataUpdateWrapper(
       if (!dryRun) {
         writeEntry(editor, existing.namespace, input.id, input.payload, false);
       }
-      return { changed: true, payload: { success: true, id: input.id } };
+      return { changed: false, payload: { success: true, id: input.id } };
     },
     { dryRun: options?.dryRun ?? false, expectedRevision: options?.expectedRevision },
   );
@@ -648,8 +676,8 @@ export function metadataRemoveWrapper(
     return executeOutOfBandMutation<AnchoredMetadataMutationResult>(
       editor,
       (dryRun) => {
-        const changed = removeEntry(editor, input.id, dryRun);
-        return { changed, payload: { success: true, id: input.id } };
+        removeEntry(editor, input.id, dryRun);
+        return { changed: false, payload: { success: true, id: input.id } };
       },
       { dryRun: false, expectedRevision: options?.expectedRevision },
     );
