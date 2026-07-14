@@ -293,7 +293,7 @@ function buildActionDescription(included?: ReadonlySet<string>): string {
  * description, AND the advertised argument properties all shrink together
  * (an arg no remaining action declares is not advertised).
  */
-function buildPerformActionDefinition(includedActions: readonly string[]): AgentToolDefinition {
+export function buildPerformActionDefinition(includedActions: readonly string[]): AgentToolDefinition {
   const included = new Set(includedActions);
   return {
     name: 'superdoc_perform_action',

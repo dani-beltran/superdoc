@@ -23,6 +23,7 @@ import {
   type ToolCatalogOperation,
   type ToolProvider,
 } from './presets.js';
+import { extendPreset, composePreset, type ActionSpec } from './actions/define.js';
 
 export { DEFAULT_PRESET, getPreset, listPresets, registerPreset, unregisterPreset };
 export type {
@@ -185,7 +186,26 @@ function resolvePromptPresetArg(preset?: string | { preset?: string }): string {
  * suitable for embedded LLM usage (OpenAI, Anthropic, Vercel APIs). For MCP
  * server instructions, use {@link getMcpPrompt} instead.
  */
-export type CreateAgentToolkitInput = ToolChooserInput;
+export type CreateAgentToolkitInput = ToolChooserInput & {
+  /**
+   * Custom actions to expose alongside the base preset's built-ins. When set,
+   * the toolkit builds the extended preset FOR YOU — no `registerPreset`, no
+   * preset id to invent or thread through later `dispatch` calls. This is the
+   * simple path: define your actions, hand them here, use the returned toolkit.
+   * Advanced callers can still `extendPreset`/`composePreset` + `preset`.
+   */
+  actions?: readonly ActionSpec[];
+  /** Base preset to extend when `actions` is set (default `'core'`). Ignored otherwise. */
+  base?: string;
+  /**
+   * With `actions`, keep only these built-in action names (∪ your custom
+   * actions) — builds via `composePreset` instead of `extendPreset`.
+   */
+  includeCoreActions?: readonly string[];
+};
+
+/** Label for the ephemeral preset built by the one-call `actions` path. */
+const CUSTOM_TOOLKIT_PRESET_ID = 'custom_superdoc_preset';
 
 export type AgentToolkit = {
   /** Provider-shaped tool definitions (see {@link chooseTools}). */
@@ -222,8 +242,45 @@ export type AgentToolkit = {
  * matching the standalone functions.
  */
 export async function createAgentToolkit(input: CreateAgentToolkitInput): Promise<AgentToolkit> {
-  const presetId = input.preset ?? DEFAULT_PRESET;
   const excludeActions = input.excludeActions ? [...input.excludeActions] : undefined;
+
+  // One-call custom-actions path: define your actions, hand them here, use the
+  // returned toolkit. We build an ephemeral extended/composed preset over
+  // `base` (default 'core') and drive it directly — no global registerPreset,
+  // and nothing for the caller to remember at dispatch time.
+  if ((input.actions && input.actions.length > 0) || input.includeCoreActions != null) {
+    // `preset` doubles as the base to extend here (so `{ preset: 'core', actions }`
+    // reads naturally); `base` wins if both are given. Default base is 'core'.
+    const baseId = input.base ?? input.preset ?? 'core';
+    const actions = input.actions ?? [];
+    const descriptor =
+      input.includeCoreActions != null
+        ? composePreset({
+            id: CUSTOM_TOOLKIT_PRESET_ID,
+            baseId,
+            includeCoreActions: input.includeCoreActions,
+            actions,
+          })
+        : extendPreset(baseId, { id: CUSTOM_TOOLKIT_PRESET_ID, actions });
+    const { tools, cacheStrategy } = await descriptor.getTools(input.provider, {
+      cache: input.cache === true,
+      excludeActions,
+    });
+    const systemPrompt = await descriptor.getSystemPrompt(excludeActions ? { excludeActions } : undefined);
+    const dispatch: AgentToolkit['dispatch'] = (documentHandle, toolName, args = {}, invokeOptions) =>
+      descriptor.dispatch(documentHandle, toolName, args, {
+        ...invokeOptions,
+        ...(excludeActions ? { excludeActions } : {}),
+      });
+    return {
+      tools,
+      meta: { provider: input.provider, preset: descriptor.id, toolCount: tools.length, cacheStrategy },
+      systemPrompt,
+      dispatch,
+    };
+  }
+
+  const presetId = input.preset ?? DEFAULT_PRESET;
   const { tools, meta } = await chooseTools({ ...input, preset: presetId, excludeActions });
   const systemPrompt = await getSystemPrompt(presetId, excludeActions ? { excludeActions } : undefined);
   const dispatch: AgentToolkit['dispatch'] = (documentHandle, toolName, args = {}, invokeOptions) =>

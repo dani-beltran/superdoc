@@ -1,4 +1,5 @@
 from .presets import DEFAULT_PRESET, get_preset, list_presets, register_preset, unregister_preset
+from .presets.custom import compose_preset, define_action, extend_preset
 from .client import AsyncSuperDocClient, AsyncSuperDocDocument, SuperDocClient, SuperDocDocument
 from .errors import SuperDocError
 from .skill_api import get_skill, install_skill, list_skills
@@ -37,4 +38,7 @@ __all__ = [
     "list_presets",
     "register_preset",
     "unregister_preset",
+    "define_action",
+    "extend_preset",
+    "compose_preset",
 ]

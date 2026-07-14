@@ -260,6 +260,17 @@ export type { AgentReceipt } from './agent/runtime.js';
 export type { GetSystemPromptOptions, GetToolsOptions, GetToolsResult, PresetDescriptor } from './presets.js';
 export { createAgentToolkit } from './tools.js';
 export type { AgentToolkit, CreateAgentToolkitInput } from './tools.js';
+// Custom-action authoring kit: define actions in two execution tiers
+// (steps / run) and extend or compose presets with them.
+export { defineAction, extendPreset, composePreset, executionKindOf } from './actions/define.js';
+export type {
+  ActionSpec,
+  ActionStep,
+  DefineActionInput,
+  ExtendPresetOptions,
+  ComposePresetOptions,
+  JSONSchemaObject,
+} from './actions/define.js';
 export { SuperDocCliError } from './runtime/errors.js';
 export type {
   InvokeOptions,

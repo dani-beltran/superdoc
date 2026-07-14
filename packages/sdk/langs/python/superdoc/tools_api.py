@@ -185,6 +185,58 @@ def create_agent_toolkit(
     preset = preset_arg if preset_arg is not None else DEFAULT_PRESET
     exclude_actions = list(input.get('excludeActions') or input.get('exclude_actions') or []) or None
 
+    # One-call custom-actions path: hand your actions to the toolkit and use it.
+    # Build an ephemeral extended/composed preset over `base` (default 'core')
+    # and drive it directly — no register_preset, no preset id to thread through
+    # dispatch. Advanced callers can still extend_preset/compose_preset + preset.
+    actions = input.get('actions') or []
+    include_core = input.get('includeCoreActions')
+    if include_core is None:
+        include_core = input.get('include_core_actions')
+    if actions or include_core is not None:
+        from .presets.custom import extend_preset, compose_preset  # lazy: avoid import cycle
+        provider = input.get('provider')
+        # Validate provider up front (parity with choose_tools) — the actions
+        # path builds tools directly, so it must not skip this check.
+        if provider not in ('openai', 'anthropic', 'vercel', 'generic'):
+            raise SuperDocError('provider is required.', code='INVALID_ARGUMENT', details={'provider': provider})
+        # `preset` doubles as the base to extend here; `base` wins if both given.
+        base_id = input.get('base') or input.get('preset') or 'core'
+        if include_core is not None:
+            descriptor = compose_preset(id='custom_superdoc_preset', base_id=base_id,
+                                        include_core_actions=include_core, actions=actions)
+        else:
+            descriptor = extend_preset(base_id, id='custom_superdoc_preset', actions=actions)
+        tools_res = descriptor.get_tools(provider, cache=bool(input.get('cache')),
+                                         exclude_actions=exclude_actions)
+        tools = tools_res.get('tools') if isinstance(tools_res.get('tools'), list) else []
+        sys_prompt = descriptor.get_system_prompt(exclude_actions=exclude_actions)
+
+        def _dispatch(document_handle: Any, tool_name: str,
+                      args: Optional[Dict[str, Any]] = None,
+                      invoke_options: Optional[Dict[str, Any]] = None) -> Any:
+            return descriptor.dispatch(document_handle, tool_name, args, invoke_options,
+                                       exclude_actions=exclude_actions)
+
+        async def _dispatch_async(document_handle: Any, tool_name: str,
+                                  args: Optional[Dict[str, Any]] = None,
+                                  invoke_options: Optional[Dict[str, Any]] = None) -> Any:
+            return await descriptor.dispatch_async(document_handle, tool_name, args, invoke_options,
+                                                   exclude_actions=exclude_actions)
+
+        return {
+            'tools': tools,
+            'meta': {
+                'provider': provider,
+                'preset': descriptor.id,
+                'toolCount': len(tools),
+                'cacheStrategy': tools_res.get('cacheStrategy', 'disabled'),
+            },
+            'system_prompt': sys_prompt,
+            'dispatch': _dispatch,
+            'dispatch_async': _dispatch_async,
+        }
+
     chosen = choose_tools({**input, 'preset': preset})
     system_prompt = (
         get_system_prompt(preset, exclude_actions=exclude_actions)
