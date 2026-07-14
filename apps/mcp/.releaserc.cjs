@@ -14,7 +14,7 @@ const {
  * Keep in sync with .github/workflows/release-mcp.yml paths and
  * .github/package-impact-map.md.
  */
-require('../../scripts/semantic-release/patch-commit-filter.cjs')([
+const RELEASE_PATHS = [
   'apps/mcp',
   'packages/sdk',
   'apps/cli',
@@ -26,7 +26,9 @@ require('../../scripts/semantic-release/patch-commit-filter.cjs')([
   'packages/preset-geometry',
   'shared',
   'pnpm-workspace.yaml',
-]);
+];
+
+require('../../scripts/semantic-release/patch-commit-filter.cjs')(RELEASE_PATHS);
 
 const branch = process.env.GITHUB_REF_NAME || process.env.CI_COMMIT_BRANCH;
 
@@ -44,7 +46,21 @@ const shouldPublishGitHubRelease = Boolean(branch) && !isPrerelease;
 const shouldCommentOnLinearRelease = true;
 
 // Use AI-powered notes for stable releases, conventional generator for prereleases
-const notesPlugin = isPrerelease ? createReleaseNotesGenerator() : ['semantic-release-ai-notes', { style: 'concise' }];
+const notesPlugin = isPrerelease
+  ? createReleaseNotesGenerator()
+  : [
+      'semantic-release-ai-notes',
+      {
+        style: 'concise',
+        scope: {
+          name: 'SuperDoc MCP',
+          paths: RELEASE_PATHS,
+          audience: 'Developers and AI agents using the SuperDoc MCP server tools',
+          instructions:
+            'This server wraps the SDK and document engine as MCP tools. Only mention SDK or engine changes when they change tool behavior, schemas, or supported operations.',
+        },
+      },
+    ];
 
 const config = {
   branches,

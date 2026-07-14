@@ -10,7 +10,7 @@ const {
  * This shared helper patches git-log-parser to expand commit analysis to
  * dependency paths. It REPLACES semantic-release-commit-filter.
  */
-require('../../scripts/semantic-release/patch-commit-filter.cjs')([
+const RELEASE_PATHS = [
   'packages/sdk',
   'apps/cli',
   'packages/document-api',
@@ -21,7 +21,9 @@ require('../../scripts/semantic-release/patch-commit-filter.cjs')([
   'packages/preset-geometry',
   'shared',
   'pnpm-workspace.yaml',
-]);
+];
+
+require('../../scripts/semantic-release/patch-commit-filter.cjs')(RELEASE_PATHS);
 
 const branch = process.env.GITHUB_REF_NAME || process.env.CI_COMMIT_BRANCH;
 const isCiRelease = Boolean(process.env.CI);
@@ -40,7 +42,22 @@ const shouldPublishGitHubRelease = Boolean(branch) && !isPrerelease;
 const shouldCommentOnLinearRelease = true;
 
 // Use AI-powered notes for stable releases, conventional generator for prereleases
-const notesPlugin = isPrerelease ? createReleaseNotesGenerator() : ['semantic-release-ai-notes', { style: 'concise' }];
+const notesPlugin = isPrerelease
+  ? createReleaseNotesGenerator()
+  : [
+      'semantic-release-ai-notes',
+      {
+        style: 'concise',
+        scope: {
+          name: 'SuperDoc SDK',
+          paths: RELEASE_PATHS,
+          audience:
+            'Developers integrating the SuperDoc SDK (Node and Python bindings) into their own backend or CLI tooling',
+          instructions:
+            "The SDK wraps the CLI and document engine. Only mention CLI or engine changes when they change the SDK's API, output, or supported operations.",
+        },
+      },
+    ];
 
 const config = {
   branches,

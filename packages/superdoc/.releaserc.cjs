@@ -69,7 +69,21 @@ const shouldCommentOnLinearRelease = true;
 
 // Use AI-powered notes for stable releases, conventional generator for prereleases
 const notesPlugin =
-  isLocalPreview || isPrerelease ? createReleaseNotesGenerator() : ['semantic-release-ai-notes', { style: 'concise' }];
+  isLocalPreview || isPrerelease
+    ? createReleaseNotesGenerator()
+    : [
+        'semantic-release-ai-notes',
+        {
+          style: 'concise',
+          scope: {
+            name: 'SuperDoc',
+            paths: SUPERDOC_PACKAGES,
+            audience: 'Developers embedding the SuperDoc editor in their own applications',
+            instructions:
+              'packages/super-editor, packages/layout-engine, packages/word-layout, and packages/preset-geometry are internal engine packages bundled directly into SuperDoc. Treat their changes as part of the editor itself, not as an external dependency.',
+          },
+        },
+      ];
 
 const config = {
   branches,

@@ -13,7 +13,7 @@ const {
  *
  * Keep in sync with .github/workflows/release-vscode-ext.yml paths: trigger.
  */
-require('../../scripts/semantic-release/patch-commit-filter.cjs')([
+const RELEASE_PATHS = [
   'apps/vscode-ext',
   'packages/superdoc',
   'packages/super-editor',
@@ -22,7 +22,9 @@ require('../../scripts/semantic-release/patch-commit-filter.cjs')([
   'packages/preset-geometry',
   'shared',
   'pnpm-workspace.yaml',
-]);
+];
+
+require('../../scripts/semantic-release/patch-commit-filter.cjs')(RELEASE_PATHS);
 
 const branch = process.env.GITHUB_REF_NAME || process.env.CI_COMMIT_BRANCH;
 
@@ -40,7 +42,21 @@ const shouldPublishGitHubRelease = Boolean(branch) && !isPrerelease;
 const shouldCommentOnLinearRelease = true;
 
 // Use AI-powered notes for stable releases, conventional generator for prereleases
-const notesPlugin = isPrerelease ? createReleaseNotesGenerator() : ['semantic-release-ai-notes', { style: 'concise' }];
+const notesPlugin = isPrerelease
+  ? createReleaseNotesGenerator()
+  : [
+      'semantic-release-ai-notes',
+      {
+        style: 'concise',
+        scope: {
+          name: 'SuperDoc for VS Code',
+          paths: RELEASE_PATHS,
+          audience: 'VS Code users editing documents with the SuperDoc extension',
+          instructions:
+            'This extension bundles the SuperDoc editor. Only mention editor/engine changes when they change what a VS Code user sees or can do inside the editor.',
+        },
+      },
+    ];
 
 const config = {
   branches,

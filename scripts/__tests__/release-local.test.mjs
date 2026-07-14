@@ -191,13 +191,16 @@ test('root release:dry-run script uses the local preview helper', async () => {
 
 test('superdoc releaserc uses preview mode to avoid AI notes and side-effect plugins', async () => {
   const content = await readRepoFile('packages/superdoc/.releaserc.cjs');
+  // Collapse whitespace so this tolerates reformatting (e.g. prettier wrapping
+  // a long ternary across lines) while still checking the real condition.
+  const normalized = content.replace(/\s+/g, ' ');
   assert.ok(
     content.includes("const isLocalPreview = process.env.SUPERDOC_RELEASE_PREVIEW === '1'"),
     'packages/superdoc/.releaserc.cjs: must detect local preview mode',
   );
   assert.ok(
-    content.includes('const notesPlugin =') &&
-      content.includes('isLocalPreview || isPrerelease ? createReleaseNotesGenerator()'),
+    normalized.includes('const notesPlugin =') &&
+      normalized.includes('isLocalPreview || isPrerelease ? createReleaseNotesGenerator()'),
     'packages/superdoc/.releaserc.cjs: preview mode must fall back to conventional release notes',
   );
   assert.ok(
@@ -226,7 +229,12 @@ test('stable orchestrator releases tools chain (CLI, SDK, MCP) and core chain (f
   assertOrder(content, "name: 'sdk'", "name: 'mcp'", 'scripts/release-local-stable.mjs (sdk before mcp)');
   assertOrder(content, "name: 'fonts'", "name: 'superdoc'", 'scripts/release-local-stable.mjs (fonts before superdoc)');
   assertOrder(content, "name: 'superdoc'", "name: 'react'", 'scripts/release-local-stable.mjs (superdoc before react)');
-  assertOrder(content, "name: 'react'", "name: 'vscode-ext'", 'scripts/release-local-stable.mjs (react before vscode-ext)');
+  assertOrder(
+    content,
+    "name: 'react'",
+    "name: 'vscode-ext'",
+    'scripts/release-local-stable.mjs (react before vscode-ext)',
+  );
   assert.ok(
     content.includes("name: 'fonts'") && content.includes('npmPackages: FONTS_NPM_PACKAGES'),
     'scripts/release-local-stable.mjs: orchestrator must release @superdoc-dev/fonts before superdoc points users at it',
@@ -260,12 +268,7 @@ test('fonts release workflow refuses automated releases before the 0.1.0 bootstr
     workflow.includes('npm view @superdoc-dev/fonts@0.1.0 version'),
     '.github/workflows/release-fonts.yml: must require the 0.1.0 npm package before semantic-release runs',
   );
-  assertOrder(
-    workflow,
-    'Verify 0.1.0 bootstrap',
-    'pnpx semantic-release',
-    '.github/workflows/release-fonts.yml',
-  );
+  assertOrder(workflow, 'Verify 0.1.0 bootstrap', 'pnpx semantic-release', '.github/workflows/release-fonts.yml');
 });
 
 test('stable tooling bundle emits SDK release coordinates so Python publish does not depend on HEAD', async () => {
@@ -419,7 +422,9 @@ test('release workflows queue (do not cancel) and use queue: max so multi-packag
       `${file}: refresh step must not be gated on stable-only; queued main runs also need to refresh to avoid stale-checkout pushes`,
     );
     assert.ok(
-      /git fetch origin "\$\{\{ github\.ref_name \}\}" --tags\s*\n\s*git checkout -B "\$\{\{ github\.ref_name \}\}" "origin\/\$\{\{ github\.ref_name \}\}"/.test(content) ||
+      /git fetch origin "\$\{\{ github\.ref_name \}\}" --tags\s*\n\s*git checkout -B "\$\{\{ github\.ref_name \}\}" "origin\/\$\{\{ github\.ref_name \}\}"/.test(
+        content,
+      ) ||
         // release-stable.yml is stable-only and refreshes against the literal `stable` ref.
         /git fetch origin stable --tags\s*\n\s*git checkout -B stable origin\/stable/.test(content),
       `${file}: must refresh to the current branch head before semantic-release runs`,
@@ -434,7 +439,10 @@ test('stable-to-main sync waits for the stable release lane after stable tooling
 
   assert.notEqual(laneDrainStart, -1, '.github/workflows/sync-patches.yml: must include the stable lane drain step');
   assert.notEqual(laneDrainEnd, -1, '.github/workflows/sync-patches.yml: must include the token generation step');
-  assert.ok(laneDrainStart < laneDrainEnd, '.github/workflows/sync-patches.yml: must drain the stable lane before checkout');
+  assert.ok(
+    laneDrainStart < laneDrainEnd,
+    '.github/workflows/sync-patches.yml: must drain the stable lane before checkout',
+  );
 
   const laneDrainStep = workflow.slice(laneDrainStart, laneDrainEnd);
 
@@ -545,10 +553,7 @@ test('stable-to-main sync preserves stable release ancestry', async () => {
     workflow.includes('version-only') &&
       conflictResolutionLoop.includes('release_artifact_only_conflict "$f"') &&
       conflictResolutionLoop.includes('git checkout --theirs "$f"') &&
-      countOccurrences(
-        artifactConflictFunction.block,
-        'python3 scripts/normalize-pyproject-release-artifact.py',
-      ) === 2,
+      countOccurrences(artifactConflictFunction.block, 'python3 scripts/normalize-pyproject-release-artifact.py') === 2,
     '.github/workflows/sync-patches.yml: release artifact conflicts must resolve to stable only when the conflict is version-only',
   );
   assert.equal(
@@ -655,7 +660,10 @@ test('both stable sync directions use checked pyproject release normalization', 
       2,
       `${workflowPath}: both pyproject conflict stages must use checked release normalization`,
     );
-    assert.ok(conflictResolutionLoop.includes(expectedCheckout), `${workflowPath}: conflict resolution uses the wrong side`);
+    assert.ok(
+      conflictResolutionLoop.includes(expectedCheckout),
+      `${workflowPath}: conflict resolution uses the wrong side`,
+    );
   }
 });
 
@@ -670,11 +678,12 @@ test('MCP releaserc builds the package before publish so the tarball ships dist/
 test('stable recovery filters prerelease tags so *-next.* never resumes as @latest', async () => {
   const content = await readRepoFile('scripts/release-local-stable.mjs');
   assert.ok(
-    content.includes('listStableMergedTags') && content.includes("isPrereleaseTag"),
+    content.includes('listStableMergedTags') && content.includes('isPrereleaseTag'),
     'scripts/release-local-stable.mjs: must expose a stable-only tag filter that excludes -next.* prereleases',
   );
   assert.ok(
-    content.includes("expectedBranch === 'stable'") && content.includes('listStableMergedTags(pkg.tagPattern, branchRef)'),
+    content.includes("expectedBranch === 'stable'") &&
+      content.includes('listStableMergedTags(pkg.tagPattern, branchRef)'),
     'scripts/release-local-stable.mjs: stable recovery must consult the prerelease-filtered list',
   );
 });
@@ -731,11 +740,15 @@ test('stable recovery tracks PyPI gaps when SDK PyPI publishing is enabled', asy
     'scripts/release-local-stable.mjs: must keep the SDK PyPI enabled state next to the recovery decision',
   );
   assert.ok(
-    /name: 'sdk'[\s\S]*\.\.\.\(SDK_PYPI_ENABLED[\s\S]*pythonPackages: SDK_PYTHON_PACKAGES[\s\S]*preparePythonSnapshot: prepareSdkPythonSnapshot/.test(content),
+    /name: 'sdk'[\s\S]*\.\.\.\(SDK_PYPI_ENABLED[\s\S]*pythonPackages: SDK_PYTHON_PACKAGES[\s\S]*preparePythonSnapshot: prepareSdkPythonSnapshot/.test(
+      content,
+    ),
     'scripts/release-local-stable.mjs: SDK Python tracking and snapshot recovery must move together behind SDK_PYPI_ENABLED',
   );
   assert.ok(
-    /function prepareSdkPythonSnapshot[\s\S]*pnpm'[\s\S]*'run'[\s\S]*'generate:all'[\s\S]*build-python-sdk\.mjs/.test(content),
+    /function prepareSdkPythonSnapshot[\s\S]*pnpm'[\s\S]*'run'[\s\S]*'generate:all'[\s\S]*build-python-sdk\.mjs/.test(
+      content,
+    ),
     'scripts/release-local-stable.mjs: recovered SDK Python snapshots must regenerate artifacts before building wheels',
   );
 });
@@ -841,7 +854,9 @@ test('docs promotion is keyed to a real superdoc tag from the orchestrator run',
     '.github/workflows/promote-stable-docs.yml: must trigger off the stable orchestrator workflow',
   );
   assert.equal(
-    /"📦 Release CLI"|"📦 Release SDK"|"📦 Release MCP"|"📦 Release react"|"📦 Release esign"|"📦 Release template-builder"|"📦 Release vscode-ext"/.test(workflowRunBlock),
+    /"📦 Release CLI"|"📦 Release SDK"|"📦 Release MCP"|"📦 Release react"|"📦 Release esign"|"📦 Release template-builder"|"📦 Release vscode-ext"/.test(
+      workflowRunBlock,
+    ),
     false,
     '.github/workflows/promote-stable-docs.yml: must trigger only off the orchestrator, not per-package workflows',
   );
@@ -859,7 +874,9 @@ test('docs promotion is keyed to a real superdoc tag from the orchestrator run',
   assert.ok(
     promoteWorkflow.includes('Wait for stable release lane to drain') &&
       promoteWorkflow.includes('gh run list') &&
-      promoteWorkflow.includes('"📦 Release stable tooling (CLI/SDK/MCP)" or .name == "📦 Release esign" or .name == "📦 Release template-builder"'),
+      promoteWorkflow.includes(
+        '"📦 Release stable tooling (CLI/SDK/MCP)" or .name == "📦 Release esign" or .name == "📦 Release template-builder"',
+      ),
     '.github/workflows/promote-stable-docs.yml: must wait for the stable release lane to drain before inspecting origin/stable',
   );
   assert.ok(
@@ -884,7 +901,9 @@ test('docs promotion is keyed to a real superdoc tag from the orchestrator run',
     '.github/workflows/promote-stable-docs.yml: must refuse to overwrite docs commits that exist only on docs-stable',
   );
   assert.ok(
-    promoteWorkflow.includes('git push --force-with-lease=refs/heads/docs-stable:"${expected}" origin "${target}:refs/heads/docs-stable"'),
+    promoteWorkflow.includes(
+      'git push --force-with-lease=refs/heads/docs-stable:"${expected}" origin "${target}:refs/heads/docs-stable"',
+    ),
     '.github/workflows/promote-stable-docs.yml: must use force-with-lease when promoting the docs-stable pointer',
   );
 });

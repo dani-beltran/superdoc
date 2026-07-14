@@ -13,7 +13,7 @@ const {
  * When react migrates `superdoc` to peerDependencies, narrow this to
  * packages/react only. See .github/package-impact-map.md.
  */
-require('../../scripts/semantic-release/patch-commit-filter.cjs')([
+const RELEASE_PATHS = [
   'packages/react',
   'packages/superdoc',
   'packages/super-editor',
@@ -22,7 +22,9 @@ require('../../scripts/semantic-release/patch-commit-filter.cjs')([
   'packages/preset-geometry',
   'shared',
   'pnpm-workspace.yaml',
-]);
+];
+
+require('../../scripts/semantic-release/patch-commit-filter.cjs')(RELEASE_PATHS);
 
 const branch = process.env.GITHUB_REF_NAME || process.env.CI_COMMIT_BRANCH;
 
@@ -40,7 +42,21 @@ const shouldPublishGitHubRelease = Boolean(branch) && !isPrerelease;
 const shouldCommentOnLinearRelease = true;
 
 // Use AI-powered notes for stable releases, conventional generator for prereleases
-const notesPlugin = isPrerelease ? createReleaseNotesGenerator() : ['semantic-release-ai-notes', { style: 'concise' }];
+const notesPlugin = isPrerelease
+  ? createReleaseNotesGenerator()
+  : [
+      'semantic-release-ai-notes',
+      {
+        style: 'concise',
+        scope: {
+          name: 'SuperDoc React',
+          paths: RELEASE_PATHS,
+          audience: 'React developers embedding the @superdoc-dev/react component',
+          instructions:
+            "This package wraps the SuperDoc editor for React. Only mention editor changes when they affect the embedded editor's behavior or the component's props and API.",
+        },
+      },
+    ];
 
 const config = {
   branches,
