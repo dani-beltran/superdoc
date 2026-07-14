@@ -201,6 +201,7 @@
                     "group": "Presets",
                     "pages": ["ai/agents/core-preset", "ai/agents/legacy-preset"]
                   },
+                  "ai/agents/custom-actions",
                   "ai/agents/integrations",
                   "ai/agents/best-practices",
                   "ai/agents/debugging",

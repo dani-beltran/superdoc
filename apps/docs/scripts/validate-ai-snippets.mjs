@@ -41,6 +41,7 @@ const PAGES = [
   'ai/agents/integrations.mdx',
   'ai/agents/best-practices.mdx',
   'ai/agents/debugging.mdx',
+  'ai/agents/custom-actions.mdx',
 ];
 
 if (!existsSync(SDK_DIST)) {

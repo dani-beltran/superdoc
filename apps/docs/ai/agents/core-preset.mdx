@@ -350,9 +350,7 @@ Unknown action names in the list throw immediately (typo protection). The legacy
 
 ## Creating custom actions
 
-<Note>
-**Coming soon.** A first-class authoring kit (`defineAction`) is in the works: define your own action with a typed schema and handler, register it alongside the built-in forty, and it appears in the tool enum, the system prompt's action list, and the dispatch surface automatically — same receipts, same exclusion support. Until it ships, custom capabilities can be added as [custom tools](/ai/agents/legacy-preset#creating-custom-tools) registered next to the preset's own tools in your loop.
-</Note>
+Use `defineAction` to add a named action with built-in `steps` or a native `run` function. `createAgentToolkit` keeps the resulting tool schema, system prompt, and dispatcher aligned. See [Custom actions](/ai/agents/custom-actions) for the SDK workflow and the optional coding-agent skill.
 
 ## Over MCP
 

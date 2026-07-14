@@ -20,7 +20,7 @@
 <p align="center">
   <strong>The document engine for DOCX files.</strong><br>
   Renders, edits, and automates .docx files in the browser, headless on the server, and within AI agent workflows.<br>
-  Self-hosted. Open source. Works with React, Vue, and vanilla JS.
+  Self-hosted. Open source. Works with React, Vue, Angular, Svelte, and vanilla JS.
 </p>
 
 <div align="center">
