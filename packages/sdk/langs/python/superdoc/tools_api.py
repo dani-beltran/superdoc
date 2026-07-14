@@ -201,7 +201,8 @@ def create_agent_toolkit(
         if provider not in ('openai', 'anthropic', 'vercel', 'generic'):
             raise SuperDocError('provider is required.', code='INVALID_ARGUMENT', details={'provider': provider})
         # `preset` doubles as the base to extend here; `base` wins if both given.
-        base_id = input.get('base') or input.get('preset') or 'core'
+        base_arg = input.get('base')
+        base_id = base_arg if base_arg is not None else (preset_arg if preset_arg is not None else 'core')
         if include_core is not None:
             descriptor = compose_preset(id='custom_superdoc_preset', base_id=base_id,
                                         include_core_actions=include_core, actions=actions)

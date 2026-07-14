@@ -284,6 +284,23 @@ def test_create_agent_toolkit_empty_preset_fails_fast():
     assert exc_info.value.code == 'PRESET_NOT_FOUND'
 
 
+@pytest.mark.parametrize('base_selection', [
+    {'base': '', 'preset': 'core'},
+    {'preset': ''},
+])
+def test_create_agent_toolkit_custom_surface_empty_base_fails_fast(base_selection):
+    from superdoc import SuperDocError, create_agent_toolkit
+
+    with pytest.raises(SuperDocError) as exc_info:
+        create_agent_toolkit({
+            'provider': 'generic',
+            'includeCoreActions': [],
+            **base_selection,
+        })
+
+    assert exc_info.value.code == 'PRESET_NOT_FOUND'
+
+
 def test_tools_api_all_exports_create_agent_toolkit():
     import superdoc.tools_api as tools_api
 
