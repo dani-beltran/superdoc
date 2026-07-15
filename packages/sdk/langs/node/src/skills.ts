@@ -43,7 +43,14 @@ function resolveSkillFilePath(skillName: string): string {
   return filePath;
 }
 
-function normalizeSkillName(name: string): string {
+function normalizeSkillName(name: unknown): string {
+  if (typeof name !== 'string') {
+    throw new SuperDocCliError('Skill name is required.', {
+      code: 'INVALID_ARGUMENT',
+      details: { name },
+    });
+  }
+
   const normalized = name.trim();
   if (!normalized || !SKILL_NAME_RE.test(normalized)) {
     throw new SuperDocCliError('Skill name is required.', {
