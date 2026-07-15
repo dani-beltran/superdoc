@@ -873,6 +873,32 @@ describe('composePreset', () => {
     expect(rowProps.sort()).toEqual(Object.keys(schemaOf(advertised)?.properties ?? {}).sort());
   });
 
+  test('getToolCatalog drops perform_action when the allowlist excludes every built-in', async () => {
+    const empty = composePreset({
+      id: 'composed-cat-empty',
+      baseId: 'core',
+      includeCoreActions: [],
+    });
+    registerPreset(empty);
+    REGISTERED.push('composed-cat-empty');
+    const emptyCatalog = await getToolCatalog('composed-cat-empty');
+    expect(emptyCatalog.tools.some((t) => t.toolName === 'superdoc_perform_action')).toBe(false);
+
+    const customOnly = composePreset({
+      id: 'composed-cat-custom-only',
+      baseId: 'core',
+      includeCoreActions: [],
+      actions: footnoteActions,
+    });
+    registerPreset(customOnly);
+    REGISTERED.push('composed-cat-custom-only');
+    const customOnlyCatalog = await getToolCatalog('composed-cat-custom-only');
+    expect(customOnlyCatalog.tools.some((t) => t.toolName === 'superdoc_perform_action')).toBe(false);
+    for (const action of footnoteActions) {
+      expect(customOnlyCatalog.tools.some((t) => t.toolName === action.name)).toBe(true);
+    }
+  });
+
   test('includeCoreActions is enforced at DISPATCH, not only in the enum', async () => {
     const composed = composePreset({
       id: 'composed-allowlist',

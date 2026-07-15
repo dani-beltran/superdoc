@@ -1029,12 +1029,20 @@ export function composePreset(options: ComposePresetOptions): PresetDescriptor {
     // that drifts. Canonical ACTION_NAMES_LIST order matches the getTools row.
     if (includeCore != null) {
       const includedBuiltins = ACTION_NAMES_LIST.filter((name) => includeCore.has(name));
-      const def = buildPerformActionDefinition(includedBuiltins);
-      rows = rows.map((row) =>
-        row.toolName === 'superdoc_perform_action'
-          ? { ...row, description: def.description, inputSchema: def.inputSchema as unknown as Record<string, unknown> }
-          : row,
-      );
+      if (includedBuiltins.length === 0) {
+        rows = rows.filter((row) => row.toolName !== 'superdoc_perform_action');
+      } else {
+        const def = buildPerformActionDefinition(includedBuiltins);
+        rows = rows.map((row) =>
+          row.toolName === 'superdoc_perform_action'
+            ? {
+                ...row,
+                description: def.description,
+                inputSchema: def.inputSchema as unknown as Record<string, unknown>,
+              }
+            : row,
+        );
+      }
     }
     const extraRows: ToolCatalogEntry[] = actions.map((action) => ({
       toolName: action.name,
